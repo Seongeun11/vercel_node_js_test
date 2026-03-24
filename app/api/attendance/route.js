@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server'
 export async function POST(request) {
   const { name, number } = await request.json()
   // 2. 값이 제대로 들어왔는지 로그로 확인 (VS Code 터미널에 찍힘)
-  console.log("받은 데이터:", name, user_id_number);
+  
   const Table_Name ='test_table_1'
   // Supabase에 데이터 삽입
   const { data, error } = await supabase
