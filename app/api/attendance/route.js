@@ -1,5 +1,5 @@
 // app/api/attendance/route.js
-import { supabase } from '@/lib/supabaseClient'
+import { supabase } from '../../../lib/supabaseClient'
 import { NextResponse } from 'next/server'
 
 export async function POST(request) {
