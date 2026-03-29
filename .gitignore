@@ -7,7 +7,7 @@ out/
 build/
 
 # 환경 변수 파일 (중요: 보안을 위해 반드시 제외!)
-.env
+.env*
 .env.local
 .env.production
 .env.development.local
