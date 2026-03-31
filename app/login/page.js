@@ -10,7 +10,7 @@ export default function LoginPage() {
   const [full_name, setFullName] = useState('') //이름추가
   const [student_id , setStudent_id] = useState('')// 학번추가
   const router = useRouter()
-  const [error_messege , setError_messege] = useState('')
+  const [error_messege , setErrorMessege] = useState('')
 
 
   /*
@@ -37,6 +37,12 @@ export default function LoginPage() {
 
 
   const handleLogin = async () => {
+    setErrorMessege('')
+
+    if (!full_name.trim() || !student_id.trim()) {
+      setErrorMessege('이름과 학번을 모두 입력해주세요.')
+      return
+    }
     const { data:user, error } = await supabase
     .from('profiles')
     .select('*')
@@ -45,12 +51,12 @@ export default function LoginPage() {
     .single();
 
 
-    setError_messege('')
+    setErrorMessege('')
     
     if (error || !user) {
     
   
-      setError_messege('입력하신 정보가 데이터베이스에 없습니다. 다시 확인해주세요.')
+      setErrorMessege('입력하신 정보가 데이터베이스에 없습니다. 다시 확인해주세요.')
       return;
     }
     // 2. 자동 로그인을 위해 로컬 스토리지에 유저 정보 저장
@@ -67,13 +73,13 @@ export default function LoginPage() {
     const onlyText = e.target.value.replace(/[^ㄱ-ㅎㅏ-ㅣ가-힣a-zA-Z]/g, '');
     setFullName(onlyText);
     
-    if (error_messege) setError_messege(''); // 다시 타이핑하면 에러 숨기기
+    if (error_messege) setErrorMessege(''); // 다시 타이핑하면 에러 숨기기
   };
   const handleChange = (e) => {
     // 숫자만 남기고 나머지 제거
     const result = e.target.value.replace(/[^0-9]/g, '');
     setStudent_id(result);
-    if (error_messege) setError_messege(''); // 다시 타이핑하면 에러 숨기기
+    if (error_messege) setErrorMessege(''); // 다시 타이핑하면 에러 숨기기
   };
 
 /*
@@ -95,7 +101,9 @@ export default function LoginPage() {
   return (
     <div style={{ padding: 20 }}>
       <h2>출석 로그인</h2>
-      <input placeholder="이름" type='text' value={full_name} onChange={fullName_handleChange} />
+      <input 
+      style={{margin:'10px'}}
+      placeholder="이름" type='text' value={full_name} onChange={fullName_handleChange} />
       <input placeholder="학번" type='text' value={student_id} onChange={handleChange}/>
       <button 
         onClick={handleLogin}
