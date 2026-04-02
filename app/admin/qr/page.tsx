@@ -209,7 +209,7 @@ return (
         <input
             type="number"
             min="1"
-            max="10"
+            max="60"
             value={expireMinutes}
             onChange={(e) => setExpireMinutes(e.target.value)}
             style={{ width: '100%', padding: '10px', marginBottom: '16px', boxSizing: 'border-box' }}

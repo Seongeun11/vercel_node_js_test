@@ -1,5 +1,5 @@
 'use client'
-
+//admin/events/page.tsx
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getStoredUser, hasRole } from '@/lib/auth'

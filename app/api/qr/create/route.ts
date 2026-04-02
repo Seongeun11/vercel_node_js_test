@@ -7,7 +7,7 @@ import { requireRole } from '@/lib/serverAuth'
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { actor_user_id, event_id, expire_minutes = 3 } = body
+    const { actor_user_id, event_id, expire_minutes = 60 } = body
 
     if (!actor_user_id || !event_id) {
       return NextResponse.json(
@@ -27,9 +27,9 @@ export async function POST(request: Request) {
 
     const expireMinutes = Number(expire_minutes)
 
-    if (Number.isNaN(expireMinutes) || expireMinutes < 1 || expireMinutes > 10) {
+    if (Number.isNaN(expireMinutes) || expireMinutes < 1 || expireMinutes > 60) {
       return NextResponse.json(
-        { error: 'expire_minutes는 1~10분 사이여야 합니다.' },
+        { error: 'expire_minutes는 1~60분 사이여야 합니다.' },
         { status: 400 }
       )
     }
@@ -68,11 +68,35 @@ export async function POST(request: Request) {
       )
     }
 
+    //vercel에서 주소 받아오기
+    function getOrigin(request: Request): string {
+    const url = new URL(request.url)
+
+    // 기본
+    let origin = url.origin
+
+    // Vercel / proxy 대응
+    const forwardedHost = request.headers.get('x-forwarded-host')
+    const forwardedProto = request.headers.get('x-forwarded-proto')
+
+    if (forwardedHost && forwardedProto) {
+      origin = `${forwardedProto}://${forwardedHost}`
+    }
+
+    return origin
+  }
+
+
+    const origin = getOrigin(request)
+
+    const scanUrl = `${origin}/attendance/scan?token=${encodeURIComponent(token)}`
+
     return NextResponse.json(
       {
         message: 'QR 토큰이 생성되었습니다.',
         qr_token: qrToken,
         event,
+        scan_url: scanUrl,
       },
       { status: 200 }
     )

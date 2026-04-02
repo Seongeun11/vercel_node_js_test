@@ -149,7 +149,7 @@ return (
           justifyContent: 'center',
         }}
       >
-        <button onClick={handleAttendance}>출석하기</button>
+        
         {hasRole(user, ['admin', 'captain']) && (
           <button onClick={() => router.push('/logs')}>
             수정 이력 조회
