@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import AdminQrViewClient from './adminQrViewClient'
+import AdminQrViewClient from './AdminQrViewClient'
 
 type PageProps = {
   searchParams: Promise<{
