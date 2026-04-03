@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { getStoredUser } from '@/lib/auth'
+import { fetchSessionUser } from '@/lib/auth'
 
 type StoredUser = {
   id: string
@@ -51,7 +51,7 @@ export default function AttendanceScanClient() {
   useEffect(() => {
     const run = async () => {
       try {
-        const user = getStoredUser() as StoredUser | null
+        const user = await fetchSessionUser() as StoredUser | null
         const currentUrl = queryString ? `${pathname}?${queryString}` : pathname
 
         if (!user) {
@@ -88,10 +88,7 @@ export default function AttendanceScanClient() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            user_id: user.id,
-            token,
-          }),
+          body: JSON.stringify({ token }),
         })
 
         const isJson = response.headers

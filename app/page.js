@@ -2,7 +2,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getStoredUser, hasRole } from '@/lib/auth'
+import { fetchSessionUser, hasRole, clearStoredUser } from '@/lib/auth'
 
 export default function AttendancePage() {
   const [user, setUser] = useState(null)
@@ -13,12 +13,16 @@ export default function AttendancePage() {
   const [eventName, setEventName] = useState('')
   
   useEffect(() => {
-    const saveUser = localStorage.getItem('attendance_user')
-    if (!saveUser) {
-      router.push('/login')
-    } else {
-      setUser(JSON.parse(saveUser))
+    const loadUser = async () => {
+      const savedUser = await fetchSessionUser()
+      if (!savedUser) {
+        router.push('/login')
+        return
+      }
+      setUser(savedUser)
     }
+
+    loadUser()
   }, [router])
 
   useEffect(() => {
@@ -93,7 +97,6 @@ export default function AttendancePage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         event_id: '1b2439ee-f380-46d4-981e-4277dadead9b',
-        user_id: user.id,
       }),
     })
 
@@ -110,9 +113,16 @@ export default function AttendancePage() {
     }
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem('attendance_user')
-    router.replace('/login')
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      })
+    } finally {
+      clearStoredUser()
+      router.replace('/login')
+    }
   }  
   
   if (!user) {

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import QRCode from 'qrcode'
-import { getStoredUser, hasRole } from '@/lib/auth'
+import { fetchSessionUser, hasRole } from '@/lib/auth'
 
 type StoredUser = {
     id: string
@@ -25,7 +25,7 @@ const router = useRouter()
 const [actor, setActor] = useState<StoredUser | null>(null)
 const [events, setEvents] = useState<EventItem[]>([])
 const [eventId, setEventId] = useState('')
-const [expireMinutes, setExpireMinutes] = useState('3')
+const [expireMinutes, setExpireMinutes] = useState('60')
 const [loading, setLoading] = useState(true)
 const [submitLoading, setSubmitLoading] = useState(false)
 
@@ -35,7 +35,8 @@ const [message, setMessage] = useState('')
 const [errorMessage, setErrorMessage] = useState('')
 
 useEffect(() => {
-        const savedUser = getStoredUser() as StoredUser | null
+        const loadUser = async () => {
+        const savedUser = await fetchSessionUser() as StoredUser | null
 
         if (!savedUser) {
         router.replace('/login')
@@ -49,6 +50,9 @@ useEffect(() => {
         }
 
         setActor(savedUser)
+        }
+
+        loadUser()
     }, [router])
 
 useEffect(() => {
@@ -62,7 +66,7 @@ useEffect(() => {
             const response = await fetch('/api/events/list', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ actor_user_id: actor.id }),
+            body: JSON.stringify({}),
             })
 
             const result =
@@ -135,8 +139,7 @@ const handleCreateQr = async () => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-            actor_user_id: actor.id,
-            event_id: eventId,
+                        event_id: eventId,
             expire_minutes: Number(expireMinutes),
             }),
         })

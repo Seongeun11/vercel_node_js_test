@@ -1,4 +1,3 @@
-// app/api/attendance/check/route.ts
 import { supabase } from '../../../../lib/supabaseClient'
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
@@ -27,20 +26,13 @@ function getKSTDateTimeString(date = new Date()): string {
 
 type CheckAttendanceBody = {
   event_id?: string
-  user_id?: string
   token?: string
 }
 
 export async function POST(request: Request) {
   try {
-    const { event_id, user_id, token } =
-      (await request.json()) as CheckAttendanceBody
-
-    if (!user_id) {
-      return NextResponse.json({ error: 'user_id 없음' }, { status: 400 })
-    }
-
-    const authResult = await requireRole(user_id, ['admin', 'captain', 'trainee'])
+    const { event_id, token } = (await request.json()) as CheckAttendanceBody
+    const authResult = await requireRole(['admin', 'captain', 'trainee'])
 
     if (!authResult.ok) {
       return NextResponse.json(
@@ -49,11 +41,7 @@ export async function POST(request: Request) {
       )
     }
 
-    /**
-     * 최종적으로 사용할 이벤트 ID
-     * - 직접 event_id가 오면 그 값 사용
-     * - token이 오면 qr_tokens에서 event_id를 해석해 덮어씀
-     */
+    const user_id = authResult.user.id
     let resolvedEventId = event_id
 
     if (token) {
@@ -64,20 +52,14 @@ export async function POST(request: Request) {
         .single()
 
       if (qrError || !qrToken) {
-        return NextResponse.json(
-          { error: '유효하지 않은 QR 토큰입니다.' },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: '유효하지 않은 QR 토큰입니다.' }, { status: 400 })
       }
 
       const now = new Date()
       const expiresAt = new Date(qrToken.expires_at)
 
       if (Number.isNaN(expiresAt.getTime()) || now > expiresAt) {
-        return NextResponse.json(
-          { error: '만료된 QR 코드입니다.' },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: '만료된 QR 코드입니다.' }, { status: 400 })
       }
 
       resolvedEventId = qrToken.event_id
@@ -90,10 +72,6 @@ export async function POST(request: Request) {
       )
     }
 
-    /**
-     * 중요:
-     * QR에서 해석한 resolvedEventId 로 이벤트를 조회해야 함
-     */
     const { data: event, error: eventError } = await supabase
       .from('events')
       .select('*')
@@ -108,10 +86,7 @@ export async function POST(request: Request) {
     const startTime = new Date(event.start_time)
 
     if (Number.isNaN(startTime.getTime())) {
-      return NextResponse.json(
-        { error: '이벤트 시간이 올바르지 않습니다.' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: '이벤트 시간이 올바르지 않습니다.' }, { status: 400 })
     }
 
     const lateLimit = new Date(
@@ -121,10 +96,6 @@ export async function POST(request: Request) {
     const status = now > lateLimit ? 'late' : 'present'
     const attendanceDateKST = getKSTDateString(now)
 
-    /**
-     * 중요:
-     * 출석 저장도 resolvedEventId 로 해야 함
-     */
     const { error: insertError } = await supabase
       .from('attendance')
       .insert({
@@ -133,27 +104,17 @@ export async function POST(request: Request) {
         date: attendanceDateKST,
         status,
         check_time: now.toISOString(),
-        method: 'qr',
+        method: token ? 'qr' : 'manual',
       })
 
     if (insertError) {
       if (insertError.code === '23505') {
-        return NextResponse.json(
-          { error: '이미 출석하셨습니다.' },
-          { status: 409 }
-        )
+        return NextResponse.json({ error: '이미 출석하셨습니다.' }, { status: 409 })
       }
 
-      return NextResponse.json(
-        { error: insertError.message },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: insertError.message }, { status: 500 })
     }
 
-    /**
-     * used_count 증가는 한 번만 처리
-     * 안전한 동시성 처리가 필요하면 RPC 사용 권장
-     */
     if (token) {
       const { data: tokenRow } = await supabase
         .from('qr_tokens')
@@ -178,7 +139,6 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('[attendance/check] error:', error)
-
     return NextResponse.json({ error: '서버 오류' }, { status: 500 })
   }
 }

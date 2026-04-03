@@ -4,17 +4,16 @@ import { requireRole } from '@/lib/serverAuth'
 
 export async function POST(request: Request) {
   try {
-    const { actor_user_id, target_user_id, event_id, date } = await request.json()
+    const { target_user_id, event_id, date } = await request.json()
 
-    if (!actor_user_id || !target_user_id || !event_id || !date) {
+    if (!target_user_id || !event_id || !date) {
       return NextResponse.json(
         { error: '필수 값이 누락되었습니다.' },
         { status: 400 }
       )
     }
 
-    // 캡틴 이상만 조회 가능
-    const authResult = await requireRole(actor_user_id, ['admin', 'captain'])
+    const authResult = await requireRole(['admin', 'captain'])
 
     if (!authResult.ok) {
       return NextResponse.json(

@@ -2,18 +2,9 @@ import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabaseClient'
 import { requireRole } from '@/lib/serverAuth'
 
-export async function POST(request: Request) {
+export async function POST() {
   try {
-    const { actor_user_id } = await request.json()
-
-    if (!actor_user_id) {
-      return NextResponse.json(
-        { error: 'actor_user_id가 필요합니다.' },
-        { status: 400 }
-      )
-    }
-
-    const authResult = await requireRole(actor_user_id, ['admin', 'captain'])
+    const authResult = await requireRole(['admin', 'captain'])
 
     if (!authResult.ok) {
       return NextResponse.json(

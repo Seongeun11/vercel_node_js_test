@@ -1,5 +1,3 @@
-//api/attendance/edit/route.ts
-
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabaseClient'
 import { requireRole } from '@/lib/serverAuth'
@@ -9,7 +7,6 @@ const ALLOWED_STATUS = ['present', 'late', 'absent'] as const
 export async function POST(request: Request) {
   try {
     const {
-      actor_user_id,
       target_user_id,
       event_id,
       date,
@@ -17,8 +14,7 @@ export async function POST(request: Request) {
       method = 'manual',
     } = await request.json()
 
-    // 필수값 검증
-    if (!actor_user_id || !target_user_id || !event_id || !date || !status) {
+    if (!target_user_id || !event_id || !date || !status) {
       return NextResponse.json(
         { error: '필수 값이 누락되었습니다.' },
         { status: 400 }
@@ -32,8 +28,7 @@ export async function POST(request: Request) {
       )
     }
 
-    // 수정 권한 확인: admin, captain만 허용
-    const authResult = await requireRole(actor_user_id, ['admin', 'captain'])
+    const authResult = await requireRole(['admin', 'captain'])
 
     if (!authResult.ok) {
       return NextResponse.json(
@@ -42,7 +37,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // 기존 출석 기록 조회
     const { data: existingAttendance, error: existingError } = await supabase
       .from('attendance')
       .select('*')
@@ -60,7 +54,6 @@ export async function POST(request: Request) {
 
     const nowIso = new Date().toISOString()
 
-    // 1) 기록이 없으면 새로 생성
     if (!existingAttendance) {
       const { data: insertedAttendance, error: insertError } = await supabase
         .from('attendance')
@@ -82,37 +75,44 @@ export async function POST(request: Request) {
         )
       }
 
-      // 로그 저장
-      const { error: logError } = await supabase
-        .from('attendance_logs')
-        .insert({
-          attendance_id: insertedAttendance.id,
-          changed_by: actor_user_id,
-          before_value: null,
-          after_value: insertedAttendance,
-          changed_at: new Date().toISOString(),
-        })
-
-      if (logError) {
-        console.error('attendance_logs insert 실패:', logError.message)
-      }
+      await supabase.from('attendance_logs').insert({
+        attendance_id: insertedAttendance.id,
+        changed_by: authResult.user.id,
+        before_value: null,
+        after_value: insertedAttendance,
+        changed_at: nowIso,
+      })
 
       return NextResponse.json({
         message: '출석 기록이 새로 등록되었습니다.',
         attendance: insertedAttendance,
       })
     }
+    // 상태가 같을경우 변경금지
+    const updatePayload: any = {}
 
-    // 2) 기록이 있으면 수정
+    if (existingAttendance.status !== status) {
+      updatePayload.status = status
+    }
+
+    if (existingAttendance.method !== method) {
+      updatePayload.method = method
+    }
+
+    if (Object.keys(updatePayload).length === 0) {
+      return NextResponse.json(
+        { error: '동일한 출석 상태는 변경할 수 없습니다.' },
+        { status: 400 }
+      )
+    }
+
+    updatePayload.check_time = nowIso
+
     const beforeValue = existingAttendance
 
     const { data: updatedAttendance, error: updateError } = await supabase
       .from('attendance')
-      .update({
-        status,
-        method,
-        check_time: nowIso,
-      })
+      .update({ status, method, check_time: nowIso })
       .eq('id', existingAttendance.id)
       .select()
       .single()
@@ -124,20 +124,13 @@ export async function POST(request: Request) {
       )
     }
 
-    // 로그 저장
-    const { error: logError } = await supabase
-      .from('attendance_logs')
-      .insert({
-        attendance_id: existingAttendance.id,
-        changed_by: actor_user_id,
-        before_value: beforeValue,
-        after_value: updatedAttendance,
-        changed_at: new Date().toISOString(),
-      })
-
-    if (logError) {
-      console.error('attendance_logs insert 실패:', logError.message)
-    }
+    await supabase.from('attendance_logs').insert({
+      attendance_id: existingAttendance.id,
+      changed_by: authResult.user.id,
+      before_value: beforeValue,
+      after_value: updatedAttendance,
+      changed_at: nowIso,
+    })
 
     return NextResponse.json({
       message: '출석 기록이 수정되었습니다.',

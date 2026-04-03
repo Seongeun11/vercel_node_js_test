@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getStoredUser, hasRole } from '@/lib/auth'
+import { fetchSessionUser, hasRole } from '@/lib/auth'
 
 type StoredUser = {
   id: string
@@ -61,20 +61,24 @@ export default function LogsPage() {
   const [searchText, setSearchText] = useState('')
 
   useEffect(() => {
-    const savedUser = getStoredUser() as StoredUser | null
+    const loadUser = async () => {
+      const savedUser = await fetchSessionUser() as StoredUser | null
 
-    if (!savedUser) {
-      router.replace('/login')
-      return
+      if (!savedUser) {
+        router.replace('/login')
+        return
+      }
+
+      if (!hasRole(savedUser, ['admin', 'captain'])) {
+        alert('캡틴 이상만 접근할 수 있습니다.')
+        router.replace('/')
+        return
+      }
+
+      setActor(savedUser)
     }
 
-    if (!hasRole(savedUser, ['admin', 'captain'])) {
-      alert('캡틴 이상만 접근할 수 있습니다.')
-      router.replace('/')
-      return
-    }
-
-    setActor(savedUser)
+    loadUser()
   }, [router])
 
   useEffect(() => {
@@ -88,7 +92,7 @@ export default function LogsPage() {
         const response = await fetch('/api/logs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ actor_user_id: actor.id }),
+          body: JSON.stringify({}),
         })
 
         const result: LogsResponse =

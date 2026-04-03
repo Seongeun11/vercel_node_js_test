@@ -1,22 +1,34 @@
-//api/qr/create/route.ts
 import { randomUUID } from 'crypto'
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabaseClient'
 import { requireRole } from '@/lib/serverAuth'
 
+function getOrigin(request: Request): string {
+  const url = new URL(request.url)
+  let origin = url.origin
+  const forwardedHost = request.headers.get('x-forwarded-host')
+  const forwardedProto = request.headers.get('x-forwarded-proto')
+
+  if (forwardedHost && forwardedProto) {
+    origin = `${forwardedProto}://${forwardedHost}`
+  }
+
+  return origin
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { actor_user_id, event_id, expire_minutes = 60 } = body
+    const { event_id, expire_minutes = 60 } = body
 
-    if (!actor_user_id || !event_id) {
+    if (!event_id) {
       return NextResponse.json(
-        { error: 'actor_user_id와 event_id가 필요합니다.' },
+        { error: 'event_id가 필요합니다.' },
         { status: 400 }
       )
     }
 
-    const authResult = await requireRole(actor_user_id, ['admin'])
+    const authResult = await requireRole(['admin'])
 
     if (!authResult.ok) {
       return NextResponse.json(
@@ -56,7 +68,7 @@ export async function POST(request: Request) {
         event_id,
         token,
         expires_at: expiresAt,
-        created_by: actor_user_id,
+        created_by: authResult.user.id,
       })
       .select()
       .single()
@@ -68,28 +80,7 @@ export async function POST(request: Request) {
       )
     }
 
-    //vercel에서 주소 받아오기
-    function getOrigin(request: Request): string {
-    const url = new URL(request.url)
-
-    // 기본
-    let origin = url.origin
-
-    // Vercel / proxy 대응
-    const forwardedHost = request.headers.get('x-forwarded-host')
-    const forwardedProto = request.headers.get('x-forwarded-proto')
-
-    if (forwardedHost && forwardedProto) {
-      origin = `${forwardedProto}://${forwardedHost}`
-    }
-
-    return origin
-  }
-
-
-    const origin = getOrigin(request)
-
-    const scanUrl = `${origin}/attendance/scan?token=${encodeURIComponent(token)}`
+    const scanUrl = `${getOrigin(request)}/attendance/scan?token=${encodeURIComponent(token)}`
 
     return NextResponse.json(
       {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { getStoredUser, hasRole } from '@/lib/auth'
+import { fetchSessionUser, hasRole } from '@/lib/auth'
 
 type AttendanceStatus = 'present' | 'late' | 'absent'
 
@@ -70,30 +70,34 @@ export default function AttendanceEditPage() {
   const [eventSearchText, setEventSearchText] = useState('')
 
   useEffect(() => {
-    const savedUser = getStoredUser() as StoredUser | null
+    const loadUser = async () => {
+      const savedUser = await fetchSessionUser() as StoredUser | null
 
-    if (!savedUser) {
-      router.replace('/login')
-      return
+      if (!savedUser) {
+        router.replace('/login')
+        return
+      }
+
+      if (!hasRole(savedUser, ['admin', 'captain'])) {
+        alert('캡틴 이상만 접근할 수 있습니다.')
+        router.replace('/')
+        return
+      }
+
+      setActor(savedUser)
+
+      const todayKST = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Asia/Seoul',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date())
+
+      setDate(todayKST)
+      setPageLoading(false)
     }
 
-    if (!hasRole(savedUser, ['admin', 'captain'])) {
-      alert('캡틴 이상만 접근할 수 있습니다.')
-      router.replace('/')
-      return
-    }
-
-    setActor(savedUser)
-
-    const todayKST = new Intl.DateTimeFormat('sv-SE', {
-      timeZone: 'Asia/Seoul',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(new Date())
-
-    setDate(todayKST)
-    setPageLoading(false)
+    loadUser()
   }, [router])
 
   useEffect(() => {
@@ -109,12 +113,12 @@ export default function AttendanceEditPage() {
           fetch('/api/profiles/list', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ actor_user_id: actor.id }),
+            body: JSON.stringify({}),
           }),
           fetch('/api/events/list', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ actor_user_id: actor.id }),
+            body: JSON.stringify({}),
           }),
         ])
 
@@ -184,8 +188,7 @@ export default function AttendanceEditPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            actor_user_id: actor.id,
-            target_user_id: targetUserId,
+                        target_user_id: targetUserId,
             event_id: eventId,
             date,
           }),
@@ -355,8 +358,7 @@ useEffect(() => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          actor_user_id: actor.id,
-          target_user_id: targetUserId,
+                    target_user_id: targetUserId,
           event_id: eventId,
           date,
           status,
@@ -381,8 +383,7 @@ useEffect(() => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          actor_user_id: actor.id,
-          target_user_id: targetUserId,
+                    target_user_id: targetUserId,
           event_id: eventId,
           date,
         }),

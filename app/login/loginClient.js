@@ -1,20 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { setStoredUser } from '@/lib/auth'
 
 export default function LoginClient() {
-  const [full_name, setFullName] = useState('')
   const [student_id, setStudent_id] = useState('')
-  const [error_messege, setErrorMessege] = useState('')
+  const [password, setPassword] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  /**
-   * 내부 경로만 허용
-   */
   const getSafeRedirectPath = (next) => {
     if (!next) return '/'
     if (!next.startsWith('/')) return '/'
@@ -23,47 +21,47 @@ export default function LoginClient() {
   }
 
   const handleLogin = async () => {
-    setErrorMessege('')
+    setErrorMessage('')
 
-    if (!full_name.trim() || !student_id.trim()) {
-      setErrorMessege('이름과 학번을 모두 입력해주세요.')
+    if (!student_id.trim() || !password.trim()) {
+      setErrorMessage('학번과 비밀번호를 모두 입력해주세요.')
       return
     }
 
-    const { data: user, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('full_name', full_name.trim())
-      .eq('student_id', student_id.trim())
-      .single()
+    try {
+      setLoading(true)
 
-    if (error || !user) {
-      setErrorMessege('사용자 정보를 찾을 수 없습니다. 다시 확인해주세요.')
-      return
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          student_id: student_id.trim(),
+          password,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result?.user) {
+        setErrorMessage(result?.error || '로그인에 실패했습니다.')
+        return
+      }
+
+      setStoredUser(result.user)
+
+      const next = searchParams.get('next')
+      const savedRedirect = sessionStorage.getItem('post_login_redirect')
+      const redirectPath = getSafeRedirectPath(next || savedRedirect)
+
+      sessionStorage.removeItem('post_login_redirect')
+      router.replace(redirectPath)
+    } catch (error) {
+      console.error('로그인 실패:', error)
+      setErrorMessage('로그인 중 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
     }
-
-    localStorage.setItem('attendance_user', JSON.stringify(user))
-
-    const next = searchParams.get('next')
-    const savedRedirect = sessionStorage.getItem('post_login_redirect')
-    const redirectPath = getSafeRedirectPath(next || savedRedirect)
-
-    sessionStorage.removeItem('post_login_redirect')
-    router.replace(redirectPath)
-  }
-
-  const fullName_handleChange = (e) => {
-    const onlyText = e.target.value.replace(/[^ㄱ-ㅎㅏ-ㅣ가-힣a-zA-Z]/g, '')
-    setFullName(onlyText)
-
-    if (error_messege) setErrorMessege('')
-  }
-
-  const handleChange = (e) => {
-    const result = e.target.value.replace(/[^0-9]/g, '')
-    setStudent_id(result)
-
-    if (error_messege) setErrorMessege('')
   }
 
   return (
@@ -72,22 +70,33 @@ export default function LoginClient() {
 
       <input
         style={{ margin: '10px' }}
-        placeholder="이름"
-        type="text"
-        value={full_name}
-        onChange={fullName_handleChange}
-      />
-
-      <input
         placeholder="학번"
         type="text"
         value={student_id}
-        onChange={handleChange}
+        onChange={(e) => {
+          //setStudent_id(e.target.value.replace(/[^ㄱ-ㅎㅏ-ㅣ가-힣a-zA-Z\s]/g, ''))
+          setStudent_id(e.target.value)
+          if (errorMessage) setErrorMessage('')
+        }}
+      />
+
+      <input
+        placeholder="비밀번호"
+        type="password"
+        value={password}
+        onChange={(e) => {
+          setPassword(e.target.value)
+          if (errorMessage) setErrorMessage('')
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !loading) handleLogin()
+        }}
       />
 
       <button
         type="button"
         onClick={handleLogin}
+        disabled={loading}
         style={{
           padding: '10px',
           margin: '10px',
@@ -95,13 +104,14 @@ export default function LoginClient() {
           backgroundColor: '#0070f3',
           color: 'white',
           border: 'none',
-          cursor: 'pointer',
+          cursor: loading ? 'not-allowed' : 'pointer',
+          opacity: loading ? 0.7 : 1,
         }}
       >
-        로그인
+        {loading ? '로그인 중...' : '로그인'}
       </button>
 
-      {error_messege && (
+      {errorMessage && (
         <p
           style={{
             color: '#ff4d4f',
@@ -110,7 +120,7 @@ export default function LoginClient() {
             fontWeight: '500',
           }}
         >
-          ⚠️ {error_messege}
+          ⚠️ {errorMessage}
         </p>
       )}
     </div>

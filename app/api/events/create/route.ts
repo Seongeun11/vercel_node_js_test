@@ -7,22 +7,21 @@ const ALLOWED_EVENT_TYPES = ['normal', 'special'] as const
 export async function POST(request: Request) {
   try {
     const {
-      actor_user_id,
       name,
       type = 'normal',
       start_time,
-      late_threshold_min = 5,
+      late_threshold_min = 10,
       allow_duplicate = false,
     } = await request.json()
 
-    if (!actor_user_id || !name || !start_time) {
+    if (!name || !start_time) {
       return NextResponse.json(
         { error: '필수 값이 누락되었습니다.' },
         { status: 400 }
       )
     }
 
-    const authResult = await requireRole(actor_user_id, ['admin'])
+    const authResult = await requireRole(['admin'])
 
     if (!authResult.ok) {
       return NextResponse.json(
@@ -55,7 +54,7 @@ export async function POST(request: Request) {
         start_time,
         late_threshold_min: lateThreshold,
         allow_duplicate: Boolean(allow_duplicate),
-        created_by: actor_user_id,
+        created_by: authResult.user.id,
       })
       .select()
       .single()

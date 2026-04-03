@@ -21,18 +21,9 @@ type AttendanceLogRow = {
   changed_at: string | null
 }
 
-export async function POST(request: Request) {
+export async function POST() {
   try {
-    const { actor_user_id } = await request.json()
-
-    if (!actor_user_id) {
-      return NextResponse.json(
-        { error: 'actor_user_id가 필요합니다.' },
-        { status: 400 }
-      )
-    }
-
-    const authResult = await requireRole(actor_user_id, ['admin', 'captain'])
+    const authResult = await requireRole(['admin', 'captain'])
 
     if (!authResult.ok) {
       return NextResponse.json(
@@ -62,8 +53,6 @@ export async function POST(request: Request) {
     }
 
     const logs = (data ?? []) as AttendanceLogRow[]
-
-    // UUID 수집
     const userIdSet = new Set<string>()
     const eventIdSet = new Set<string>()
 
@@ -71,16 +60,14 @@ export async function POST(request: Request) {
       if (log.changed_by) userIdSet.add(log.changed_by)
       if (log.before_value?.user_id) userIdSet.add(log.before_value.user_id)
       if (log.after_value?.user_id) userIdSet.add(log.after_value.user_id)
-
       if (log.before_value?.event_id) eventIdSet.add(log.before_value.event_id)
       if (log.after_value?.event_id) eventIdSet.add(log.after_value.event_id)
     }
 
     const userIds = Array.from(userIdSet)
     const eventIds = Array.from(eventIdSet)
-
-    // profiles 조회
     let userMap: Record<string, { full_name: string; student_id: string; role: string }> = {}
+    let eventMap: Record<string, { name: string; start_time: string }> = {}
 
     if (userIds.length > 0) {
       const { data: profiles, error: profilesError } = await supabase
@@ -89,26 +76,17 @@ export async function POST(request: Request) {
         .in('id', userIds)
 
       if (profilesError) {
-        return NextResponse.json(
-          { error: profilesError.message },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: profilesError.message }, { status: 500 })
       }
 
       userMap = Object.fromEntries(
-        (profiles ?? []).map((profile) => [
-          profile.id,
-          {
-            full_name: profile.full_name,
-            student_id: profile.student_id,
-            role: profile.role,
-          },
-        ])
+        (profiles ?? []).map((profile) => [profile.id, {
+          full_name: profile.full_name,
+          student_id: profile.student_id,
+          role: profile.role,
+        }])
       )
     }
-
-    // events 조회
-    let eventMap: Record<string, { name: string; start_time: string }> = {}
 
     if (eventIds.length > 0) {
       const { data: events, error: eventsError } = await supabase
@@ -117,24 +95,17 @@ export async function POST(request: Request) {
         .in('id', eventIds)
 
       if (eventsError) {
-        return NextResponse.json(
-          { error: eventsError.message },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: eventsError.message }, { status: 500 })
       }
 
       eventMap = Object.fromEntries(
-        (events ?? []).map((event) => [
-          event.id,
-          {
-            name: event.name,
-            start_time: event.start_time,
-          },
-        ])
+        (events ?? []).map((event) => [event.id, {
+          name: event.name,
+          start_time: event.start_time,
+        }])
       )
     }
 
-    // 로그에 표시용 이름 붙이기
     const enrichedLogs = logs.map((log) => {
       const beforeUserId = log.before_value?.user_id ?? null
       const afterUserId = log.after_value?.user_id ?? null
