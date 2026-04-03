@@ -46,7 +46,9 @@ export default function AdminPage() {
         <button onClick={() => router.push('/admin/qr')}>
           QR 출석 생성
         </button>
-      
+        <button onClick={() => router.push('/admin/attendance')}>
+          출석 현황
+        </button>
       </div>
     </div>
   )
