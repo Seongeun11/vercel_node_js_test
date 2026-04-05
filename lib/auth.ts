@@ -1,54 +1,47 @@
-// lib/auth.js
+// lib/auth.ts (JS → TS로 바꾸는 걸 강력 추천)
 
-export function getStoredUser() {
-  if (typeof window === 'undefined') return null
+export type AppRole = 'admin' | 'captain' | 'trainee'
 
-  const raw = localStorage.getItem('attendance_user')
-  if (!raw) return null
+export type CurrentUser = {
+  id: string
+  full_name: string
+  student_id: string
+  role: AppRole
+}
 
+/**
+ * 현재 세션 사용자 조회
+ */
+export async function fetchSessionUser(): Promise<CurrentUser | null> {
   try {
-    return JSON.parse(raw)
+    const response = await fetch('/api/auth/me', {
+      method: 'GET',
+      cache: 'no-store',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      return null
+    }
+
+    const result = await response.json()
+    return result?.user ?? null
   } catch (error) {
-    console.error('저장된 사용자 정보 파싱 실패:', error)
-    localStorage.removeItem('attendance_user')
+    console.error('세션 사용자 조회 실패:', error)
     return null
   }
 }
 
-export function setStoredUser(user) {
-  if (typeof window === 'undefined') return
-  localStorage.setItem('attendance_user', JSON.stringify(user))
-}
-
-export function clearStoredUser() {
-  if (typeof window === 'undefined') return
-  localStorage.removeItem('attendance_user')
-}
-
-export async function fetchSessionUser() {
-  const response = await fetch('/api/auth/me', {
-    method: 'GET',
-    cache: 'no-store',
-    credentials: 'include',
-  })
-
-  if (!response.ok) {
-    clearStoredUser()
-    return null
-  }
-
-  const result = await response.json()
-
-  if (!result?.user) {
-    clearStoredUser()
-    return null
-  }
-
-  setStoredUser(result.user)
-  return result.user
-}
-
-export function hasRole(user, allowedRoles) {
+/**
+ * 권한 체크 유틸
+ */
+export function hasRole(
+  user: CurrentUser | null,
+  allowedRoles: AppRole[]
+): boolean {
   if (!user || !user.role) return false
   return allowedRoles.includes(user.role)
 }

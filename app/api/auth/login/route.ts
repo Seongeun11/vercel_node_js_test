@@ -1,4 +1,3 @@
-// app/api/auth/login/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { supabaseAdmin } from '@/lib/supabase/admin'
@@ -12,7 +11,11 @@ type LoginBody = {
 type PendingCookie = {
   name: string
   value: string
-  options?: any
+  options?: Parameters<NextResponse['cookies']['set']>[0] extends infer T
+    ? T extends { name: string; value: string }
+      ? Omit<T, 'name' | 'value'>
+      : never
+    : never
 }
 
 export async function POST(request: NextRequest) {
@@ -39,10 +42,10 @@ export async function POST(request: NextRequest) {
           get(name: string) {
             return request.cookies.get(name)?.value
           },
-          set(name: string, value: string, options: any) {
+          set(name: string, value: string, options) {
             pendingCookies.push({ name, value, options })
           },
-          remove(name: string, options: any) {
+          remove(name: string, options) {
             pendingCookies.push({ name, value: '', options })
           },
         },
@@ -55,12 +58,6 @@ export async function POST(request: NextRequest) {
         password,
       })
 
-    //console.log('[LOGIN] studentId:', studentId)
-    //console.log('[LOGIN] email:', email)
-    //console.log('[LOGIN] signIn user:', signInData.user?.id ?? null)
-    //console.log('[LOGIN] signIn session:', !!signInData.session)
-    //console.error('[LOGIN] signIn error:', signInError)
-
     if (signInError || !signInData.user || !signInData.session) {
       return NextResponse.json(
         { error: '학번 또는 비밀번호가 올바르지 않습니다.' },
@@ -68,17 +65,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 로그인 직후 profile 조회는 admin client로 수행
-    const signedInUser = signInData.user
-
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('id, full_name, student_id, role')
-      .eq('id', signedInUser.id)
+      .eq('id', signInData.user.id)
       .maybeSingle()
-
-    //console.error('[LOGIN] profileError:', profileError)
-    //console.log('[LOGIN] profile:', profile)
 
     if (profileError || !profile) {
       return NextResponse.json(
@@ -102,9 +93,8 @@ export async function POST(request: NextRequest) {
         ...(cookie.options ?? {}),
       })
     }
-    //console.error('[LOGIN] profileError:', profileError)
-   // console.log('[LOGIN] profile:', profile)
-    //console.log('[LOGIN] pendingCookies:', pendingCookies)
+
+
     return response
   } catch (error) {
     console.error('[AUTH_LOGIN_POST_ERROR]', error)

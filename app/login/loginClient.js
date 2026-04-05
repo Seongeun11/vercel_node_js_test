@@ -3,7 +3,6 @@
 
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { setStoredUser } from '@/lib/auth'
 
 export default function LoginClient() {
   const [student_id, setStudentId] = useState('')
@@ -24,7 +23,10 @@ export default function LoginClient() {
   async function handleLogin() {
     setErrorMessage('')
 
-    if (!student_id.trim() || !password.trim()) {
+    const normalizedStudentId = student_id.trim()
+    const normalizedPassword = password.trim()
+
+    if (!normalizedStudentId || !normalizedPassword) {
       setErrorMessage('학번과 비밀번호를 모두 입력해주세요.')
       return
     }
@@ -37,8 +39,8 @@ export default function LoginClient() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          student_id: student_id.trim(),
-          password,
+          student_id: normalizedStudentId,
+          password: normalizedPassword,
         }),
       })
 
@@ -49,13 +51,13 @@ export default function LoginClient() {
         return
       }
 
-      setStoredUser(result.user)
-
       const next = searchParams.get('next')
       const savedRedirect = sessionStorage.getItem('post_login_redirect')
       const redirectPath = getSafeRedirectPath(next || savedRedirect)
 
       sessionStorage.removeItem('post_login_redirect')
+
+      // 로그인 후에는 서버가 새 쿠키 기준으로 다시 렌더링하게 이동
       router.replace(redirectPath)
       router.refresh()
     } catch (error) {
@@ -119,7 +121,7 @@ export default function LoginClient() {
           style={{
             color: '#ff4d4f',
             fontSize: '13px',
-            margin: '0',
+            margin: 0,
             fontWeight: '500',
           }}
         >

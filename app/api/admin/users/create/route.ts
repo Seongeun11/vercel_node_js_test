@@ -10,6 +10,9 @@ import { writeAdminAuditLog } from '@/lib/admin-audit'
 function isAllowedOrigin(request: NextRequest): boolean {
   const origin = request.headers.get('origin')
   if (!origin) return true
+  if (process.env.NODE_ENV !== 'production') {
+    return true
+  }
 
   const allowedOrigins = [
     process.env.NEXT_PUBLIC_APP_URL,
@@ -17,6 +20,7 @@ function isAllowedOrigin(request: NextRequest): boolean {
     process.env.VERCEL_PROJECT_PRODUCTION_URL
       ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
       : undefined,
+ 
   ].filter(Boolean) as string[]
 
   return allowedOrigins.includes(origin)
@@ -62,7 +66,10 @@ export async function POST(request: NextRequest) {
       })
 
       return NextResponse.json(
+
+
         { error: '허용되지 않은 요청 출처입니다.' },
+        
         { status: 403 }
       )
     }
@@ -254,6 +261,7 @@ export async function POST(request: NextRequest) {
         },
       })
 
+    
       return NextResponse.json(
         { error: '프로필 자동 생성에 실패했습니다. 트리거 설정을 확인해주세요.' },
         { status: 500 }
@@ -287,12 +295,16 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     )
+
   } catch (error) {
-    console.error('[ADMIN_USER_CREATE_ERROR]', error)
+    
+    //console.error('[ADMIN_USER_CREATE_ERROR]', error)
 
     return NextResponse.json(
       { error: '서버 오류가 발생했습니다.' },
       { status: 500 }
     )
   }
+  
 }
+

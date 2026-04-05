@@ -1,11 +1,13 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 
+export type AppRole = 'admin' | 'captain' | 'trainee'
+
 export type CurrentUser = {
   id: string
   full_name: string
   student_id: string
-  role: 'admin' | 'captain' | 'trainee'
+  role: AppRole
 }
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
@@ -17,9 +19,6 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       error,
     } = await supabase.auth.getUser()
 
-    console.log('[AUTH] getUser error:', error)
-    console.log('[AUTH] auth user id:', user?.id ?? null)
-
     if (error || !user) {
       return null
     }
@@ -30,23 +29,18 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       .eq('id', user.id)
       .maybeSingle()
 
-    console.log('[AUTH] profileError:', profileError)
-    console.log('[AUTH] profile:', profile)
-
     if (profileError || !profile) {
       return null
     }
 
     return profile as CurrentUser
   } catch (error) {
-    console.error('[AUTH] getCurrentUser fatal:', error)
+    console.error('[GET_CURRENT_USER_ERROR]', error)
     return null
   }
 }
 
-export async function requireRole(
-  allowedRoles: Array<'admin' | 'captain' | 'trainee'>
-) {
+export async function requireRole(allowedRoles: AppRole[]) {
   const user = await getCurrentUser()
 
   if (!user) {

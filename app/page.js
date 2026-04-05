@@ -7,7 +7,7 @@ export default async function HomePage() {
 
   return (
     <main style={{ maxWidth: '860px', margin: '0 auto', padding: '24px' }}>
-      <h1 style={{ marginBottom: '12px' }}>동아리 출석 체크</h1>
+      <h1 style={{ marginBottom: '12px' }}>천심 영성 아카데미 출석 체크</h1>
 
       {!user ? (
         <div
@@ -51,7 +51,7 @@ export default async function HomePage() {
             <h2 style={{ marginTop: 0 }}>바로가기</h2>
 
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <Link href="/attendance">
+              <Link href="/attendance/scan">
                 <button type="button">출석 체크</button>
               </Link>
 
@@ -63,7 +63,7 @@ export default async function HomePage() {
 
               {user.role === 'admin' && (
                 <>
-                  <Link href="/admin">
+                  <Link href="/logs">
                     <button type="button">관리자 페이지</button>
                   </Link>
                   <Link href="/admin/events">
@@ -75,7 +75,7 @@ export default async function HomePage() {
                   <Link href="/admin/attendance">
                     <button type="button">출석 현황</button>
                   </Link>
-                  <Link href="/admin/user">
+                  <Link href="/admin/users">
                     <button type="button">사용자 생성</button>
                   </Link>
                 </>
@@ -83,7 +83,7 @@ export default async function HomePage() {
             </div>
           </div>
 
-          <form action="/api/auth/logout" method="post" style={{ marginTop: '20px' }}>
+          <form action="/login" method="post" style={{ marginTop: '20px' }}>
             <button type="submit">로그아웃</button>
           </form>
         </>
