@@ -1,6 +1,7 @@
+// app/api/profiles/list/route.ts
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
 import { requireRole } from '@/lib/serverAuth'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
 export async function POST() {
   try {
@@ -13,7 +14,7 @@ export async function POST() {
       )
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('profiles')
       .select('id, full_name, student_id, role')
       .order('full_name', { ascending: true })

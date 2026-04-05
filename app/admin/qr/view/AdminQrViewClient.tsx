@@ -3,14 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import QRCode from 'qrcode'
-import { fetchSessionUser, hasRole } from '@/lib/auth'
 
-type StoredUser = {
-  id: string
-  full_name: string
-  student_id: string
-  role: 'admin' | 'captain' | 'trainee'
-}
+
 
 type Props = {
   qrUrl: string
@@ -93,18 +87,7 @@ export default function AdminQrViewClient({
   useEffect(() => {
     const init = async () => {
       try {
-        const savedUser = (await fetchSessionUser()) as StoredUser | null
-
-        if (!savedUser) {
-          router.replace('/login')
-          return
-        }
-
-        if (!hasRole(savedUser, ['admin'])) {
-          alert('관리자만 접근할 수 있습니다.')
-          router.replace('/')
-          return
-        }
+        
 
         if (!qrUrl) {
           setErrorMessage('QR 링크가 없습니다.')

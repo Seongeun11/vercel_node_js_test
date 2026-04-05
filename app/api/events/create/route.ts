@@ -1,26 +1,17 @@
+// app/api/events/create/route.ts
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
 import { requireRole } from '@/lib/serverAuth'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
-const ALLOWED_EVENT_TYPES = ['normal', 'special'] as const
+type CreateEventBody = {
+  name?: string
+  start_time?: string
+  late_threshold_min?: number
+  allow_duplicate_check?: boolean
+}
 
 export async function POST(request: Request) {
   try {
-    const {
-      name,
-      type = 'normal',
-      start_time,
-      late_threshold_min = 10,
-      allow_duplicate = false,
-    } = await request.json()
-
-    if (!name || !start_time) {
-      return NextResponse.json(
-        { error: '필수 값이 누락되었습니다.' },
-        { status: 400 }
-      )
-    }
-
     const authResult = await requireRole(['admin'])
 
     if (!authResult.ok) {
@@ -30,38 +21,57 @@ export async function POST(request: Request) {
       )
     }
 
-    if (!ALLOWED_EVENT_TYPES.includes(type)) {
+    const body = (await request.json()) as CreateEventBody
+
+    const name = String(body.name || '').trim()
+    const startTimeRaw = String(body.start_time || '').trim()
+    const lateThresholdMin = Number(body.late_threshold_min ?? 5)
+    const allowDuplicateCheck = Boolean(body.allow_duplicate_check)
+
+    if (!name) {
       return NextResponse.json(
-        { error: '유효하지 않은 이벤트 타입입니다.' },
+        { error: '이벤트명을 입력해주세요.' },
         { status: 400 }
       )
     }
 
-    const lateThreshold = Number(late_threshold_min)
-
-    if (Number.isNaN(lateThreshold) || lateThreshold < 0) {
+    if (!startTimeRaw) {
       return NextResponse.json(
-        { error: '지각 기준 분은 0 이상 숫자여야 합니다.' },
+        { error: '시작 시간을 입력해주세요.' },
         { status: 400 }
       )
     }
 
-    const { data, error } = await supabase
+    const startTime = new Date(startTimeRaw)
+
+    if (Number.isNaN(startTime.getTime())) {
+      return NextResponse.json(
+        { error: '시작 시간 형식이 올바르지 않습니다.' },
+        { status: 400 }
+      )
+    }
+
+    if (!Number.isFinite(lateThresholdMin) || lateThresholdMin < 0 || lateThresholdMin > 180) {
+      return NextResponse.json(
+        { error: '지각 기준은 0~180분 사이여야 합니다.' },
+        { status: 400 }
+      )
+    }
+
+    const { data: createdEvent, error } = await supabaseAdmin
       .from('events')
       .insert({
-        name: String(name).trim(),
-        type,
-        start_time,
-        late_threshold_min: lateThreshold,
-        allow_duplicate: Boolean(allow_duplicate),
-        created_by: authResult.user.id,
+        name,
+        start_time: startTime.toISOString(),
+        late_threshold_min: lateThresholdMin,
+        allow_duplicate_check: allowDuplicateCheck,
       })
-      .select()
+      .select('id, name, start_time, late_threshold_min, allow_duplicate_check, created_at')
       .single()
 
-    if (error) {
+    if (error || !createdEvent) {
       return NextResponse.json(
-        { error: error.message },
+        { error: error?.message || '이벤트 생성에 실패했습니다.' },
         { status: 500 }
       )
     }
@@ -69,9 +79,9 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         message: '이벤트가 생성되었습니다.',
-        event: data,
+        event: createdEvent,
       },
-      { status: 200 }
+      { status: 201 }
     )
   } catch (error) {
     console.error('events/create POST error:', error)

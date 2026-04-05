@@ -1,20 +1,45 @@
+// app/api/attendance/edit/route.ts
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
 import { requireRole } from '@/lib/serverAuth'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
 const ALLOWED_STATUS = ['present', 'late', 'absent'] as const
+const ALLOWED_METHOD = ['manual', 'qr', 'nfc'] as const
+
+type AttendanceStatus = (typeof ALLOWED_STATUS)[number]
+type AttendanceMethod = (typeof ALLOWED_METHOD)[number]
+
+type EditAttendanceBody = {
+  target_user_id?: string
+  event_id?: string
+  date?: string
+  status?: AttendanceStatus
+  method?: AttendanceMethod
+}
 
 export async function POST(request: Request) {
   try {
-    const {
-      target_user_id,
-      event_id,
-      date,
-      status,
-      method = 'manual',
-    } = await request.json()
+    // 1) 먼저 권한 확인
+    const authResult = await requireRole(['admin', 'captain'])
 
-    if (!target_user_id || !event_id || !date || !status) {
+    if (!authResult.ok || !authResult.user) {
+      return NextResponse.json(
+        { error: authResult.error },
+        { status: authResult.status }
+      )
+    }
+
+    // 2) 요청 본문 파싱
+    const body = (await request.json()) as EditAttendanceBody
+
+    const targetUserId = String(body.target_user_id || '').trim()
+    const eventId = String(body.event_id || '').trim()
+    const date = String(body.date || '').trim()
+    const status = body.status
+    const method = body.method ?? 'manual'
+
+    // 3) 입력값 검증
+    if (!targetUserId || !eventId || !date || !status) {
       return NextResponse.json(
         { error: '필수 값이 누락되었습니다.' },
         { status: 400 }
@@ -28,20 +53,21 @@ export async function POST(request: Request) {
       )
     }
 
-    const authResult = await requireRole(['admin', 'captain'])
-
-    if (!authResult.ok) {
+    if (!ALLOWED_METHOD.includes(method)) {
       return NextResponse.json(
-        { error: authResult.error },
-        { status: authResult.status }
+        { error: '유효하지 않은 출석 방식입니다.' },
+        { status: 400 }
       )
     }
 
-    const { data: existingAttendance, error: existingError } = await supabase
+    const nowIso = new Date().toISOString()
+
+    // 4) 기존 출석 기록 조회
+    const { data: existingAttendance, error: existingError } = await supabaseAdmin
       .from('attendance')
       .select('*')
-      .eq('user_id', target_user_id)
-      .eq('event_id', event_id)
+      .eq('user_id', targetUserId)
+      .eq('event_id', eventId)
       .eq('date', date)
       .maybeSingle()
 
@@ -52,14 +78,13 @@ export async function POST(request: Request) {
       )
     }
 
-    const nowIso = new Date().toISOString()
-
+    // 5) 기존 기록이 없으면 신규 생성
     if (!existingAttendance) {
-      const { data: insertedAttendance, error: insertError } = await supabase
+      const { data: insertedAttendance, error: insertError } = await supabaseAdmin
         .from('attendance')
         .insert({
-          user_id: target_user_id,
-          event_id,
+          user_id: targetUserId,
+          event_id: eventId,
           date,
           status,
           method,
@@ -68,14 +93,15 @@ export async function POST(request: Request) {
         .select()
         .single()
 
-      if (insertError) {
+      if (insertError || !insertedAttendance) {
         return NextResponse.json(
-          { error: insertError.message },
+          { error: insertError?.message || '출석 기록 생성에 실패했습니다.' },
           { status: 500 }
         )
       }
 
-      await supabase.from('attendance_logs').insert({
+      // 생성 로그 저장
+      const { error: logInsertError } = await supabaseAdmin.from('attendance_logs').insert({
         attendance_id: insertedAttendance.id,
         changed_by: authResult.user.id,
         before_value: null,
@@ -83,13 +109,22 @@ export async function POST(request: Request) {
         changed_at: nowIso,
       })
 
+      if (logInsertError) {
+        console.error('attendance log insert error:', logInsertError)
+      }
+
       return NextResponse.json({
         message: '출석 기록이 새로 등록되었습니다.',
         attendance: insertedAttendance,
       })
     }
-    // 상태가 같을경우 변경금지
-    const updatePayload: any = {}
+
+    // 6) 동일 값 변경 방지
+    const updatePayload: Partial<{
+      status: AttendanceStatus
+      method: AttendanceMethod
+      check_time: string
+    }> = {}
 
     if (existingAttendance.status !== status) {
       updatePayload.status = status
@@ -110,21 +145,23 @@ export async function POST(request: Request) {
 
     const beforeValue = existingAttendance
 
-    const { data: updatedAttendance, error: updateError } = await supabase
+    // 7) 변경된 값만 업데이트
+    const { data: updatedAttendance, error: updateError } = await supabaseAdmin
       .from('attendance')
-      .update({ status, method, check_time: nowIso })
+      .update(updatePayload)
       .eq('id', existingAttendance.id)
       .select()
       .single()
 
-    if (updateError) {
+    if (updateError || !updatedAttendance) {
       return NextResponse.json(
-        { error: updateError.message },
+        { error: updateError?.message || '출석 기록 수정에 실패했습니다.' },
         { status: 500 }
       )
     }
 
-    await supabase.from('attendance_logs').insert({
+    // 8) 수정 로그 저장
+    const { error: logUpdateError } = await supabaseAdmin.from('attendance_logs').insert({
       attendance_id: existingAttendance.id,
       changed_by: authResult.user.id,
       before_value: beforeValue,
@@ -132,12 +169,16 @@ export async function POST(request: Request) {
       changed_at: nowIso,
     })
 
+    if (logUpdateError) {
+      console.error('attendance log update error:', logUpdateError)
+    }
+
     return NextResponse.json({
       message: '출석 기록이 수정되었습니다.',
       attendance: updatedAttendance,
     })
   } catch (error) {
-    console.error(error)
+    console.error('attendance/edit POST error:', error)
     return NextResponse.json(
       { error: '서버 오류가 발생했습니다.' },
       { status: 500 }

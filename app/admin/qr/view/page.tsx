@@ -1,3 +1,4 @@
+// app/admin/qr/view/page.tsx
 import { Suspense } from 'react'
 import AdminQrViewClient from './AdminQrViewClient'
 

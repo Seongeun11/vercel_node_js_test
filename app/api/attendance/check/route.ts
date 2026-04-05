@@ -1,6 +1,7 @@
-import { supabase } from '../../../../lib/supabaseClient'
+// app/api/attendance/check/route.ts
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
 function getKSTDateString(date = new Date()): string {
   return new Intl.DateTimeFormat('sv-SE', {
@@ -31,10 +32,10 @@ type CheckAttendanceBody = {
 
 export async function POST(request: Request) {
   try {
-    const { event_id, token } = (await request.json()) as CheckAttendanceBody
+    // 1) 인증 + 권한
     const authResult = await requireRole(['admin', 'captain', 'trainee'])
 
-    if (!authResult.ok) {
+    if (!authResult.ok || !authResult.user) {
       return NextResponse.json(
         { error: authResult.error },
         { status: authResult.status }
@@ -42,24 +43,35 @@ export async function POST(request: Request) {
     }
 
     const user_id = authResult.user.id
+
+    // 2) 요청 파싱
+    const { event_id, token } = (await request.json()) as CheckAttendanceBody
+
     let resolvedEventId = event_id
 
+    // 3) QR 토큰 처리
     if (token) {
-      const { data: qrToken, error: qrError } = await supabase
+      const { data: qrToken, error: qrError } = await supabaseAdmin
         .from('qr_tokens')
         .select('id, event_id, expires_at, used_count')
         .eq('token', token)
         .single()
 
       if (qrError || !qrToken) {
-        return NextResponse.json({ error: '유효하지 않은 QR 토큰입니다.' }, { status: 400 })
+        return NextResponse.json(
+          { error: '유효하지 않은 QR 토큰입니다.' },
+          { status: 400 }
+        )
       }
 
       const now = new Date()
       const expiresAt = new Date(qrToken.expires_at)
 
       if (Number.isNaN(expiresAt.getTime()) || now > expiresAt) {
-        return NextResponse.json({ error: '만료된 QR 코드입니다.' }, { status: 400 })
+        return NextResponse.json(
+          { error: '만료된 QR 코드입니다.' },
+          { status: 400 }
+        )
       }
 
       resolvedEventId = qrToken.event_id
@@ -72,7 +84,8 @@ export async function POST(request: Request) {
       )
     }
 
-    const { data: event, error: eventError } = await supabase
+    // 4) 이벤트 조회
+    const { data: event, error: eventError } = await supabaseAdmin
       .from('events')
       .select('*')
       .eq('id', resolvedEventId)
@@ -86,17 +99,22 @@ export async function POST(request: Request) {
     const startTime = new Date(event.start_time)
 
     if (Number.isNaN(startTime.getTime())) {
-      return NextResponse.json({ error: '이벤트 시간이 올바르지 않습니다.' }, { status: 400 })
+      return NextResponse.json(
+        { error: '이벤트 시간이 올바르지 않습니다.' },
+        { status: 400 }
+      )
     }
 
     const lateLimit = new Date(
-      startTime.getTime() + Number(event.late_threshold_min || 0) * 60 * 1000
+      startTime.getTime() +
+        Number(event.late_threshold_min || 0) * 60 * 1000
     )
 
     const status = now > lateLimit ? 'late' : 'present'
     const attendanceDateKST = getKSTDateString(now)
 
-    const { error: insertError } = await supabase
+    // 5) 출석 기록 insert (중복 방지: DB unique constraint)
+    const { error: insertError } = await supabaseAdmin
       .from('attendance')
       .insert({
         user_id,
@@ -108,26 +126,29 @@ export async function POST(request: Request) {
       })
 
     if (insertError) {
+      // 중복 출석 (unique constraint)
       if (insertError.code === '23505') {
-        return NextResponse.json({ error: '이미 출석하셨습니다.' }, { status: 409 })
+        return NextResponse.json(
+          { error: '이미 출석하셨습니다.' },
+          { status: 409 }
+        )
       }
 
-      return NextResponse.json({ error: insertError.message }, { status: 500 })
+      return NextResponse.json(
+        { error: insertError.message },
+        { status: 500 }
+      )
     }
 
+    // 6) QR 토큰 사용 횟수 증가 (race-safe)
     if (token) {
-      const { data: tokenRow } = await supabase
-        .from('qr_tokens')
-        .select('id, used_count')
-        .eq('token', token)
-        .single()
-
-      if (tokenRow) {
-        await supabase
-          .from('qr_tokens')
-          .update({ used_count: Number(tokenRow.used_count || 0) + 1 })
-          .eq('id', tokenRow.id)
-      }
+      await supabaseAdmin.rpc('increment_qr_token_used_count', {
+        p_token: token,
+      })
+      // 아래 RPC 없으면 fallback:
+      // await supabaseAdmin
+      //   .from('qr_tokens')
+      //   .update({ used_count: sql`used_count + 1` }) ❌ supabase-js 미지원
     }
 
     return NextResponse.json({

@@ -1,16 +1,14 @@
+// app/api/events/update/route.ts
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
 import { requireRole } from '@/lib/serverAuth'
-
-const ALLOWED_TYPES = ['normal', 'special'] as const
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
 type UpdateEventBody = {
   id?: string
   name?: string
-  type?: 'normal' | 'special'
   start_time?: string
   late_threshold_min?: number
-  allow_duplicate?: boolean
+  allow_duplicate_check?: boolean
 }
 
 export async function POST(request: Request) {
@@ -25,34 +23,53 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as UpdateEventBody
-    const { id, name, type, start_time, late_threshold_min, allow_duplicate } = body
 
-    if (!id || !name || !type || !start_time) {
+    const id = String(body.id || '').trim()
+    const name = String(body.name || '').trim()
+    const startTimeRaw = String(body.start_time || '').trim()
+    const lateThresholdMin = Number(body.late_threshold_min ?? 5)
+    const allowDuplicateCheck = Boolean(body.allow_duplicate_check)
+
+    if (!id) {
       return NextResponse.json(
-        { error: '필수 값이 누락되었습니다.' },
+        { error: '이벤트 ID가 필요합니다.' },
         { status: 400 }
       )
     }
 
-    if (!ALLOWED_TYPES.includes(type)) {
+    if (!name) {
       return NextResponse.json(
-        { error: '유효하지 않은 이벤트 타입입니다.' },
+        { error: '이벤트명을 입력해주세요.' },
         { status: 400 }
       )
     }
 
-    const lateThreshold = Number(late_threshold_min)
-
-    if (Number.isNaN(lateThreshold) || lateThreshold < 0) {
+    if (!startTimeRaw) {
       return NextResponse.json(
-        { error: '지각 기준 분은 0 이상 숫자여야 합니다.' },
+        { error: '시작 시간을 입력해주세요.' },
         { status: 400 }
       )
     }
 
-    const { data: existingEvent, error: existingError } = await supabase
+    const startTime = new Date(startTimeRaw)
+
+    if (Number.isNaN(startTime.getTime())) {
+      return NextResponse.json(
+        { error: '시작 시간 형식이 올바르지 않습니다.' },
+        { status: 400 }
+      )
+    }
+
+    if (!Number.isFinite(lateThresholdMin) || lateThresholdMin < 0 || lateThresholdMin > 180) {
+      return NextResponse.json(
+        { error: '지각 기준은 0~180분 사이여야 합니다.' },
+        { status: 400 }
+      )
+    }
+
+    const { data: existingEvent, error: existingError } = await supabaseAdmin
       .from('events')
-      .select('*')
+      .select('id, name, start_time, late_threshold_min, allow_duplicate_check, created_at')
       .eq('id', id)
       .single()
 
@@ -63,44 +80,56 @@ export async function POST(request: Request) {
       )
     }
 
-    const normalizedName = String(name).trim()
-    const normalizedAllowDuplicate = Boolean(allow_duplicate)
+    const nextStartTimeIso = startTime.toISOString()
 
-    const isSame =
-      existingEvent.name === normalizedName &&
-      existingEvent.type === type &&
-      new Date(existingEvent.start_time).toISOString() === new Date(start_time).toISOString() &&
-      Number(existingEvent.late_threshold_min) === lateThreshold &&
-      Boolean(existingEvent.allow_duplicate) === normalizedAllowDuplicate
+    const updatePayload: Partial<{
+      name: string
+      start_time: string
+      late_threshold_min: number
+      allow_duplicate_check: boolean
+    }> = {}
 
-    if (isSame) {
+    if (existingEvent.name !== name) {
+      updatePayload.name = name
+    }
+
+    if (existingEvent.start_time !== nextStartTimeIso) {
+      updatePayload.start_time = nextStartTimeIso
+    }
+
+    if (Number(existingEvent.late_threshold_min) !== lateThresholdMin) {
+      updatePayload.late_threshold_min = lateThresholdMin
+    }
+
+    if (Boolean(existingEvent.allow_duplicate_check) !== allowDuplicateCheck) {
+      updatePayload.allow_duplicate_check = allowDuplicateCheck
+    }
+
+    if (Object.keys(updatePayload).length === 0) {
       return NextResponse.json(
         { error: '변경된 내용이 없습니다.' },
         { status: 400 }
       )
     }
 
-    const { data, error } = await supabase
+    const { data: updatedEvent, error: updateError } = await supabaseAdmin
       .from('events')
-      .update({
-        name: normalizedName,
-        type,
-        start_time,
-        late_threshold_min: lateThreshold,
-        allow_duplicate: normalizedAllowDuplicate,
-      })
+      .update(updatePayload)
       .eq('id', id)
-      .select()
+      .select('id, name, start_time, late_threshold_min, allow_duplicate_check, created_at')
       .single()
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (updateError || !updatedEvent) {
+      return NextResponse.json(
+        { error: updateError?.message || '이벤트 수정에 실패했습니다.' },
+        { status: 500 }
+      )
     }
 
     return NextResponse.json(
       {
         message: '이벤트가 수정되었습니다.',
-        event: data,
+        event: updatedEvent,
       },
       { status: 200 }
     )

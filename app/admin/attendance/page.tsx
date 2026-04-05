@@ -2,215 +2,89 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { fetchSessionUser, hasRole } from '@/lib/auth'
-
-type StoredUser = {
-  id: string
-  full_name: string
-  student_id: string
-  role: 'admin' | 'captain' | 'trainee'
-}
-
-type EventType = 'normal' | 'special'
 
 type EventItem = {
   id: string
   name: string
-  type: EventType
   start_time: string
   late_threshold_min: number
-  allow_duplicate: boolean
-  created_at?: string
 }
-
-type AttendanceStatus = 'present' | 'late'
 
 type AttendanceItem = {
   id: string
-  event_id: string
   user_id: string
-  status: AttendanceStatus
-  checked_at?: string
-  created_at?: string
-  users?: {
+  event_id: string
+  date: string
+  status: 'present' | 'late' | 'absent'
+  method: 'manual' | 'qr' | 'nfc'
+  check_time: string
+  user?: {
     id: string
     full_name: string
     student_id: string
     role: 'admin' | 'captain' | 'trainee'
   } | null
+  event?: {
+    id: string
+    name: string
+  } | null
 }
 
-type AttendanceSummary = {
-  total: number
-  present: number
-  late: number
-}
+type AttendanceDetail = {
+  id: string
+  user_id: string
+  event_id: string
+  date: string
+  status: 'present' | 'late' | 'absent'
+  method: 'manual' | 'qr' | 'nfc'
+  check_time: string
+} | null
+
+const STATUS_OPTIONS = [
+  { value: 'present', label: '출석' },
+  { value: 'late', label: '지각' },
+  { value: 'absent', label: '결석' },
+] as const
 
 export default function AdminAttendancePage() {
   const router = useRouter()
 
-  const [actor, setActor] = useState<StoredUser | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [eventsLoading, setEventsLoading] = useState(false)
-  const [attendanceLoading, setAttendanceLoading] = useState(false)
-
   const [events, setEvents] = useState<EventItem[]>([])
+  const [attendanceList, setAttendanceList] = useState<AttendanceItem[]>([])
+
   const [selectedEventId, setSelectedEventId] = useState('')
-  const [attendances, setAttendances] = useState<AttendanceItem[]>([])
-  const [summary, setSummary] = useState<AttendanceSummary>({
-    total: 0,
-    present: 0,
-    late: 0,
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const now = new Date()
+    const yyyy = now.getFullYear()
+    const mm = String(now.getMonth() + 1).padStart(2, '0')
+    const dd = String(now.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
   })
 
-  const [keyword, setKeyword] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [submitLoading, setSubmitLoading] = useState(false)
+
   const [message, setMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
 
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const savedUser = (await fetchSessionUser()) as StoredUser | null
+  const [editTarget, setEditTarget] = useState<{
+    target_user_id: string
+    event_id: string
+    date: string
+    full_name: string
+    student_id: string
+  } | null>(null)
 
-        if (!savedUser) {
-          router.replace('/login')
-          return
-        }
+  const [editStatus, setEditStatus] = useState<'present' | 'late' | 'absent'>('present')
+  const [editMethod, setEditMethod] = useState<'manual' | 'qr' | 'nfc'>('manual')
+  const [detailLoading, setDetailLoading] = useState(false)
 
-        if (!hasRole(savedUser, ['admin'])) {
-          alert('관리자만 접근할 수 있습니다.')
-          router.replace('/')
-          return
-        }
+  const selectedEvent = useMemo(
+    () => events.find((event) => event.id === selectedEventId) ?? null,
+    [events, selectedEventId]
+  )
 
-        setActor(savedUser)
-        await fetchEvents()
-      } catch (error) {
-        console.error(error)
-        setErrorMessage('초기 데이터 조회 중 오류가 발생했습니다.')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    void init()
-  }, [router])
-
-  useEffect(() => {
-    if (!selectedEventId) return
-    void fetchAttendance(selectedEventId)
-  }, [selectedEventId])
-
-  const selectedEvent = useMemo(() => {
-    return events.find((event) => event.id === selectedEventId) ?? null
-  }, [events, selectedEventId])
-
-  const filteredAttendances = useMemo(() => {
-    const q = keyword.trim().toLowerCase()
-    if (!q) return attendances
-
-    return attendances.filter((item) => {
-      const value = [
-        item.users?.full_name ?? '',
-        item.users?.student_id ?? '',
-        item.users?.role ?? '',
-        item.status ?? '',
-        item.checked_at ?? '',
-      ]
-        .join(' ')
-        .toLowerCase()
-
-      return value.includes(q)
-    })
-  }, [attendances, keyword])
-
-  const fetchEvents = async () => {
-    try {
-      setEventsLoading(true)
-      setErrorMessage('')
-
-      const response = await fetch('/api/events/list', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-
-      const contentType = response.headers.get('content-type') || ''
-      const result =
-        contentType.includes('application/json')
-          ? await response.json()
-          : null
-
-      if (!response.ok) {
-        throw new Error(result?.error || '이벤트 목록 조회에 실패했습니다.')
-      }
-
-      const fetchedEvents = (result?.events ?? []) as EventItem[]
-      setEvents(fetchedEvents)
-
-      if (fetchedEvents.length > 0) {
-        setSelectedEventId((prev) => prev || fetchedEvents[0].id)
-      }
-    } catch (error) {
-      console.error(error)
-      setErrorMessage(
-        error instanceof Error ? error.message : '이벤트 목록 조회 중 오류가 발생했습니다.'
-      )
-    } finally {
-      setEventsLoading(false)
-    }
-  }
-
-  const fetchAttendance = async (eventId: string) => {
-    try {
-      setAttendanceLoading(true)
-      setErrorMessage('')
-      setMessage('')
-
-      const response = await fetch('/api/attendance/list', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_id: eventId }),
-      })
-
-      const contentType = response.headers.get('content-type') || ''
-      const result =
-        contentType.includes('application/json')
-          ? await response.json()
-          : null
-
-      if (!response.ok) {
-        throw new Error(result?.error || '출석 현황 조회에 실패했습니다.')
-      }
-
-      setAttendances((result?.attendances ?? []) as AttendanceItem[])
-      setSummary(
-        (result?.summary ?? {
-          total: 0,
-          present: 0,
-          late: 0,
-        }) as AttendanceSummary
-      )
-    } catch (error) {
-      console.error(error)
-      setErrorMessage(
-        error instanceof Error ? error.message : '출석 현황 조회 중 오류가 발생했습니다.'
-      )
-      setAttendances([])
-      setSummary({ total: 0, present: 0, late: 0 })
-    } finally {
-      setAttendanceLoading(false)
-    }
-  }
-
-  const handleRefresh = async () => {
-    if (!selectedEventId) return
-    await fetchAttendance(selectedEventId)
-    setMessage('출석 현황을 새로고침했습니다.')
-  }
-
-  const formatDateTime = (value?: string) => {
-    if (!value) return '-'
-
+  const formatDateTime = (value: string) => {
     try {
       return new Intl.DateTimeFormat('ko-KR', {
         timeZone: 'Asia/Seoul',
@@ -227,23 +101,207 @@ export default function AdminAttendancePage() {
     }
   }
 
-  if (loading || !actor) {
-    return <div style={{ padding: '20px' }}>로딩중...</div>
+  const fetchEvents = async () => {
+    const response = await fetch('/api/events/list', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+
+    const result = response.headers
+      .get('content-type')
+      ?.includes('application/json')
+      ? await response.json()
+      : { error: '이벤트 목록 응답 형식이 올바르지 않습니다.' }
+
+    if (!response.ok) {
+      throw new Error(result.error || '이벤트 목록을 불러오지 못했습니다.')
+    }
+
+    const fetchedEvents = result.events ?? []
+    setEvents(fetchedEvents)
+
+    if (!selectedEventId && fetchedEvents.length > 0) {
+      setSelectedEventId(fetchedEvents[0].id)
+    }
+
+    return fetchedEvents as EventItem[]
+  }
+
+  const fetchAttendance = async (eventId: string, date: string) => {
+    if (!eventId || !date) {
+      setAttendanceList([])
+      return
+    }
+
+    const response = await fetch('/api/attendance/list', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event_id: eventId,
+        date,
+      }),
+    })
+
+    const result = response.headers
+      .get('content-type')
+      ?.includes('application/json')
+      ? await response.json()
+      : { error: '출석 목록 응답 형식이 올바르지 않습니다.' }
+
+    if (!response.ok) {
+      throw new Error(result.error || '출석 목록을 불러오지 못했습니다.')
+    }
+
+    setAttendanceList(result.attendance ?? [])
+  }
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        setLoading(true)
+        setErrorMessage('')
+        const fetchedEvents = await fetchEvents()
+
+        const eventId = selectedEventId || fetchedEvents[0]?.id || ''
+        if (eventId) {
+          await fetchAttendance(eventId, selectedDate)
+        }
+      } catch (error) {
+        console.error(error)
+        setErrorMessage(
+          error instanceof Error ? error.message : '초기 데이터 로딩 중 오류가 발생했습니다.'
+        )
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    void init()
+  }, [])
+
+  useEffect(() => {
+    if (!selectedEventId || !selectedDate) return
+
+    const run = async () => {
+      try {
+        setLoading(true)
+        setErrorMessage('')
+        await fetchAttendance(selectedEventId, selectedDate)
+      } catch (error) {
+        console.error(error)
+        setErrorMessage(
+          error instanceof Error ? error.message : '출석 목록 조회 중 오류가 발생했습니다.'
+        )
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    void run()
+  }, [selectedEventId, selectedDate])
+
+  const handleOpenEdit = async (item: AttendanceItem) => {
+    try {
+      setDetailLoading(true)
+      setMessage('')
+      setErrorMessage('')
+
+      const response = await fetch('/api/attendance/detail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target_user_id: item.user_id,
+          event_id: item.event_id,
+          date: item.date,
+        }),
+      })
+
+      const result = response.headers
+        .get('content-type')
+        ?.includes('application/json')
+        ? await response.json()
+        : { error: '출석 상세 응답 형식이 올바르지 않습니다.' }
+
+      if (!response.ok) {
+        setErrorMessage(result.error || '출석 상세를 불러오지 못했습니다.')
+        return
+      }
+
+      const attendance = result.attendance as AttendanceDetail
+
+      setEditTarget({
+        target_user_id: item.user_id,
+        event_id: item.event_id,
+        date: item.date,
+        full_name: item.user?.full_name || '이름 없음',
+        student_id: item.user?.student_id || '-',
+      })
+
+      setEditStatus(attendance?.status ?? item.status)
+      setEditMethod(attendance?.method ?? item.method)
+    } catch (error) {
+      console.error(error)
+      setErrorMessage('출석 상세 조회 중 오류가 발생했습니다.')
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editTarget) return
+
+    try {
+      setSubmitLoading(true)
+      setMessage('')
+      setErrorMessage('')
+
+      const response = await fetch('/api/attendance/edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target_user_id: editTarget.target_user_id,
+          event_id: editTarget.event_id,
+          date: editTarget.date,
+          status: editStatus,
+          method: editMethod,
+        }),
+      })
+
+      const result = response.headers
+        .get('content-type')
+        ?.includes('application/json')
+        ? await response.json()
+        : { error: '출석 수정 응답 형식이 올바르지 않습니다.' }
+
+      if (!response.ok) {
+        setErrorMessage(result.error || '출석 수정에 실패했습니다.')
+        return
+      }
+
+      setMessage(result.message || '출석 기록이 수정되었습니다.')
+      setEditTarget(null)
+
+      if (selectedEventId && selectedDate) {
+        await fetchAttendance(selectedEventId, selectedDate)
+      }
+    } catch (error) {
+      console.error(error)
+      setErrorMessage('출석 수정 중 오류가 발생했습니다.')
+    } finally {
+      setSubmitLoading(false)
+    }
   }
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto' }}>
+    <div style={{ padding: '20px', maxWidth: '1100px', margin: '0 auto' }}>
       <h2>출석 현황</h2>
-
-      <p style={{ marginBottom: '20px' }}>
-        관리자: {actor.full_name} ({actor.student_id})
-      </p>
 
       <div
         style={{
           border: '1px solid #ddd',
           borderRadius: '12px',
-          padding: '16px',
+          padding: '20px',
           background: '#fff',
           marginBottom: '20px',
         }}
@@ -251,8 +309,8 @@ export default function AdminAttendancePage() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(240px, 360px) minmax(0, 1fr)',
-            gap: '16px',
+            gridTemplateColumns: '1fr 220px auto',
+            gap: '12px',
             alignItems: 'end',
           }}
         >
@@ -261,28 +319,27 @@ export default function AdminAttendancePage() {
             <select
               value={selectedEventId}
               onChange={(e) => setSelectedEventId(e.target.value)}
-              style={{ width: '100%', padding: '10px' }}
-              disabled={eventsLoading}
+              style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
             >
-              {events.length === 0 ? (
-                <option value="">이벤트 없음</option>
-              ) : (
-                events.map((event) => (
-                  <option key={event.id} value={event.id}>
-                    {event.name} / {formatDateTime(event.start_time)}
-                  </option>
-                ))
-              )}
+              {events.map((event) => (
+                <option key={event.id} value={event.id}>
+                  {event.name}
+                </option>
+              ))}
             </select>
           </div>
 
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px' }}>날짜</label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
+            />
+          </div>
+
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button type="button" onClick={handleRefresh} disabled={attendanceLoading || !selectedEventId}>
-              {attendanceLoading ? '불러오는 중...' : '새로고침'}
-            </button>
-            <button type="button" onClick={() => router.push('/admin/events')}>
-              이벤트 관리로
-            </button>
             <button type="button" onClick={() => router.push('/admin')}>
               관리자 페이지로
             </button>
@@ -294,113 +351,72 @@ export default function AdminAttendancePage() {
             style={{
               marginTop: '16px',
               padding: '12px',
-              borderRadius: '10px',
-              background: '#f8fafc',
-              lineHeight: 1.7,
+              border: '1px solid #eee',
+              borderRadius: '8px',
             }}
           >
-            <div><strong>이벤트명:</strong> {selectedEvent.name}</div>
-            <div><strong>타입:</strong> {selectedEvent.type}</div>
-            <div><strong>시작 시간:</strong> {formatDateTime(selectedEvent.start_time)}</div>
-            <div><strong>지각 기준:</strong> {selectedEvent.late_threshold_min}분</div>
+            <div>
+              <strong>선택 이벤트:</strong> {selectedEvent.name}
+            </div>
+            <div>
+              <strong>시작 시간:</strong> {formatDateTime(selectedEvent.start_time)}
+            </div>
+            <div>
+              <strong>지각 기준:</strong> {selectedEvent.late_threshold_min}분
+            </div>
           </div>
         )}
 
-        {message && (
-          <p style={{ color: 'green', marginTop: '12px' }}>✅ {message}</p>
-        )}
-
+        {message && <p style={{ color: 'green', marginTop: '16px' }}>✅ {message}</p>}
         {errorMessage && (
-          <p style={{ color: 'crimson', marginTop: '12px' }}>⚠️ {errorMessage}</p>
+          <p style={{ color: 'crimson', marginTop: '16px' }}>⚠️ {errorMessage}</p>
         )}
-      </div>
-
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, minmax(180px, 1fr))',
-          gap: '12px',
-          marginBottom: '20px',
-        }}
-      >
-        <SummaryCard title="총 출석" value={summary.total} />
-        <SummaryCard title="정상 출석" value={summary.present} />
-        <SummaryCard title="지각" value={summary.late} />
       </div>
 
       <div
         style={{
           border: '1px solid #ddd',
           borderRadius: '12px',
-          padding: '16px',
+          padding: '20px',
           background: '#fff',
         }}
       >
-        <div
-          style={{
-            display: 'flex',
-            gap: '10px',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            marginBottom: '12px',
-          }}
-        >
-          <h3 style={{ margin: 0 }}>출석 목록</h3>
+        <h3 style={{ marginTop: 0 }}>출석 목록</h3>
 
-          <input
-            type="text"
-            placeholder="이름 / 학번 / 상태 검색"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            style={{ padding: '8px 10px', minWidth: '240px' }}
-          />
-        </div>
-
-        {attendanceLoading ? (
-          <p style={{ color: '#666' }}>출석 데이터를 불러오는 중입니다...</p>
-        ) : filteredAttendances.length === 0 ? (
-          <p style={{ color: '#666' }}>출석 데이터가 없습니다.</p>
+        {loading ? (
+          <p>로딩중...</p>
+        ) : attendanceList.length === 0 ? (
+          <p>조회된 출석 기록이 없습니다.</p>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table
-              style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                minWidth: '900px',
-              }}
-            >
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
                   <th style={thStyle}>이름</th>
                   <th style={thStyle}>학번</th>
-                  <th style={thStyle}>역할</th>
-                  <th style={thStyle}>출석 상태</th>
-                  <th style={thStyle}>출석 시간</th>
+                  <th style={thStyle}>상태</th>
+                  <th style={thStyle}>방식</th>
+                  <th style={thStyle}>체크 시간</th>
+                  <th style={thStyle}>관리</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredAttendances.map((item) => (
+                {attendanceList.map((item) => (
                   <tr key={item.id}>
-                    <td style={tdStyle}>{item.users?.full_name ?? '-'}</td>
-                    <td style={tdStyle}>{item.users?.student_id ?? '-'}</td>
-                    <td style={tdStyle}>{item.users?.role ?? '-'}</td>
+                    <td style={tdStyle}>{item.user?.full_name || '-'}</td>
+                    <td style={tdStyle}>{item.user?.student_id || '-'}</td>
+                    <td style={tdStyle}>{statusLabel(item.status)}</td>
+                    <td style={tdStyle}>{item.method}</td>
+                    <td style={tdStyle}>{formatDateTime(item.check_time)}</td>
                     <td style={tdStyle}>
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          padding: '4px 10px',
-                          borderRadius: '999px',
-                          background: item.status === 'late' ? '#fff7ed' : '#ecfeff',
-                          color: item.status === 'late' ? '#c2410c' : '#0f766e',
-                          fontWeight: 600,
-                          fontSize: '13px',
-                        }}
+                      <button
+                        type="button"
+                        onClick={() => void handleOpenEdit(item)}
+                        disabled={detailLoading}
                       >
-                        {item.status === 'late' ? '지각' : '정상'}
-                      </span>
+                        {detailLoading ? '불러오는 중...' : '수정'}
+                      </button>
                     </td>
-                    <td style={tdStyle}>{formatDateTime(item.checked_at || item.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -408,38 +424,96 @@ export default function AdminAttendancePage() {
           </div>
         )}
       </div>
+
+      {editTarget && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '420px',
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '20px',
+            }}
+          >
+            <h3 style={{ marginTop: 0 }}>출석 수정</h3>
+
+            <p style={{ marginTop: 0 }}>
+              {editTarget.full_name} ({editTarget.student_id})
+            </p>
+            <p>{editTarget.date}</p>
+
+            <label style={{ display: 'block', marginBottom: '6px' }}>상태</label>
+            <select
+              value={editStatus}
+              onChange={(e) =>
+                setEditStatus(e.target.value as 'present' | 'late' | 'absent')
+              }
+              style={{ width: '100%', padding: '10px', marginBottom: '12px' }}
+            >
+              {STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+
+            <label style={{ display: 'block', marginBottom: '6px' }}>방식</label>
+            <select
+              value={editMethod}
+              onChange={(e) =>
+                setEditMethod(e.target.value as 'manual' | 'qr' | 'nfc')
+              }
+              style={{ width: '100%', padding: '10px', marginBottom: '16px' }}
+            >
+              <option value="manual">manual</option>
+              <option value="qr">qr</option>
+              <option value="nfc">nfc</option>
+            </select>
+
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button type="button" onClick={handleSaveEdit} disabled={submitLoading}>
+                {submitLoading ? '저장중...' : '저장'}
+              </button>
+              <button type="button" onClick={() => setEditTarget(null)}>
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-function SummaryCard({
-  title,
-  value,
-}: {
-  title: string
-  value: number
-}) {
-  return (
-    <div
-      style={{
-        border: '1px solid #ddd',
-        borderRadius: '12px',
-        padding: '16px',
-        background: '#fff',
-      }}
-    >
-      <div style={{ fontSize: '14px', color: '#666', marginBottom: '6px' }}>{title}</div>
-      <div style={{ fontSize: '28px', fontWeight: 700 }}>{value}</div>
-    </div>
-  )
+function statusLabel(status: AttendanceItem['status']) {
+  switch (status) {
+    case 'present':
+      return '출석'
+    case 'late':
+      return '지각'
+    case 'absent':
+      return '결석'
+    default:
+      return status
+  }
 }
 
 const thStyle: React.CSSProperties = {
   textAlign: 'left',
   borderBottom: '1px solid #ddd',
   padding: '10px',
-  background: '#fafafa',
-  verticalAlign: 'top',
+  whiteSpace: 'nowrap',
 }
 
 const tdStyle: React.CSSProperties = {

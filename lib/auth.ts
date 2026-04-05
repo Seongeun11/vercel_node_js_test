@@ -1,3 +1,5 @@
+// lib/auth.js
+
 export function getStoredUser() {
   if (typeof window === 'undefined') return null
 

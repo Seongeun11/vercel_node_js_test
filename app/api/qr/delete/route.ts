@@ -1,6 +1,7 @@
+// app/api/qr/delete/route.ts
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
 import { requireRole } from '@/lib/serverAuth'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
 type DeleteQrBody = {
   id?: string
@@ -18,16 +19,16 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as DeleteQrBody
-    const { id } = body
+    const id = String(body.id || '').trim()
 
     if (!id) {
       return NextResponse.json(
-        { error: '삭제할 QR id가 필요합니다.' },
+        { error: 'QR ID가 필요합니다.' },
         { status: 400 }
       )
     }
 
-    const { data: existingQr, error: existingError } = await supabase
+    const { data: existingQr, error: existingError } = await supabaseAdmin
       .from('qr_tokens')
       .select('id')
       .eq('id', id)
@@ -35,30 +36,29 @@ export async function POST(request: Request) {
 
     if (existingError || !existingQr) {
       return NextResponse.json(
-        { error: '삭제할 QR 데이터를 찾을 수 없습니다.' },
+        { error: '삭제할 QR을 찾을 수 없습니다.' },
         { status: 404 }
       )
     }
 
-    const { error } = await supabase
+    const { error: deleteError } = await supabaseAdmin
       .from('qr_tokens')
       .delete()
       .eq('id', id)
 
-    if (error) {
+    if (deleteError) {
       return NextResponse.json(
-        { error: error.message },
+        { error: deleteError.message },
         { status: 500 }
       )
     }
 
     return NextResponse.json(
-      { message: 'QR 코드가 삭제되었습니다.' },
+      { message: 'QR이 삭제되었습니다.' },
       { status: 200 }
     )
   } catch (error) {
     console.error('qr/delete POST error:', error)
-
     return NextResponse.json(
       { error: 'QR 삭제 중 서버 오류가 발생했습니다.' },
       { status: 500 }

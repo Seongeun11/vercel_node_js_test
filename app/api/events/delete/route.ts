@@ -1,6 +1,7 @@
+// app/api/events/delete/route.ts
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
 import { requireRole } from '@/lib/serverAuth'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
 type DeleteEventBody = {
   id?: string
@@ -18,18 +19,18 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as DeleteEventBody
-    const { id } = body
+    const id = String(body.id || '').trim()
 
     if (!id) {
       return NextResponse.json(
-        { error: '삭제할 이벤트 id가 필요합니다.' },
+        { error: '이벤트 ID가 필요합니다.' },
         { status: 400 }
       )
     }
 
-    const { data: existingEvent, error: existingError } = await supabase
+    const { data: existingEvent, error: existingError } = await supabaseAdmin
       .from('events')
-      .select('id, name')
+      .select('id')
       .eq('id', id)
       .single()
 
@@ -40,55 +41,48 @@ export async function POST(request: Request) {
       )
     }
 
-    const { count: attendanceCount, error: attendanceError } = await supabase
-      .from('attendance')
-      .select('*', { count: 'exact', head: true })
-      .eq('event_id', id)
+    const [{ count: attendanceCount, error: attendanceCountError }, { count: qrCount, error: qrCountError }] =
+      await Promise.all([
+        supabaseAdmin
+          .from('attendance')
+          .select('*', { count: 'exact', head: true })
+          .eq('event_id', id),
+        supabaseAdmin
+          .from('qr_tokens')
+          .select('*', { count: 'exact', head: true })
+          .eq('event_id', id),
+      ])
 
-    if (attendanceError) {
+    if (attendanceCountError || qrCountError) {
       return NextResponse.json(
-        { error: attendanceError.message },
+        { error: attendanceCountError?.message || qrCountError?.message || '연관 데이터 확인에 실패했습니다.' },
         { status: 500 }
       )
     }
 
-    if ((attendanceCount ?? 0) > 0) {
+    if ((attendanceCount ?? 0) > 0 || (qrCount ?? 0) > 0) {
       return NextResponse.json(
-        { error: '출석 기록이 있는 이벤트는 삭제할 수 없습니다.' },
-        { status: 409 }
+        {
+          error: '출석 기록 또는 QR 토큰이 연결된 이벤트는 삭제할 수 없습니다.',
+        },
+        { status: 400 }
       )
     }
 
-    const { count: qrTokenCount, error: qrTokenError } = await supabase
-      .from('qr_tokens')
-      .select('*', { count: 'exact', head: true })
-      .eq('event_id', id)
-
-    if (qrTokenError) {
-      return NextResponse.json(
-        { error: qrTokenError.message },
-        { status: 500 }
-      )
-    }
-
-    if ((qrTokenCount ?? 0) > 0) {
-      return NextResponse.json(
-        { error: 'QR 토큰이 연결된 이벤트는 먼저 QR 데이터를 정리한 뒤 삭제해주세요.' },
-        { status: 409 }
-      )
-    }
-
-    const { error } = await supabase
+    const { error: deleteError } = await supabaseAdmin
       .from('events')
       .delete()
       .eq('id', id)
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (deleteError) {
+      return NextResponse.json(
+        { error: deleteError.message },
+        { status: 500 }
+      )
     }
 
     return NextResponse.json(
-      { message: `"${existingEvent.name}" 이벤트가 삭제되었습니다.` },
+      { message: '이벤트가 삭제되었습니다.' },
       { status: 200 }
     )
   } catch (error) {

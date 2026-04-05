@@ -1,33 +1,20 @@
-import { randomUUID } from 'crypto'
+// app/api/qr/create/route.ts
+import crypto from 'crypto'
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
 import { requireRole } from '@/lib/serverAuth'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
-function getOrigin(request: Request): string {
-  const url = new URL(request.url)
-  let origin = url.origin
-  const forwardedHost = request.headers.get('x-forwarded-host')
-  const forwardedProto = request.headers.get('x-forwarded-proto')
+type CreateQrBody = {
+  event_id?: string
+  expire_minutes?: number
+}
 
-  if (forwardedHost && forwardedProto) {
-    origin = `${forwardedProto}://${forwardedHost}`
-  }
-
-  return origin
+function generateQrToken() {
+  return crypto.randomBytes(24).toString('hex')
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { event_id, expire_minutes = 60 } = body
-
-    if (!event_id) {
-      return NextResponse.json(
-        { error: 'event_id가 필요합니다.' },
-        { status: 400 }
-      )
-    }
-
     const authResult = await requireRole(['admin'])
 
     if (!authResult.ok) {
@@ -37,19 +24,29 @@ export async function POST(request: Request) {
       )
     }
 
-    const expireMinutes = Number(expire_minutes)
+    const body = (await request.json()) as CreateQrBody
 
-    if (Number.isNaN(expireMinutes) || expireMinutes < 1 || expireMinutes > 60) {
+    const eventId = String(body.event_id || '').trim()
+    const expireMinutes = Number(body.expire_minutes ?? 60)
+
+    if (!eventId) {
       return NextResponse.json(
-        { error: 'expire_minutes는 1~60분 사이여야 합니다.' },
+        { error: 'event_id가 필요합니다.' },
         { status: 400 }
       )
     }
 
-    const { data: event, error: eventError } = await supabase
+    if (!Number.isFinite(expireMinutes) || expireMinutes < 1 || expireMinutes > 60) {
+      return NextResponse.json(
+        { error: 'QR 유효 시간은 1~60분 사이여야 합니다.' },
+        { status: 400 }
+      )
+    }
+
+    const { data: event, error: eventError } = await supabaseAdmin
       .from('events')
       .select('id, name, start_time')
-      .eq('id', event_id)
+      .eq('id', eventId)
       .single()
 
     if (eventError || !event) {
@@ -59,44 +56,44 @@ export async function POST(request: Request) {
       )
     }
 
-    const token = randomUUID()
-    const expiresAt = new Date(Date.now() + expireMinutes * 60 * 1000).toISOString()
+    const now = new Date()
+    const expiresAt = new Date(now.getTime() + expireMinutes * 60 * 1000)
+    const token = generateQrToken()
 
-    const { data: qrToken, error: insertError } = await supabase
+    const { data: createdQrToken, error: createError } = await supabaseAdmin
       .from('qr_tokens')
       .insert({
-        event_id,
+        event_id: eventId,
         token,
-        expires_at: expiresAt,
-        created_by: authResult.user.id,
+        expires_at: expiresAt.toISOString(),
+        used_count: 0,
       })
-      .select()
+      .select('id, event_id, token, expires_at, used_count, created_at')
       .single()
 
-    if (insertError) {
+    if (createError || !createdQrToken) {
       return NextResponse.json(
-        { error: insertError.message },
+        { error: createError?.message || 'QR 생성에 실패했습니다.' },
         { status: 500 }
       )
     }
 
-    const scanUrl = `${getOrigin(request)}/attendance/scan?token=${encodeURIComponent(token)}`
-
     return NextResponse.json(
       {
-        message: 'QR 토큰이 생성되었습니다.',
-        qr_token: qrToken,
-        event,
-        scan_url: scanUrl,
+        message: 'QR이 생성되었습니다.',
+        qr_token: createdQrToken,
+        event: {
+          id: event.id,
+          name: event.name,
+          start_time: event.start_time,
+        },
       },
-      { status: 200 }
+      { status: 201 }
     )
   } catch (error) {
     console.error('qr/create POST error:', error)
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : 'QR 토큰 생성 중 서버 오류가 발생했습니다.',
-      },
+      { error: 'QR 생성 중 서버 오류가 발생했습니다.' },
       { status: 500 }
     )
   }

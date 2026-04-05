@@ -1,3 +1,4 @@
+// app/login/loginClient.js
 'use client'
 
 import { useState } from 'react'
@@ -5,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { setStoredUser } from '@/lib/auth'
 
 export default function LoginClient() {
-  const [student_id, setStudent_id] = useState('')
+  const [student_id, setStudentId] = useState('')
   const [password, setPassword] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [loading, setLoading] = useState(false)
@@ -13,14 +14,14 @@ export default function LoginClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const getSafeRedirectPath = (next) => {
+  function getSafeRedirectPath(next) {
     if (!next) return '/'
     if (!next.startsWith('/')) return '/'
     if (next.startsWith('//')) return '/'
     return next
   }
 
-  const handleLogin = async () => {
+  async function handleLogin() {
     setErrorMessage('')
 
     if (!student_id.trim() || !password.trim()) {
@@ -56,6 +57,7 @@ export default function LoginClient() {
 
       sessionStorage.removeItem('post_login_redirect')
       router.replace(redirectPath)
+      router.refresh()
     } catch (error) {
       console.error('로그인 실패:', error)
       setErrorMessage('로그인 중 오류가 발생했습니다.')
@@ -74,10 +76,10 @@ export default function LoginClient() {
         type="text"
         value={student_id}
         onChange={(e) => {
-          //setStudent_id(e.target.value.replace(/[^ㄱ-ㅎㅏ-ㅣ가-힣a-zA-Z\s]/g, ''))
-          setStudent_id(e.target.value)
+          setStudentId(e.target.value)
           if (errorMessage) setErrorMessage('')
         }}
+        autoComplete="username"
       />
 
       <input
@@ -91,6 +93,7 @@ export default function LoginClient() {
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !loading) handleLogin()
         }}
+        autoComplete="current-password"
       />
 
       <button

@@ -1,8 +1,13 @@
+// app/api/qr/list/route.ts
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
 import { requireRole } from '@/lib/serverAuth'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
-export async function POST() {
+type ListQrBody = {
+  event_id?: string
+}
+
+export async function POST(request: Request) {
   try {
     const authResult = await requireRole(['admin'])
 
@@ -13,7 +18,10 @@ export async function POST() {
       )
     }
 
-    const { data, error } = await supabase
+    const body = (await request.json()) as ListQrBody
+    const eventId = String(body.event_id || '').trim()
+
+    let query = supabaseAdmin
       .from('qr_tokens')
       .select(`
         id,
@@ -22,7 +30,6 @@ export async function POST() {
         expires_at,
         used_count,
         created_at,
-        created_by,
         events (
           id,
           name,
@@ -31,14 +38,38 @@ export async function POST() {
       `)
       .order('created_at', { ascending: false })
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (eventId) {
+      query = query.eq('event_id', eventId)
     }
 
-    return NextResponse.json({ qrTokens: data ?? [] }, { status: 200 })
+    const { data, error } = await query
+
+    if (error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      )
+    }
+
+    const now = Date.now()
+
+    const qrTokens = (data ?? []).map((item: any) => {
+      const expiresAtMs = new Date(item.expires_at).getTime()
+
+      return {
+        ...item,
+        is_expired: Number.isNaN(expiresAtMs) ? true : now > expiresAtMs,
+      }
+    })
+
+    return NextResponse.json(
+      {
+        qr_tokens: qrTokens,
+      },
+      { status: 200 }
+    )
   } catch (error) {
     console.error('qr/list POST error:', error)
-
     return NextResponse.json(
       { error: 'QR 목록 조회 중 서버 오류가 발생했습니다.' },
       { status: 500 }

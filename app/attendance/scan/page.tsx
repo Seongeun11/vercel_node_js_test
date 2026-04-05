@@ -1,24 +1,168 @@
-import { Suspense } from 'react'
-import AttendanceScanClient from './attendanceScanClient'
+// app/attendance/scan/page.tsx
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+
+type CheckResult = {
+  status?: 'present' | 'late' | 'absent'
+  message?: string
+  recorded_at_utc?: string
+  recorded_at_kst?: string
+  attendance_date_kst?: string
+  error?: string
+}
 
 export default function AttendanceScanPage() {
-  return (
-    <Suspense
-      fallback={
-        <main
-          style={{
-            padding: '20px',
-            maxWidth: '480px',
-            margin: '0 auto',
-            textAlign: 'center',
-          }}
-        >
-          <h2>QR 출석</h2>
-          <p>처리중...</p>
-        </main>
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const token = searchParams.get('token') || ''
+
+  const requestedRef = useRef(false)
+
+  const [loading, setLoading] = useState(true)
+  const [result, setResult] = useState<CheckResult | null>(null)
+
+  useEffect(() => {
+    const checkAttendance = async () => {
+      try {
+        if (requestedRef.current) return
+        requestedRef.current = true
+
+        if (!token) {
+          setResult({ error: 'QR 토큰이 없습니다.' })
+          return
+        }
+
+        const response = await fetch('/api/attendance/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        })
+
+        const data = response.headers
+          .get('content-type')
+          ?.includes('application/json')
+          ? await response.json()
+          : { error: '출석 응답 형식이 올바르지 않습니다.' }
+
+        if (!response.ok) {
+          setResult({
+            error: data.error || '출석 처리에 실패했습니다.',
+          })
+          return
+        }
+
+        setResult({
+          status: data.status,
+          message: data.message,
+          recorded_at_utc: data.recorded_at_utc,
+          recorded_at_kst: data.recorded_at_kst,
+          attendance_date_kst: data.attendance_date_kst,
+        })
+      } catch (error) {
+        console.error(error)
+        setResult({
+          error: '출석 처리 중 오류가 발생했습니다.',
+        })
+      } finally {
+        setLoading(false)
       }
+    }
+
+    void checkAttendance()
+  }, [token])
+
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#f7f7f7',
+        padding: '20px',
+        boxSizing: 'border-box',
+      }}
     >
-      <AttendanceScanClient />
-    </Suspense>
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '520px',
+          background: '#fff',
+          border: '1px solid #e5e5e5',
+          borderRadius: '16px',
+          padding: '24px',
+          textAlign: 'center',
+        }}
+      >
+        <h2 style={{ marginTop: 0 }}>QR 출석 처리</h2>
+
+        {loading ? (
+          <p>출석을 처리하는 중입니다...</p>
+        ) : result?.error ? (
+          <>
+            <p style={{ color: 'crimson', fontWeight: 700 }}>⚠️ {result.error}</p>
+            <div style={{ marginTop: '16px', display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button type="button" onClick={() => router.push('/attendance')}>
+                출석 페이지로
+              </button>
+              <button type="button" onClick={() => router.push('/')}>
+                메인으로
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p
+              style={{
+                fontSize: '18px',
+                fontWeight: 700,
+                color: result?.status === 'late' ? '#b45309' : 'green',
+              }}
+            >
+              {result?.message || '출석이 완료되었습니다.'}
+            </p>
+
+            <div
+              style={{
+                marginTop: '16px',
+                textAlign: 'left',
+                border: '1px solid #eee',
+                borderRadius: '12px',
+                padding: '16px',
+                background: '#fafafa',
+              }}
+            >
+              <div style={{ marginBottom: '8px' }}>
+                <strong>출석 상태:</strong>{' '}
+                {result?.status === 'present'
+                  ? '출석'
+                  : result?.status === 'late'
+                  ? '지각'
+                  : result?.status === 'absent'
+                  ? '결석'
+                  : '-'}
+              </div>
+              <div style={{ marginBottom: '8px' }}>
+                <strong>출석 날짜(KST):</strong> {result?.attendance_date_kst || '-'}
+              </div>
+              <div>
+                <strong>처리 시각(KST):</strong> {result?.recorded_at_kst || '-'}
+              </div>
+            </div>
+
+            <div style={{ marginTop: '16px', display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button type="button" onClick={() => router.push('/')}>
+                메인으로
+              </button>
+              <button type="button" onClick={() => router.push('/attendance')}>
+                출석 페이지로
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   )
 }
