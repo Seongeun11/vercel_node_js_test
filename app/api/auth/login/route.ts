@@ -1,6 +1,7 @@
 // app/api/auth/login/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { studentIdToEmail } from '@/lib/auth-email'
 
 type LoginBody = {
@@ -17,8 +18,8 @@ type PendingCookie = {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as LoginBody
-    const studentId = String(body.student_id || '').trim()
-    const password = String(body.password || '')
+    const studentId = String(body.student_id ?? '').trim()
+    const password = String(body.password ?? '')
 
     if (!studentId || !password) {
       return NextResponse.json(
@@ -27,6 +28,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const email = studentIdToEmail(studentId)
     const pendingCookies: PendingCookie[] = []
 
     const supabase = createServerClient(
@@ -47,38 +49,38 @@ export async function POST(request: NextRequest) {
       }
     )
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: studentIdToEmail(studentId),
-      password,
-    })
+    const { data: signInData, error: signInError } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-    if (signInError) {
+    //console.log('[LOGIN] studentId:', studentId)
+    //console.log('[LOGIN] email:', email)
+    //console.log('[LOGIN] signIn user:', signInData.user?.id ?? null)
+    //console.log('[LOGIN] signIn session:', !!signInData.session)
+    //console.error('[LOGIN] signIn error:', signInError)
+
+    if (signInError || !signInData.user || !signInData.session) {
       return NextResponse.json(
         { error: '학번 또는 비밀번호가 올바르지 않습니다.' },
         { status: 401 }
       )
     }
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
+    // 로그인 직후 profile 조회는 admin client로 수행
+    const signedInUser = signInData.user
 
-    if (userError || !user) {
-      return NextResponse.json(
-        { error: '로그인 세션 확인에 실패했습니다.' },
-        { status: 401 }
-      )
-    }
-
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('id, full_name, student_id, role')
-      .eq('id', user.id)
-      .single()
+      .eq('id', signedInUser.id)
+      .maybeSingle()
+
+    //console.error('[LOGIN] profileError:', profileError)
+    //console.log('[LOGIN] profile:', profile)
 
     if (profileError || !profile) {
-      await supabase.auth.signOut()
       return NextResponse.json(
         { error: '프로필 정보를 찾을 수 없습니다. 관리자에게 문의해주세요.' },
         { status: 403 }
@@ -93,7 +95,6 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     )
 
-    // Supabase가 요청한 쿠키를 최종 응답에 반영
     for (const cookie of pendingCookies) {
       response.cookies.set({
         name: cookie.name,
@@ -101,10 +102,12 @@ export async function POST(request: NextRequest) {
         ...(cookie.options ?? {}),
       })
     }
-
+    //console.error('[LOGIN] profileError:', profileError)
+   // console.log('[LOGIN] profile:', profile)
+    //console.log('[LOGIN] pendingCookies:', pendingCookies)
     return response
   } catch (error) {
-    console.error('auth/login POST error:', error)
+    console.error('[AUTH_LOGIN_POST_ERROR]', error)
     return NextResponse.json(
       { error: '로그인 처리 중 서버 오류가 발생했습니다.' },
       { status: 500 }
