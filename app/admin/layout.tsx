@@ -2,6 +2,8 @@ import { ReactNode } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { requireRole } from '@/lib/serverAuth'
+//vercel 빌드 형식 dynamic으로 선언
+export const dynamic = 'force-dynamic'
 
 type Props = {
   children: ReactNode

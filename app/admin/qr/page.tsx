@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import QRCode from 'qrcode'
+//vercel 빌드 형식 dynamic으로 선언
+export const dynamic = 'force-dynamic'
 
 type EventItem = {
   id: string

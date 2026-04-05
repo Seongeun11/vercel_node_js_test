@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+//vercel 빌드 형식 dynamic으로 선언
+export const dynamic = 'force-dynamic'
 
 type Role = 'admin' | 'captain' | 'trainee'
 

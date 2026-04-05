@@ -1,6 +1,7 @@
 // app/page.js
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/serverAuth'
+import LogoutButton from '@/components/LogoutButton'
 
 export default async function HomePage() {
   const user = await getCurrentUser()
@@ -63,7 +64,7 @@ export default async function HomePage() {
 
               {user.role === 'admin' && (
                 <>
-                  <Link href="/logs">
+                  <Link href="/admin">
                     <button type="button">관리자 페이지</button>
                   </Link>
                   <Link href="/admin/events">
@@ -83,8 +84,8 @@ export default async function HomePage() {
             </div>
           </div>
 
-          <form action="/login" method="post" style={{ marginTop: '20px' }}>
-            <button type="submit">로그아웃</button>
+          <form action="/api/auth/logout" method="post" style={{ marginTop: '20px' }}>
+            <LogoutButton />
           </form>
         </>
       )}
