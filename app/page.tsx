@@ -1,5 +1,4 @@
 // app/page.tsx
-
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/serverAuth'
 import LogoutButton from '@/components/LogoutButton'
