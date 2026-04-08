@@ -1,29 +1,39 @@
-// app/login/loginClient.js
 'use client'
 
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import type { KeyboardEvent } from 'react'
+
+type LoginResponse = {
+  user?: {
+    id?: string
+    student_id?: string
+    role?: string
+  }
+  error?: string
+}
 
 export default function LoginClient() {
-  const [student_id, setStudentId] = useState('')
-  const [password, setPassword] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [studentId, setStudentId] = useState<string>('')
+  const [password, setPassword] = useState<string>('')
+  const [errorMessage, setErrorMessage] = useState<string>('')
+  const [loading, setLoading] = useState<boolean>(false)
 
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  function getSafeRedirectPath(next) {
+  // 오픈 리다이렉트 방지용 안전한 내부 경로만 허용
+  function getSafeRedirectPath(next: string | null): string {
     if (!next) return '/'
     if (!next.startsWith('/')) return '/'
     if (next.startsWith('//')) return '/'
     return next
   }
 
-  async function handleLogin() {
+  async function handleLogin(): Promise<void> {
     setErrorMessage('')
 
-    const normalizedStudentId = student_id.trim()
+    const normalizedStudentId = studentId.trim()
     const normalizedPassword = password.trim()
 
     if (!normalizedStudentId || !normalizedPassword) {
@@ -44,7 +54,7 @@ export default function LoginClient() {
         }),
       })
 
-      const result = await response.json()
+      const result: LoginResponse = await response.json()
 
       if (!response.ok || !result?.user) {
         setErrorMessage(result?.error || '로그인에 실패했습니다.')
@@ -57,14 +67,20 @@ export default function LoginClient() {
 
       sessionStorage.removeItem('post_login_redirect')
 
-      // 로그인 후에는 서버가 새 쿠키 기준으로 다시 렌더링하게 이동
+      // 로그인 후 새 쿠키 기준으로 서버 컴포넌트 재평가
       router.replace(redirectPath)
       router.refresh()
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('로그인 실패:', error)
       setErrorMessage('로그인 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  function handlePasswordKeyDown(e: KeyboardEvent<HTMLInputElement>): void {
+    if (e.key === 'Enter' && !loading) {
+      void handleLogin()
     }
   }
 
@@ -76,7 +92,7 @@ export default function LoginClient() {
         style={{ margin: '10px' }}
         placeholder="학번"
         type="text"
-        value={student_id}
+        value={studentId}
         onChange={(e) => {
           setStudentId(e.target.value)
           if (errorMessage) setErrorMessage('')
@@ -92,15 +108,13 @@ export default function LoginClient() {
           setPassword(e.target.value)
           if (errorMessage) setErrorMessage('')
         }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !loading) handleLogin()
-        }}
+        onKeyDown={handlePasswordKeyDown}
         autoComplete="current-password"
       />
 
       <button
         type="button"
-        onClick={handleLogin}
+        onClick={() => void handleLogin()}
         disabled={loading}
         style={{
           padding: '10px',

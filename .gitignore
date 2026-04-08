@@ -15,7 +15,6 @@ build/
 # 운영체제 관련 파일
 .DS_Store
 Thumbs.db
-
-package.json
-package-lock.json
-tsconfig.json
+# backups
+*.bak
+*.backup

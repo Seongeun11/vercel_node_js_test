@@ -1,10 +1,18 @@
-// app/page.js
+// app/page.tsx
+
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/serverAuth'
 import LogoutButton from '@/components/LogoutButton'
 
+// 서버에서 사용하는 사용자 타입 정의 (최소 필드만)
+type User = {
+  full_name: string
+  student_id: string
+  role: 'admin' | 'captain' | 'trainee'
+} | null
+
 export default async function HomePage() {
-  const user = await getCurrentUser()
+  const user: User = await getCurrentUser()
 
   return (
     <main style={{ maxWidth: '860px', margin: '0 auto', padding: '24px' }}>
