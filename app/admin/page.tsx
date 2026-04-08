@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { requireRole } from '@/lib/serverAuth'
+//vercel 빌드 형식 dynamic으로 선언
+export const dynamic = 'force-dynamic'
 
 export default async function AdminPage() {
   const authResult = await requireRole(['admin'])

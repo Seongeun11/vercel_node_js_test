@@ -1,18 +1,21 @@
 // app/api/qr/list/route.ts
-import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { NextRequest } from 'next/server'
+import { assertSameOrigin } from '@/lib/security/csrf'
+import { jsonNoStore } from '@/lib/security/api-response'
 
 type ListQrBody = {
   event_id?: string
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request)
     const authResult = await requireRole(['admin'])
 
     if (!authResult.ok) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: authResult.error },
         { status: authResult.status }
       )
@@ -45,7 +48,7 @@ export async function POST(request: Request) {
     const { data, error } = await query
 
     if (error) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: error.message },
         { status: 500 }
       )
@@ -62,7 +65,7 @@ export async function POST(request: Request) {
       }
     })
 
-    return NextResponse.json(
+    return jsonNoStore(
       {
         qr_tokens: qrTokens,
       },
@@ -70,7 +73,7 @@ export async function POST(request: Request) {
     )
   } catch (error) {
     console.error('qr/list POST error:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: 'QR 목록 조회 중 서버 오류가 발생했습니다.' },
       { status: 500 }
     )

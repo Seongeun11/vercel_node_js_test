@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+// app/api/admin/users/create/route.ts
+
+import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { studentIdToEmail } from '@/lib/auth-email'
@@ -6,25 +8,8 @@ import { adminUserCreateSchema } from '@/lib/validations/admin-user'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getClientIp } from '@/lib/request-ip'
 import { writeAdminAuditLog } from '@/lib/admin-audit'
-
-function isAllowedOrigin(request: NextRequest): boolean {
-  const origin = request.headers.get('origin')
-  if (!origin) return true
-  if (process.env.NODE_ENV !== 'production') {
-    return true
-  }
-
-  const allowedOrigins = [
-    process.env.NEXT_PUBLIC_APP_URL,
-    process.env.APP_URL,
-    process.env.VERCEL_PROJECT_PRODUCTION_URL
-      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-      : undefined,
- 
-  ].filter(Boolean) as string[]
-
-  return allowedOrigins.includes(origin)
-}
+import { assertSameOrigin } from '@/lib/security/csrf'
+import { jsonNoStore } from '@/lib/security/api-response'
 
 function normalizeSupabaseAuthError(message?: string): string {
   if (!message) return '사용자 생성 실패'
@@ -47,30 +32,16 @@ export async function POST(request: NextRequest) {
   const clientIp = getClientIp(request)
 
   try {
-    // 1) 관리자 권한 확인
+    // 1) CSRF 방어
+    assertSameOrigin(request)
+
+    // 2) 관리자 권한 확인
     const authResult = await requireRole(['admin'])
 
     if (!authResult.ok || !authResult.user) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: authResult.error },
         { status: authResult.status }
-      )
-    }
-
-    // 2) Origin 검사
-    if (!isAllowedOrigin(request)) {
-      await writeAdminAuditLog({
-        actorUserId: authResult.user.id,
-        action: 'admin.user_create.blocked.invalid_origin',
-        metadata: { client_ip: clientIp },
-      })
-
-      return NextResponse.json(
-
-
-        { error: '허용되지 않은 요청 출처입니다.' },
-        
-        { status: 403 }
       )
     }
 
@@ -88,7 +59,7 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      return NextResponse.json(
+      return jsonNoStore(
         {
           error: '입력값이 올바르지 않습니다.',
           details: parsed.error.flatten(),
@@ -97,7 +68,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { student_id: studentId, password, full_name: fullName, role } = parsed.data
+    const {
+      student_id: studentId,
+      password,
+      full_name: fullName,
+      role,
+    } = parsed.data
+
     const email = studentIdToEmail(studentId)
 
     // 4) Rate limit - IP 기준
@@ -118,7 +95,7 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      return NextResponse.json(
+      return jsonNoStore(
         {
           error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
         },
@@ -149,7 +126,7 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      return NextResponse.json(
+      return jsonNoStore(
         {
           error: '해당 학번에 대한 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
         },
@@ -183,7 +160,7 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '학번 중복 확인 중 오류가 발생했습니다.' },
         { status: 500 }
       )
@@ -199,7 +176,7 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '이미 존재하는 학번입니다.' },
         { status: 409 }
       )
@@ -230,7 +207,7 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      return NextResponse.json(
+      return jsonNoStore(
         { error: normalizeSupabaseAuthError(createAuthError?.message) },
         { status: 400 }
       )
@@ -247,6 +224,7 @@ export async function POST(request: NextRequest) {
     if (createdProfileError || !createdProfile) {
       console.error('[PROFILE_TRIGGER_CREATE_ERROR]', createdProfileError)
 
+      // Auth만 생성되고 profile이 없으면 롤백
       await supabaseAdmin.auth.admin.deleteUser(createdAuth.user.id)
 
       await writeAdminAuditLog({
@@ -261,8 +239,7 @@ export async function POST(request: NextRequest) {
         },
       })
 
-    
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '프로필 자동 생성에 실패했습니다. 트리거 설정을 확인해주세요.' },
         { status: 500 }
       )
@@ -282,7 +259,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json(
+    return jsonNoStore(
       {
         ok: true,
         user: {
@@ -295,16 +272,12 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     )
-
   } catch (error) {
-    
-    //console.error('[ADMIN_USER_CREATE_ERROR]', error)
+    console.error('[ADMIN_USER_CREATE_ERROR]', error)
 
-    return NextResponse.json(
+    return jsonNoStore(
       { error: '서버 오류가 발생했습니다.' },
       { status: 500 }
     )
   }
-  
 }
-

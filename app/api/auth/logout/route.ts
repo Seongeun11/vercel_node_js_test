@@ -1,10 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server'
+// app/api/auth/logout/route.ts
+import { NextRequest} from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { assertSameOrigin } from '@/lib/security/csrf'
+import { jsonNoStore } from '@/lib/security/api-response'
 
 type PendingCookie = {
   name: string
   value: string
-  options?: Parameters<NextResponse['cookies']['set']>[0] extends infer T
+  options?: Parameters<NextRequest['cookies']['set']>[0] extends infer T
     ? T extends { name: string; value: string }
       ? Omit<T, 'name' | 'value'>
       : never
@@ -13,6 +16,8 @@ type PendingCookie = {
 
 export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request)
+
     const pendingCookies: PendingCookie[] = []
 
     const supabase = createServerClient(
@@ -33,15 +38,13 @@ export async function POST(request: NextRequest) {
       }
     )
 
-    // 1) Supabase 세션 종료
     await supabase.auth.signOut()
 
-    const response = NextResponse.json(
+    const response = jsonNoStore(
       { message: '로그아웃되었습니다.' },
       { status: 200 }
     )
 
-    // 2) Supabase auth 쿠키 제거 반영
     for (const cookie of pendingCookies) {
       response.cookies.set({
         name: cookie.name,
@@ -52,8 +55,16 @@ export async function POST(request: NextRequest) {
 
     return response
   } catch (error) {
+    if (error instanceof Error && error.message === 'CSRF_BLOCKED') {
+      return jsonNoStore(
+        { error: '허용되지 않은 요청입니다.' },
+        { status: 403 }
+      )
+    }
+
     console.error('[AUTH_LOGOUT_POST_ERROR]', error)
-    return NextResponse.json(
+
+    return jsonNoStore(
       { error: '로그아웃 처리 중 서버 오류가 발생했습니다.' },
       { status: 500 }
     )

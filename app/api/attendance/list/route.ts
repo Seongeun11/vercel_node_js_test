@@ -1,20 +1,23 @@
 // app/api/attendance/list/route.ts
-import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { NextRequest } from 'next/server'
+import { assertSameOrigin } from '@/lib/security/csrf'
+import { jsonNoStore } from '@/lib/security/api-response'
 
 type AttendanceListBody = {
   event_id?: string
   date?: string
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request)    
     // 1) 권한 체크
     const authResult = await requireRole(['admin', 'captain'])
 
     if (!authResult.ok) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: authResult.error },
         { status: authResult.status }
       )
@@ -28,14 +31,14 @@ export async function POST(request: Request) {
 
     // 3) 입력값 검증
     if (!eventId || !date) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'event_id와 date는 필수입니다.' },
         { status: 400 }
       )
     }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'date 형식이 올바르지 않습니다. (YYYY-MM-DD)' },
         { status: 400 }
       )
@@ -49,7 +52,7 @@ export async function POST(request: Request) {
       .single()
 
     if (eventError || !event) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '이벤트를 찾을 수 없습니다.' },
         { status: 404 }
       )
@@ -82,7 +85,7 @@ export async function POST(request: Request) {
       .order('check_time', { ascending: true })
 
     if (error) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: error.message },
         { status: 500 }
       )
@@ -113,7 +116,7 @@ export async function POST(request: Request) {
         : null,
     }))
 
-    return NextResponse.json(
+    return jsonNoStore(
       {
         event,
         attendance,
@@ -122,7 +125,7 @@ export async function POST(request: Request) {
     )
   } catch (error) {
     console.error('attendance/list POST error:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: '출석 목록 조회 중 서버 오류가 발생했습니다.' },
       { status: 500 }
     )

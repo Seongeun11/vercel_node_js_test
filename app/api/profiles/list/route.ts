@@ -1,14 +1,17 @@
 // app/api/profiles/list/route.ts
-import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { NextRequest } from 'next/server'
+import { assertSameOrigin } from '@/lib/security/csrf'
+import { jsonNoStore } from '@/lib/security/api-response'
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request)
     const authResult = await requireRole(['admin', 'captain'])
 
     if (!authResult.ok) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: authResult.error },
         { status: authResult.status }
       )
@@ -20,16 +23,16 @@ export async function POST() {
       .order('full_name', { ascending: true })
 
     if (error) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: error.message },
         { status: 500 }
       )
     }
 
-    return NextResponse.json({ users: data ?? [] }, { status: 200 })
+    return jsonNoStore({ users: data ?? [] }, { status: 200 })
   } catch (error) {
     console.error('profiles/list POST error:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: '사용자 목록 조회 중 서버 오류가 발생했습니다.' },
       { status: 500 }
     )

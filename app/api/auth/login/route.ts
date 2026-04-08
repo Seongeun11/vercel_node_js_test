@@ -1,7 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server'
+// app/api/auth/login/route.ts
 import { createServerClient } from '@supabase/ssr'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { studentIdToEmail } from '@/lib/auth-email'
+import { checkRateLimit } from '@/lib/rate-limit'
+import { getClientIp } from '@/lib/request-ip'
+import { NextRequest } from 'next/server'
+import { assertSameOrigin } from '@/lib/security/csrf'
+import { jsonNoStore } from '@/lib/security/api-response'
 
 type LoginBody = {
   student_id?: string
@@ -11,7 +16,7 @@ type LoginBody = {
 type PendingCookie = {
   name: string
   value: string
-  options?: Parameters<NextResponse['cookies']['set']>[0] extends infer T
+  options?: Parameters<NextRequest['cookies']['set']>[0] extends infer T
     ? T extends { name: string; value: string }
       ? Omit<T, 'name' | 'value'>
       : never
@@ -20,14 +25,57 @@ type PendingCookie = {
 
 export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request)
     const body = (await request.json()) as LoginBody
     const studentId = String(body.student_id ?? '').trim()
     const password = String(body.password ?? '')
+    const clientIp = getClientIp(request)
 
     if (!studentId || !password) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '학번과 비밀번호를 모두 입력해주세요.' },
         { status: 400 }
+      )
+    }
+
+    // 1) IP 기준 제한
+    const ipRateLimit = await checkRateLimit(`login:ip:${clientIp}`, 10, 60)
+
+    if (!ipRateLimit.configured && process.env.NODE_ENV === 'production') {
+      return jsonNoStore(
+        { error: '로그인 보호 설정이 올바르지 않습니다. 관리자에게 문의해주세요.' },
+        { status: 503 }
+      )
+    }
+
+    if (!ipRateLimit.ok) {
+      return jsonNoStore(
+        { error: '로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(ipRateLimit.resetInSeconds),
+          },
+        }
+      )
+    }
+
+    // 2) 계정 기준 제한
+    const accountRateLimit = await checkRateLimit(
+      `login:student:${studentId}`,
+      5,
+      300
+    )
+
+    if (!accountRateLimit.ok) {
+      return jsonNoStore(
+        { error: '해당 계정의 로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(accountRateLimit.resetInSeconds),
+          },
+        }
       )
     }
 
@@ -59,7 +107,7 @@ export async function POST(request: NextRequest) {
       })
 
     if (signInError || !signInData.user || !signInData.session) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '학번 또는 비밀번호가 올바르지 않습니다.' },
         { status: 401 }
       )
@@ -72,13 +120,13 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (profileError || !profile) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '프로필 정보를 찾을 수 없습니다. 관리자에게 문의해주세요.' },
         { status: 403 }
       )
     }
 
-    const response = NextResponse.json(
+    const response = jsonNoStore(
       {
         ok: true,
         user: profile,
@@ -94,11 +142,11 @@ export async function POST(request: NextRequest) {
       })
     }
 
-
     return response
   } catch (error) {
     console.error('[AUTH_LOGIN_POST_ERROR]', error)
-    return NextResponse.json(
+
+    return jsonNoStore(
       { error: '로그인 처리 중 서버 오류가 발생했습니다.' },
       { status: 500 }
     )

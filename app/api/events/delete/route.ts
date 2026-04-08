@@ -1,18 +1,21 @@
 // app/api/events/delete/route.ts
-import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { NextRequest } from 'next/server'
+import { assertSameOrigin } from '@/lib/security/csrf'
+import { jsonNoStore } from '@/lib/security/api-response'
 
 type DeleteEventBody = {
   id?: string
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request)
     const authResult = await requireRole(['admin'])
 
     if (!authResult.ok) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: authResult.error },
         { status: authResult.status }
       )
@@ -22,7 +25,7 @@ export async function POST(request: Request) {
     const id = String(body.id || '').trim()
 
     if (!id) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '이벤트 ID가 필요합니다.' },
         { status: 400 }
       )
@@ -35,7 +38,7 @@ export async function POST(request: Request) {
       .single()
 
     if (existingError || !existingEvent) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '삭제할 이벤트를 찾을 수 없습니다.' },
         { status: 404 }
       )
@@ -54,14 +57,14 @@ export async function POST(request: Request) {
       ])
 
     if (attendanceCountError || qrCountError) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: attendanceCountError?.message || qrCountError?.message || '연관 데이터 확인에 실패했습니다.' },
         { status: 500 }
       )
     }
 
     if ((attendanceCount ?? 0) > 0 || (qrCount ?? 0) > 0) {
-      return NextResponse.json(
+      return jsonNoStore(
         {
           error: '출석 기록 또는 QR 토큰이 연결된 이벤트는 삭제할 수 없습니다.',
         },
@@ -75,19 +78,19 @@ export async function POST(request: Request) {
       .eq('id', id)
 
     if (deleteError) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: deleteError.message },
         { status: 500 }
       )
     }
 
-    return NextResponse.json(
+    return jsonNoStore(
       { message: '이벤트가 삭제되었습니다.' },
       { status: 200 }
     )
   } catch (error) {
     console.error('events/delete POST error:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: '이벤트 삭제 중 서버 오류가 발생했습니다.' },
       { status: 500 }
     )

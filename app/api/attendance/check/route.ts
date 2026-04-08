@@ -1,7 +1,9 @@
 // app/api/attendance/check/route.ts
-import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { NextRequest } from 'next/server'
+import { assertSameOrigin } from '@/lib/security/csrf'
+import { jsonNoStore } from '@/lib/security/api-response'
 
 function getKSTDateString(date = new Date()): string {
   return new Intl.DateTimeFormat('sv-SE', {
@@ -30,13 +32,14 @@ type CheckAttendanceBody = {
   token?: string
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request)    
     // 1) 인증 + 권한
     const authResult = await requireRole(['admin', 'captain', 'trainee'])
 
     if (!authResult.ok || !authResult.user) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: authResult.error },
         { status: authResult.status }
       )
@@ -58,7 +61,7 @@ export async function POST(request: Request) {
         .single()
 
       if (qrError || !qrToken) {
-        return NextResponse.json(
+        return jsonNoStore(
           { error: '유효하지 않은 QR 토큰입니다.' },
           { status: 400 }
         )
@@ -68,7 +71,7 @@ export async function POST(request: Request) {
       const expiresAt = new Date(qrToken.expires_at)
 
       if (Number.isNaN(expiresAt.getTime()) || now > expiresAt) {
-        return NextResponse.json(
+        return jsonNoStore(
           { error: '만료된 QR 코드입니다.' },
           { status: 400 }
         )
@@ -78,7 +81,7 @@ export async function POST(request: Request) {
     }
 
     if (!resolvedEventId) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'event_id 또는 token이 필요합니다.' },
         { status: 400 }
       )
@@ -92,14 +95,14 @@ export async function POST(request: Request) {
       .single()
 
     if (eventError || !event) {
-      return NextResponse.json({ error: '이벤트 없음' }, { status: 400 })
+      return jsonNoStore({ error: '이벤트 없음' }, { status: 400 })
     }
 
     const now = new Date()
     const startTime = new Date(event.start_time)
 
     if (Number.isNaN(startTime.getTime())) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '이벤트 시간이 올바르지 않습니다.' },
         { status: 400 }
       )
@@ -128,13 +131,13 @@ export async function POST(request: Request) {
     if (insertError) {
       // 중복 출석 (unique constraint)
       if (insertError.code === '23505') {
-        return NextResponse.json(
+        return jsonNoStore(
           { error: '이미 출석하셨습니다.' },
           { status: 409 }
         )
       }
 
-      return NextResponse.json(
+      return jsonNoStore(
         { error: insertError.message },
         { status: 500 }
       )
@@ -151,7 +154,7 @@ export async function POST(request: Request) {
       //   .update({ used_count: sql`used_count + 1` }) ❌ supabase-js 미지원
     }
 
-    return NextResponse.json({
+    return jsonNoStore({
       status,
       message: status === 'late' ? '지각입니다 ⏰' : '출석 완료 ✅',
       recorded_at_utc: now.toISOString(),
@@ -160,6 +163,6 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('[attendance/check] error:', error)
-    return NextResponse.json({ error: '서버 오류' }, { status: 500 })
+    return jsonNoStore({ error: '서버 오류' }, { status: 500 })
   }
 }

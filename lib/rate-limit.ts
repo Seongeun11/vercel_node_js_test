@@ -1,3 +1,4 @@
+// lib/rate-limit.ts
 import { Redis } from '@upstash/redis'
 
 const redis =
@@ -8,42 +9,51 @@ const redis =
       })
     : null
 
-type RateLimitResult = {
+export type RateLimitResult = {
   ok: boolean
   remaining: number
   resetInSeconds: number
+  configured: boolean
 }
 
-/**
- * 고정 윈도우 기반 간단 rate limit
- * - production에서는 충분히 실용적
- * - Redis 미설정이면 fail-open
- */
 export async function checkRateLimit(
   key: string,
   limit: number,
   windowSeconds: number
 ): Promise<RateLimitResult> {
-  if (!redis) {
+  // 개발 환경에서는 로컬 테스트 편의를 위해 열어둠
+  if (!redis && process.env.NODE_ENV !== 'production') {
     return {
       ok: true,
       remaining: limit,
       resetInSeconds: windowSeconds,
+      configured: false,
     }
   }
 
-  const current = await redis.incr(key)
-
-  if (current === 1) {
-    await redis.expire(key, windowSeconds)
+  // 운영에서는 rate limit 저장소 미설정 상태를 안전하게 처리
+  if (!redis && process.env.NODE_ENV === 'production') {
+    return {
+      ok: false,
+      remaining: 0,
+      resetInSeconds: windowSeconds,
+      configured: false,
+    }
   }
 
-  const ttl = await redis.ttl(key)
+  const current = await redis!.incr(key)
+
+  if (current === 1) {
+    await redis!.expire(key, windowSeconds)
+  }
+
+  const ttl = await redis!.ttl(key)
   const remaining = Math.max(0, limit - current)
 
   return {
     ok: current <= limit,
     remaining,
     resetInSeconds: ttl > 0 ? ttl : windowSeconds,
+    configured: true,
   }
 }

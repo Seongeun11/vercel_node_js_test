@@ -1,18 +1,21 @@
 // app/api/qr/delete/route.ts
-import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { NextRequest } from 'next/server'
+import { assertSameOrigin } from '@/lib/security/csrf'
+import { jsonNoStore } from '@/lib/security/api-response'
 
 type DeleteQrBody = {
   id?: string
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request)
     const authResult = await requireRole(['admin'])
 
     if (!authResult.ok) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: authResult.error },
         { status: authResult.status }
       )
@@ -22,7 +25,7 @@ export async function POST(request: Request) {
     const id = String(body.id || '').trim()
 
     if (!id) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'QR ID가 필요합니다.' },
         { status: 400 }
       )
@@ -35,7 +38,7 @@ export async function POST(request: Request) {
       .single()
 
     if (existingError || !existingQr) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '삭제할 QR을 찾을 수 없습니다.' },
         { status: 404 }
       )
@@ -47,19 +50,19 @@ export async function POST(request: Request) {
       .eq('id', id)
 
     if (deleteError) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: deleteError.message },
         { status: 500 }
       )
     }
 
-    return NextResponse.json(
+    return jsonNoStore(
       { message: 'QR이 삭제되었습니다.' },
       { status: 200 }
     )
   } catch (error) {
     console.error('qr/delete POST error:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: 'QR 삭제 중 서버 오류가 발생했습니다.' },
       { status: 500 }
     )

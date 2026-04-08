@@ -1,7 +1,9 @@
 // app/api/events/create/route.ts
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { assertSameOrigin } from '@/lib/security/csrf'
+import { jsonNoStore } from '@/lib/security/api-response'
 
 type CreateEventBody = {
   name?: string
@@ -10,12 +12,13 @@ type CreateEventBody = {
   allow_duplicate_check?: boolean
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request)
     const authResult = await requireRole(['admin'])
 
     if (!authResult.ok) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: authResult.error },
         { status: authResult.status }
       )
@@ -29,14 +32,14 @@ export async function POST(request: Request) {
     const allowDuplicateCheck = Boolean(body.allow_duplicate_check)
 
     if (!name) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '이벤트명을 입력해주세요.' },
         { status: 400 }
       )
     }
 
     if (!startTimeRaw) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '시작 시간을 입력해주세요.' },
         { status: 400 }
       )
@@ -45,14 +48,14 @@ export async function POST(request: Request) {
     const startTime = new Date(startTimeRaw)
 
     if (Number.isNaN(startTime.getTime())) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '시작 시간 형식이 올바르지 않습니다.' },
         { status: 400 }
       )
     }
 
     if (!Number.isFinite(lateThresholdMin) || lateThresholdMin < 0 || lateThresholdMin > 180) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '지각 기준은 0~180분 사이여야 합니다.' },
         { status: 400 }
       )
@@ -70,13 +73,13 @@ export async function POST(request: Request) {
       .single()
 
     if (error || !createdEvent) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: error?.message || '이벤트 생성에 실패했습니다.' },
         { status: 500 }
       )
     }
 
-    return NextResponse.json(
+    return jsonNoStore(
       {
         message: '이벤트가 생성되었습니다.',
         event: createdEvent,
@@ -85,7 +88,7 @@ export async function POST(request: Request) {
     )
   } catch (error) {
     console.error('events/create POST error:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: '이벤트 생성 중 서버 오류가 발생했습니다.' },
       { status: 500 }
     )

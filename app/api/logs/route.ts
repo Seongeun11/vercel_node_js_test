@@ -1,7 +1,9 @@
 // app/api/logs/route.ts
-import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { NextRequest } from 'next/server'
+import { assertSameOrigin } from '@/lib/security/csrf'
+import { jsonNoStore } from '@/lib/security/api-response'
 
 type LogsRequestBody = {
   event_id?: string
@@ -31,13 +33,15 @@ type EventRow = {
   start_time?: string
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request)
+   
     // 1) 권한 체크
     const authResult = await requireRole(['admin', 'captain'])
 
     if (!authResult.ok) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: authResult.error },
         { status: authResult.status }
       )
@@ -51,7 +55,7 @@ export async function POST(request: Request) {
     const limit = Math.min(Math.max(Number(body.limit ?? 100), 1), 500)
 
     if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'date 형식이 올바르지 않습니다. (YYYY-MM-DD)' },
         { status: 400 }
       )
@@ -67,7 +71,7 @@ export async function POST(request: Request) {
     const { data: rawLogs, error: logsError } = await logsQuery
 
     if (logsError) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: logsError.message },
         { status: 500 }
       )
@@ -76,7 +80,7 @@ export async function POST(request: Request) {
     const logs = (rawLogs ?? []) as AttendanceLogRow[]
 
     if (logs.length === 0) {
-      return NextResponse.json(
+      return jsonNoStore(
         {
           logs: [],
         },
@@ -125,14 +129,14 @@ export async function POST(request: Request) {
       ])
 
     if (profilesError) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: profilesError.message },
         { status: 500 }
       )
     }
 
     if (eventsError) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: eventsError.message },
         { status: 500 }
       )
@@ -205,7 +209,7 @@ export async function POST(request: Request) {
         return true
       })
 
-    return NextResponse.json(
+    return jsonNoStore(
       {
         logs: normalizedLogs,
       },
@@ -213,7 +217,7 @@ export async function POST(request: Request) {
     )
   } catch (error) {
     console.error('logs POST error:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: '출석 로그 조회 중 서버 오류가 발생했습니다.' },
       { status: 500 }
     )

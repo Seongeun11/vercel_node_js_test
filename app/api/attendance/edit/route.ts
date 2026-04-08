@@ -1,7 +1,9 @@
 // app/api/attendance/edit/route.ts
-import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { NextRequest } from 'next/server'
+import { assertSameOrigin } from '@/lib/security/csrf'
+import { jsonNoStore } from '@/lib/security/api-response'
 
 const ALLOWED_STATUS = ['present', 'late', 'absent'] as const
 const ALLOWED_METHOD = ['manual', 'qr', 'nfc'] as const
@@ -17,13 +19,15 @@ type EditAttendanceBody = {
   method?: AttendanceMethod
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request)
+ 
     // 1) 먼저 권한 확인
     const authResult = await requireRole(['admin', 'captain'])
 
     if (!authResult.ok || !authResult.user) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: authResult.error },
         { status: authResult.status }
       )
@@ -40,21 +44,21 @@ export async function POST(request: Request) {
 
     // 3) 입력값 검증
     if (!targetUserId || !eventId || !date || !status) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '필수 값이 누락되었습니다.' },
         { status: 400 }
       )
     }
 
     if (!ALLOWED_STATUS.includes(status)) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '유효하지 않은 출석 상태입니다.' },
         { status: 400 }
       )
     }
 
     if (!ALLOWED_METHOD.includes(method)) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '유효하지 않은 출석 방식입니다.' },
         { status: 400 }
       )
@@ -72,7 +76,7 @@ export async function POST(request: Request) {
       .maybeSingle()
 
     if (existingError) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: existingError.message },
         { status: 500 }
       )
@@ -94,7 +98,7 @@ export async function POST(request: Request) {
         .single()
 
       if (insertError || !insertedAttendance) {
-        return NextResponse.json(
+        return jsonNoStore(
           { error: insertError?.message || '출석 기록 생성에 실패했습니다.' },
           { status: 500 }
         )
@@ -113,7 +117,7 @@ export async function POST(request: Request) {
         console.error('attendance log insert error:', logInsertError)
       }
 
-      return NextResponse.json({
+      return jsonNoStore({
         message: '출석 기록이 새로 등록되었습니다.',
         attendance: insertedAttendance,
       })
@@ -135,7 +139,7 @@ export async function POST(request: Request) {
     }
 
     if (Object.keys(updatePayload).length === 0) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '동일한 출석 상태는 변경할 수 없습니다.' },
         { status: 400 }
       )
@@ -154,7 +158,7 @@ export async function POST(request: Request) {
       .single()
 
     if (updateError || !updatedAttendance) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: updateError?.message || '출석 기록 수정에 실패했습니다.' },
         { status: 500 }
       )
@@ -173,13 +177,13 @@ export async function POST(request: Request) {
       console.error('attendance log update error:', logUpdateError)
     }
 
-    return NextResponse.json({
+    return jsonNoStore({
       message: '출석 기록이 수정되었습니다.',
       attendance: updatedAttendance,
     })
   } catch (error) {
     console.error('attendance/edit POST error:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: '서버 오류가 발생했습니다.' },
       { status: 500 }
     )

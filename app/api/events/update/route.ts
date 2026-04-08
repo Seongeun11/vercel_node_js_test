@@ -1,7 +1,10 @@
 // app/api/events/update/route.ts
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { assertSameOrigin } from '@/lib/security/csrf'
+import { jsonNoStore } from '@/lib/security/api-response'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+
 
 type UpdateEventBody = {
   id?: string
@@ -11,12 +14,14 @@ type UpdateEventBody = {
   allow_duplicate_check?: boolean
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const authResult = await requireRole(['admin'])
+    assertSameOrigin(request)
 
+    const authResult = await requireRole(['admin'])
+    
     if (!authResult.ok) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: authResult.error },
         { status: authResult.status }
       )
@@ -31,21 +36,21 @@ export async function POST(request: Request) {
     const allowDuplicateCheck = Boolean(body.allow_duplicate_check)
 
     if (!id) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '이벤트 ID가 필요합니다.' },
         { status: 400 }
       )
     }
 
     if (!name) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '이벤트명을 입력해주세요.' },
         { status: 400 }
       )
     }
 
     if (!startTimeRaw) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '시작 시간을 입력해주세요.' },
         { status: 400 }
       )
@@ -54,14 +59,14 @@ export async function POST(request: Request) {
     const startTime = new Date(startTimeRaw)
 
     if (Number.isNaN(startTime.getTime())) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '시작 시간 형식이 올바르지 않습니다.' },
         { status: 400 }
       )
     }
 
     if (!Number.isFinite(lateThresholdMin) || lateThresholdMin < 0 || lateThresholdMin > 180) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '지각 기준은 0~180분 사이여야 합니다.' },
         { status: 400 }
       )
@@ -74,7 +79,7 @@ export async function POST(request: Request) {
       .single()
 
     if (existingError || !existingEvent) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '수정할 이벤트를 찾을 수 없습니다.' },
         { status: 404 }
       )
@@ -106,7 +111,7 @@ export async function POST(request: Request) {
     }
 
     if (Object.keys(updatePayload).length === 0) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: '변경된 내용이 없습니다.' },
         { status: 400 }
       )
@@ -120,13 +125,13 @@ export async function POST(request: Request) {
       .single()
 
     if (updateError || !updatedEvent) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: updateError?.message || '이벤트 수정에 실패했습니다.' },
         { status: 500 }
       )
     }
 
-    return NextResponse.json(
+    return jsonNoStore(
       {
         message: '이벤트가 수정되었습니다.',
         event: updatedEvent,
@@ -135,7 +140,7 @@ export async function POST(request: Request) {
     )
   } catch (error) {
     console.error('events/update POST error:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: '이벤트 수정 중 서버 오류가 발생했습니다.' },
       { status: 500 }
     )
