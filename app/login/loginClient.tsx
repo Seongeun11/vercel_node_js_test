@@ -34,9 +34,10 @@ export default function LoginClient() {
     setErrorMessage('')
 
     const normalizedStudentId = studentId.trim()
-    const normalizedPassword = password.trim()
+    //const normalizedPassword = password.trim()
+    const rawPassword = password
 
-    if (!normalizedStudentId || !normalizedPassword) {
+    if (!normalizedStudentId || !rawPassword) {
       setErrorMessage('학번과 비밀번호를 모두 입력해주세요.')
       return
     }
@@ -50,7 +51,7 @@ export default function LoginClient() {
         credentials: 'include',
         body: JSON.stringify({
           student_id: normalizedStudentId,
-          password: normalizedPassword,
+          password: rawPassword,
         }),
       })
 

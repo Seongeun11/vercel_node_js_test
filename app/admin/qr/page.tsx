@@ -15,7 +15,7 @@ type EventItem = {
 export default function AdminQrPage() {
   const [events, setEvents] = useState<EventItem[]>([])
   const [eventId, setEventId] = useState('')
-  const [expireMinutes, setExpireMinutes] = useState('3')
+  const [expireMinutes, setExpireMinutes] = useState('60')
 
   const [loading, setLoading] = useState(true)
   const [submitLoading, setSubmitLoading] = useState(false)
@@ -32,20 +32,19 @@ export default function AdminQrPage() {
         setErrorMessage('')
 
         const response = await fetch('/api/events/list', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'GET',
           credentials: 'include',
-          body: JSON.stringify({}),
+          cache: 'no-store',
         })
-
-        const result = await response.json()
+        const text = await response.text()
+        const result = text ? JSON.parse(text) : {}
 
         if (!response.ok) {
           setErrorMessage(result?.error || '이벤트 목록을 불러오지 못했습니다.')
           return
         }
 
-        const fetchedEvents = result?.events ?? []
+        const fetchedEvents = result?.items ?? []
         setEvents(fetchedEvents)
 
         if (fetchedEvents.length > 0) {
@@ -53,6 +52,7 @@ export default function AdminQrPage() {
         }
       } catch (error) {
         console.error('이벤트 조회 실패:', error)
+        
         setErrorMessage('이벤트 목록 조회 중 오류가 발생했습니다.')
       } finally {
         setLoading(false)

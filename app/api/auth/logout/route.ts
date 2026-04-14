@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.error('[AUTH_LOGOUT_POST_ERROR]', error)
+    //console.error('[AUTH_LOGOUT_POST_ERROR]', error)
 
     return jsonNoStore(
       { error: '로그아웃 처리 중 서버 오류가 발생했습니다.' },

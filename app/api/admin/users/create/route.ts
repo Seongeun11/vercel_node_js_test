@@ -273,11 +273,13 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     )
   } catch (error) {
-    console.error('[ADMIN_USER_CREATE_ERROR]', error)
+    //console.error('[ADMIN_USER_CREATE_ERROR]', error)
 
-    return jsonNoStore(
-      { error: '서버 오류가 발생했습니다.' },
-      { status: 500 }
-    )
+    if (error instanceof Error && error.message === 'CSRF_BLOCKED') {
+      return jsonNoStore(
+        { error: '허용되지 않은 요청입니다.' },
+        { status: 403 }
+      )
+    }
   }
 }

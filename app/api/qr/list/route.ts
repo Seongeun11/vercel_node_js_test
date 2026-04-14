@@ -72,10 +72,11 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     )
   } catch (error) {
-    console.error('qr/list POST error:', error)
-    return jsonNoStore(
-      { error: 'QR 목록 조회 중 서버 오류가 발생했습니다.' },
-      { status: 500 }
-    )
+    if (error instanceof Error && error.message === 'CSRF_BLOCKED') {
+      return jsonNoStore(
+        { error: '허용되지 않은 요청입니다.' },
+        { status: 403 }
+      )
+    }
   }
 }

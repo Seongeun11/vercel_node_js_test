@@ -1,43 +1,84 @@
 // app/api/events/list/route.ts
-import { NextResponse } from 'next/server'
-import { requireRole } from '@/lib/serverAuth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { NextRequest } from 'next/server'
+import { getSessionProfile } from '@/lib/server-session'
+import { jsonNoStore } from '@/lib/security/api-response'
 
-export async function POST() {
-  try {
-    const authResult = await requireRole(['admin', 'captain', 'trainee'])
+type EventItem = {
+  id: string
+  name: string
+  start_time: string
+  late_threshold_min: number
+  allow_duplicate_check: boolean
+  created_at: string
+  updated_at: string
+}
 
-    if (!authResult.ok) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: authResult.status }
-      )
-    }
+type EventsListResponse = {
+  items?: EventItem[]
+  error?: string
+}
 
-    const { data: events, error } = await supabaseAdmin
-      .from('events')
-      .select('id, name, start_time, late_threshold_min, allow_duplicate_check, created_at')
-      .order('start_time', { ascending: true })
-      .order('created_at', { ascending: false })
+function parseBooleanParam(value: string | null): boolean | null {
+  if (value === null) return null
+  if (value === 'true') return true
+  if (value === 'false') return false
+  return null
+}
 
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
-    }
+export async function GET(request: NextRequest): Promise<Response> {
+  const session = await getSessionProfile()
 
-    return NextResponse.json(
-      {
-        events: events ?? [],
-      },
-      { status: 200 }
+  if (!session.ok) {
+    return jsonNoStore<EventsListResponse>(
+      { error: session.error },
+      { status: session.status }
     )
-  } catch (error) {
-    console.error('events/list POST error:', error)
-    return NextResponse.json(
-      { error: '이벤트 목록 조회 중 서버 오류가 발생했습니다.' },
+  }
+
+  const searchParams = request.nextUrl.searchParams
+  const upcomingOnly = parseBooleanParam(searchParams.get('upcoming_only')) ?? false
+  const nowIso = new Date().toISOString()
+
+  let query = session.supabase
+    .from('events')
+    .select(
+      `
+      id,
+      name,
+      start_time,
+      late_threshold_min,
+      allow_duplicate_check,
+      created_at,
+      updated_at
+      `
+    )
+    .is('deleted_at', null)
+
+  if (upcomingOnly) {
+    query = query.gte('start_time', nowIso)
+  }
+
+  const { data, error } = await query.order('start_time', {
+    ascending: upcomingOnly,
+  })
+
+  if (error) {
+    console.error('[events/list] query error:', error)
+    return jsonNoStore<EventsListResponse>(
+      { error: '이벤트 목록 조회에 실패했습니다.' },
       { status: 500 }
     )
   }
+
+  return jsonNoStore<EventsListResponse>({
+    items: (data ?? []).map((event) => ({
+      id: event.id,
+      name: event.name,
+      start_time: event.start_time,
+      late_threshold_min: event.late_threshold_min,
+      allow_duplicate_check: event.allow_duplicate_check,
+      created_at: event.created_at,
+      updated_at: event.updated_at,
+    })),
+  })
 }
