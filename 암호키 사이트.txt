@@ -1,5 +1,0 @@
-https://console.upstash.com
-
-https://supabase.com/
-
-깃허브로 로그인
