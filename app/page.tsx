@@ -64,7 +64,7 @@ export default async function HomePage() {
               </Link>
 
               {(user.role === 'admin' || user.role === 'captain') && (
-                <Link href="/logs">
+                <Link href="/admin/logs">
                   <button type="button">출석 로그</button>
                 </Link>
               )}

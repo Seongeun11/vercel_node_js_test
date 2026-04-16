@@ -1,16 +1,27 @@
-import { ReactNode } from 'react'
+// app/admin/layout.tsx
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { requireRole } from '@/lib/serverAuth'
-//vercel 빌드 형식 dynamic으로 선언
+
 export const dynamic = 'force-dynamic'
 
 type Props = {
   children: ReactNode
 }
 
+const navLinkStyle: React.CSSProperties = {
+  display: 'block',
+  padding: '10px 12px',
+  borderRadius: '8px',
+  textDecoration: 'none',
+  color: '#111827',
+  background: '#f9fafb',
+  border: '1px solid #e5e7eb',
+}
+
 export default async function AdminLayout({ children }: Props) {
-  const authResult = await requireRole(['admin'])
+  const authResult = await requireRole(['admin', 'captain'])
 
   if (!authResult.ok) {
     redirect('/login?next=/admin')
@@ -19,51 +30,78 @@ export default async function AdminLayout({ children }: Props) {
   const user = authResult.user
 
   return (
-    <main style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
       <div
         style={{
-          border: '1px solid #ddd',
-          borderRadius: '12px',
+          borderBottom: '1px solid #e5e7eb',
           background: '#fff',
-          padding: '20px',
-          marginBottom: '20px',
+          padding: '16px 24px',
         }}
       >
-        <h1 style={{ marginTop: 0, marginBottom: '8px' }}>관리자 페이지</h1>
-        <p style={{ margin: 0 }}>
-          관리자: {user.full_name} ({user.student_id})
-        </p>
-
-        <div
-          style={{
-            display: 'flex',
-            gap: '10px',
-            flexWrap: 'wrap',
-            marginTop: '16px',
-          }}
-        >
-          <Link href="/admin">
-            <button type="button">관리자 홈</button>
-          </Link>
-          <Link href="/admin/events">
-            <button type="button">이벤트 관리</button>
-          </Link>
-          <Link href="/admin/qr">
-            <button type="button">QR 관리</button>
-          </Link>
-          <Link href="/admin/attendance">
-            <button type="button">출석 현황</button>
-          </Link>
-          <Link href="/admin/users">
-            <button type="button">사용자 생성</button>
-          </Link>
-          <Link href="/">
-            <button type="button">메인으로</button>
-          </Link>
+        <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
+          <h1 style={{ margin: 0, fontSize: '24px' }}>운영 페이지</h1>
+          <p style={{ margin: '8px 0 0', color: '#4b5563' }}>
+            사용자: {user.full_name} ({user.student_id}) / 권한: {user.role}
+          </p>
         </div>
       </div>
 
-      {children}
-    </main>
+      <div
+        style={{
+          maxWidth: '1280px',
+          margin: '0 auto',
+          display: 'grid',
+          gridTemplateColumns: '240px 1fr',
+          gap: '24px',
+          padding: '24px',
+          alignItems: 'start',
+        }}
+      >
+        <aside
+          style={{
+            border: '1px solid #ddd',
+            borderRadius: '12px',
+            background: '#fff',
+            padding: '16px',
+          }}
+        >
+          <h2 style={{ marginTop: 0, marginBottom: '16px', fontSize: '18px' }}>
+            운영 메뉴
+          </h2>
+
+          <nav style={{ display: 'grid', gap: '8px' }}>
+            <Link href="/admin/logs" style={navLinkStyle}>
+              출석 로그
+            </Link>
+
+            {user.role === 'admin' && (
+              <>
+                <Link href="/admin" style={navLinkStyle}>
+                  관리자 홈
+                </Link>
+                <Link href="/admin/admin-only/attendance" style={navLinkStyle}>
+                  출석 현황
+                </Link>
+                <Link href="/admin/admin-only/qr" style={navLinkStyle}>
+                  QR 관리
+                </Link>
+                <Link href="/admin/admin-only/events" style={navLinkStyle}>
+                  이벤트 관리
+                </Link>
+                <Link href="/admin/admin-only/users" style={navLinkStyle}>
+                  사용자 생성
+                </Link>
+              </>
+            )}
+
+            <Link href="/" style={navLinkStyle}>
+              메인으로
+            </Link>
+          </nav>
+        </aside>
+
+        <main>{children}</main>
+      </div>
+    </div>
   )
 }

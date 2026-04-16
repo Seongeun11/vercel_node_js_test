@@ -5,10 +5,12 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 type CheckResult = {
+  success?: boolean
   status?: 'present' | 'late' | 'absent'
   message?: string
-  recorded_at_utc?: string
-  recorded_at_kst?: string
+  check_time?: string
+  check_time_kst?: string
+  attendance_date?: string
   attendance_date_kst?: string
   error?: string
 }
@@ -30,7 +32,7 @@ export default function AttendanceScanPage() {
         requestedRef.current = true
 
         if (!token) {
-          setResult({ error: 'QR 토큰이 없습니다.' })
+          setResult({ error: 'QR코드를 스캔하세요.' })
           return
         }
 
@@ -54,11 +56,13 @@ export default function AttendanceScanPage() {
         }
 
         setResult({
+          success: data.success,
           status: data.status,
           message: data.message,
-          recorded_at_utc: data.recorded_at_utc,
-          recorded_at_kst: data.recorded_at_kst,
-          attendance_date_kst: data.attendance_date_kst,
+          check_time: data.check_time,
+          check_time_kst: data.check_time_kst ?? data.recorded_at_kst,
+          attendance_date: data.attendance_date,
+          attendance_date_kst: data.attendance_date_kst ?? data.attendance_date,
         })
       } catch (error) {
         console.error(error)
@@ -104,9 +108,6 @@ export default function AttendanceScanPage() {
           <>
             <p style={{ color: 'crimson', fontWeight: 700 }}>⚠️ {result.error}</p>
             <div style={{ marginTop: '16px', display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button type="button" onClick={() => router.push('/attendance')}>
-                출석 페이지로
-              </button>
               <button type="button" onClick={() => router.push('/')}>
                 메인으로
               </button>
@@ -148,7 +149,7 @@ export default function AttendanceScanPage() {
                 <strong>출석 날짜(KST):</strong> {result?.attendance_date_kst || '-'}
               </div>
               <div>
-                <strong>처리 시각(KST):</strong> {result?.recorded_at_kst || '-'}
+                <strong>처리 시각(KST):</strong> {result?.check_time_kst || '-'}
               </div>
             </div>
 

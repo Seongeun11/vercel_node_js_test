@@ -1,134 +1,112 @@
 // app/api/attendance/list/route.ts
-import { requireRole } from '@/lib/serverAuth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextRequest } from 'next/server'
-import { assertSameOrigin } from '@/lib/security/csrf'
+import { getSessionProfile } from '@/lib/server-session'
 import { jsonNoStore } from '@/lib/security/api-response'
 
-type AttendanceListBody = {
-  event_id?: string
-  date?: string
+type AttendanceItem = {
+  id: string
+  date: string
+  status: 'present' | 'late' | 'absent'
+  method: 'manual' | 'qr' | 'nfc'
+  check_time: string
+  created_at: string
+  updated_at: string
+  event: {
+    id: string
+    name: string
+    start_time: string
+    late_threshold_min: number
+  } | null
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    assertSameOrigin(request)    
-    // 1) 권한 체크
-    const authResult = await requireRole(['admin', 'captain'])
+type AttendanceListResponse = {
+  items?: AttendanceItem[]
+  error?: string
+}
 
-    if (!authResult.ok) {
-      return jsonNoStore(
-        { error: authResult.error },
-        { status: authResult.status }
-      )
-    }
+function isValidDateString(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
 
-    // 2) 요청 파싱
-    const body = (await request.json()) as AttendanceListBody
+export async function GET(request: NextRequest): Promise<Response> {
+  const session = await getSessionProfile(['admin', 'captain', 'trainee'])
 
-    const eventId = String(body.event_id || '').trim()
-    const date = String(body.date || '').trim()
-
-    // 3) 입력값 검증
-    if (!eventId || !date) {
-      return jsonNoStore(
-        { error: 'event_id와 date는 필수입니다.' },
-        { status: 400 }
-      )
-    }
-
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return jsonNoStore(
-        { error: 'date 형식이 올바르지 않습니다. (YYYY-MM-DD)' },
-        { status: 400 }
-      )
-    }
-
-    // 4) 이벤트 존재 확인
-    const { data: event, error: eventError } = await supabaseAdmin
-      .from('events')
-      .select('id, name, start_time, late_threshold_min')
-      .eq('id', eventId)
-      .single()
-
-    if (eventError || !event) {
-      return jsonNoStore(
-        { error: '이벤트를 찾을 수 없습니다.' },
-        { status: 404 }
-      )
-    }
-
-    // 5) 출석 목록 조회
-    const { data, error } = await supabaseAdmin
-      .from('attendance')
-      .select(`
-        id,
-        user_id,
-        event_id,
-        date,
-        status,
-        method,
-        check_time,
-        profiles!attendance_user_id_fkey (
-          id,
-          full_name,
-          student_id,
-          role
-        ),
-        events!attendance_event_id_fkey (
-          id,
-          name
-        )
-      `)
-      .eq('event_id', eventId)
-      .eq('date', date)
-      .order('check_time', { ascending: true })
-
-    if (error) {
-      return jsonNoStore(
-        { error: error.message },
-        { status: 500 }
-      )
-    }
-
-    // 6) 프론트에서 바로 쓰기 좋게 shape 정리
-    const attendance = (data ?? []).map((item: any) => ({
-      id: item.id,
-      user_id: item.user_id,
-      event_id: item.event_id,
-      date: item.date,
-      status: item.status,
-      method: item.method,
-      check_time: item.check_time,
-      user: item.profiles
-        ? {
-            id: item.profiles.id,
-            full_name: item.profiles.full_name,
-            student_id: item.profiles.student_id,
-            role: item.profiles.role,
-          }
-        : null,
-      event: item.events
-        ? {
-            id: item.events.id,
-            name: item.events.name,
-          }
-        : null,
-    }))
-
-    return jsonNoStore(
-      {
-        event,
-        attendance,
-      },
-      { status: 200 }
+  if (!session.ok) {
+    return jsonNoStore<AttendanceListResponse>(
+      { error: session.error },
+      { status: session.status }
     )
-  } catch (error) {
-    if (error instanceof Error && error.message === 'CSRF_BLOCKED') {
-      return jsonNoStore(
-        { error: '허용되지 않은 요청입니다.' },
-        { status: 403 }
-      )
-    }
   }
+
+  const searchParams = request.nextUrl.searchParams
+  const dateFrom = searchParams.get('date_from')?.trim() || ''
+  const dateTo = searchParams.get('date_to')?.trim() || ''
+
+  if (dateFrom && !isValidDateString(dateFrom)) {
+    return jsonNoStore<AttendanceListResponse>(
+      { error: 'date_from 형식은 YYYY-MM-DD 이어야 합니다.' },
+      { status: 400 }
+    )
+  }
+
+  if (dateTo && !isValidDateString(dateTo)) {
+    return jsonNoStore<AttendanceListResponse>(
+      { error: 'date_to 형식은 YYYY-MM-DD 이어야 합니다.' },
+      { status: 400 }
+    )
+  }
+
+  let query = session.supabase
+    .from('attendance')
+    .select(`
+      id,
+      date,
+      status,
+      method,
+      check_time,
+      created_at,
+      updated_at,
+      event:events (
+        id,
+        name,
+        start_time,
+        late_threshold_min
+      )
+    `)
+    .eq('user_id', session.profile.id)
+    .order('date', { ascending: false })
+    .order('check_time', { ascending: false })
+
+  if (dateFrom) {
+    query = query.gte('date', dateFrom)
+  }
+
+  if (dateTo) {
+    query = query.lte('date', dateTo)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('[attendance/list] query error:', error)
+    return jsonNoStore<AttendanceListResponse>(
+      { error: '출석 목록 조회에 실패했습니다.' },
+      { status: 500 }
+    )
+  }
+
+  const items: AttendanceItem[] = (data ?? []).map((row) => ({
+    id: row.id,
+    date: row.date,
+    status: row.status,
+    method: row.method,
+    check_time: row.check_time,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    event: Array.isArray(row.event) ? row.event[0] ?? null : row.event ?? null,
+  }))
+
+  return jsonNoStore<AttendanceListResponse>({
+    items,
+  })
 }

@@ -1,192 +1,186 @@
 // app/api/attendance/edit/route.ts
+import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import { NextRequest } from 'next/server'
 import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
 
-const ALLOWED_STATUS = ['present', 'late', 'absent'] as const
-const ALLOWED_METHOD = ['manual', 'qr', 'nfc'] as const
-
-type AttendanceStatus = (typeof ALLOWED_STATUS)[number]
-type AttendanceMethod = (typeof ALLOWED_METHOD)[number]
+type AttendanceStatus = 'present' | 'late' | 'absent'
+type AttendanceMethod = 'manual' | 'qr' | 'nfc'
 
 type EditAttendanceBody = {
-  target_user_id?: string
-  event_id?: string
-  date?: string
+  attendance_id?: string
   status?: AttendanceStatus
   method?: AttendanceMethod
+  check_time?: string | null
+  reason?: string
 }
 
-export async function POST(request: NextRequest) {
+type AttendanceRow = {
+  id: string
+  user_id: string
+  event_id: string
+  date: string
+  status: AttendanceStatus
+  method: AttendanceMethod
+  check_time: string
+  created_at: string
+  updated_at: string
+}
+
+type EditAttendanceResponse = {
+  message?: string
+  item?: AttendanceRow
+  error?: string
+}
+
+const ALLOWED_STATUS: AttendanceStatus[] = ['present' , 'late' , 'absent']
+const ALLOWED_METHOD: AttendanceMethod[] = ['manual', 'qr', 'nfc']
+
+function isValidStatus(value: unknown): value is AttendanceStatus {
+  return typeof value === 'string' && ALLOWED_STATUS.includes(value as AttendanceStatus)
+}
+
+function isValidMethod(value: unknown): value is AttendanceMethod {
+  return typeof value === 'string' && ALLOWED_METHOD.includes(value as AttendanceMethod)
+}
+
+function normalizeReason(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function parseCheckTime(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (typeof value !== 'string') return undefined
+
+  const trimmed = value.trim()
+  return trimmed ? trimmed : null
+}
+
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     assertSameOrigin(request)
- 
-    // 1) 먼저 권한 확인
-    const authResult = await requireRole(['admin', 'captain'])
 
+    const authResult = await requireRole(['admin', 'captain'])
     if (!authResult.ok || !authResult.user) {
-      return jsonNoStore(
+      return jsonNoStore<EditAttendanceResponse>(
         { error: authResult.error },
         { status: authResult.status }
       )
     }
 
-    // 2) 요청 본문 파싱
     const body = (await request.json()) as EditAttendanceBody
 
-    const targetUserId = String(body.target_user_id || '').trim()
-    const eventId = String(body.event_id || '').trim()
-    const date = String(body.date || '').trim()
-    const status = body.status
-    const method = body.method ?? 'manual'
+    const attendanceId =
+      typeof body.attendance_id === 'string' ? body.attendance_id.trim() : ''
+    const reason = normalizeReason(body.reason)
 
-    // 3) 입력값 검증
-    if (!targetUserId || !eventId || !date || !status) {
-      return jsonNoStore(
-        { error: '필수 값이 누락되었습니다.' },
+    if (!attendanceId) {
+      return jsonNoStore<EditAttendanceResponse>(
+        { error: 'attendance_id가 필요합니다.' },
         { status: 400 }
       )
     }
 
-    if (!ALLOWED_STATUS.includes(status)) {
-      return jsonNoStore(
-        { error: '유효하지 않은 출석 상태입니다.' },
+    if (!reason) {
+      return jsonNoStore<EditAttendanceResponse>(
+        { error: '수정 사유(reason)는 필수입니다.' },
         { status: 400 }
       )
     }
 
-    if (!ALLOWED_METHOD.includes(method)) {
-      return jsonNoStore(
-        { error: '유효하지 않은 출석 방식입니다.' },
+    if (body.status !== undefined && !isValidStatus(body.status)) {
+      return jsonNoStore<EditAttendanceResponse>(
+        { error: 'status 값이 올바르지 않습니다.' },
         { status: 400 }
       )
     }
 
-    const nowIso = new Date().toISOString()
-
-    // 4) 기존 출석 기록 조회
-    const { data: existingAttendance, error: existingError } = await supabaseAdmin
-      .from('attendance')
-      .select('*')
-      .eq('user_id', targetUserId)
-      .eq('event_id', eventId)
-      .eq('date', date)
-      .maybeSingle()
-
-    if (existingError) {
-      return jsonNoStore(
-        { error: existingError.message },
-        { status: 500 }
+    if (body.method !== undefined && !isValidMethod(body.method)) {
+      return jsonNoStore<EditAttendanceResponse>(
+        { error: 'method 값이 올바르지 않습니다.' },
+        { status: 400 }
       )
     }
 
-    // 5) 기존 기록이 없으면 신규 생성
-    if (!existingAttendance) {
-      const { data: insertedAttendance, error: insertError } = await supabaseAdmin
-        .from('attendance')
-        .insert({
-          user_id: targetUserId,
-          event_id: eventId,
-          date,
-          status,
-          method,
-          check_time: nowIso,
-        })
-        .select()
-        .single()
+    const parsedCheckTime = parseCheckTime(body.check_time)
 
-      if (insertError || !insertedAttendance) {
-        return jsonNoStore(
-          { error: insertError?.message || '출석 기록 생성에 실패했습니다.' },
-          { status: 500 }
+    if (parsedCheckTime !== undefined && parsedCheckTime !== null) {
+      const checkTimeDate = new Date(parsedCheckTime)
+      if (Number.isNaN(checkTimeDate.getTime())) {
+        return jsonNoStore<EditAttendanceResponse>(
+          { error: 'check_time 형식이 올바르지 않습니다.' },
+          { status: 400 }
+        )
+      }
+    }
+
+    const { data, error } = await supabaseAdmin.rpc('edit_attendance_with_log', {
+      p_attendance_id: attendanceId,
+      p_status: body.status ?? null,
+      p_method: body.method ?? null,
+      p_check_time: parsedCheckTime ? new Date(parsedCheckTime).toISOString() : null,
+      p_reason: reason,
+      p_changed_by: authResult.user.id,
+    })
+
+    if (error) {
+      console.error('[attendance/edit] rpc error:', error)
+
+      const message = error.message || '출석 수정에 실패했습니다.'
+
+      if (
+        message.includes('attendance_id가 필요합니다.') ||
+        message.includes('수정 사유(reason)는 필수입니다.') ||
+        message.includes('status 값이 올바르지 않습니다.') ||
+        message.includes('method 값이 올바르지 않습니다.') ||
+        message.includes('변경된 내용이 없습니다.')
+      ) {
+        return jsonNoStore<EditAttendanceResponse>(
+          { error: message },
+          { status: 400 }
         )
       }
 
-      // 생성 로그 저장
-      const { error: logInsertError } = await supabaseAdmin.from('attendance_logs').insert({
-        attendance_id: insertedAttendance.id,
-        changed_by: authResult.user.id,
-        before_value: null,
-        after_value: insertedAttendance,
-        changed_at: nowIso,
-      })
-
-      if (logInsertError) {
-        console.error('attendance log insert error:', logInsertError)
+      if (message.includes('출석 정보를 찾을 수 없습니다.')) {
+        return jsonNoStore<EditAttendanceResponse>(
+          { error: message },
+          { status: 404 }
+        )
       }
 
-      return jsonNoStore({
-        message: '출석 기록이 새로 등록되었습니다.',
-        attendance: insertedAttendance,
-      })
-    }
-
-    // 6) 동일 값 변경 방지
-    const updatePayload: Partial<{
-      status: AttendanceStatus
-      method: AttendanceMethod
-      check_time: string
-    }> = {}
-
-    if (existingAttendance.status !== status) {
-      updatePayload.status = status
-    }
-
-    if (existingAttendance.method !== method) {
-      updatePayload.method = method
-    }
-
-    if (Object.keys(updatePayload).length === 0) {
-      return jsonNoStore(
-        { error: '동일한 출석 상태는 변경할 수 없습니다.' },
-        { status: 400 }
-      )
-    }
-
-    updatePayload.check_time = nowIso
-
-    const beforeValue = existingAttendance
-
-    // 7) 변경된 값만 업데이트
-    const { data: updatedAttendance, error: updateError } = await supabaseAdmin
-      .from('attendance')
-      .update(updatePayload)
-      .eq('id', existingAttendance.id)
-      .select()
-      .single()
-
-    if (updateError || !updatedAttendance) {
-      return jsonNoStore(
-        { error: updateError?.message || '출석 기록 수정에 실패했습니다.' },
+      return jsonNoStore<EditAttendanceResponse>(
+        { error: message },
         { status: 500 }
       )
     }
 
-    // 8) 수정 로그 저장
-    const { error: logUpdateError } = await supabaseAdmin.from('attendance_logs').insert({
-      attendance_id: existingAttendance.id,
-      changed_by: authResult.user.id,
-      before_value: beforeValue,
-      after_value: updatedAttendance,
-      changed_at: nowIso,
-    })
+    const item = Array.isArray(data) ? data[0] : data
 
-    if (logUpdateError) {
-      console.error('attendance log update error:', logUpdateError)
+    if (!item) {
+      return jsonNoStore<EditAttendanceResponse>(
+        { error: '출석 수정 결과를 찾을 수 없습니다.' },
+        { status: 500 }
+      )
     }
 
-    return jsonNoStore({
-      message: '출석 기록이 수정되었습니다.',
-      attendance: updatedAttendance,
+    return jsonNoStore<EditAttendanceResponse>({
+      message: '출석 정보가 수정되었습니다.',
+      item,
     })
   } catch (error) {
     if (error instanceof Error && error.message === 'CSRF_BLOCKED') {
-      return jsonNoStore(
+      return jsonNoStore<EditAttendanceResponse>(
         { error: '허용되지 않은 요청입니다.' },
         { status: 403 }
       )
     }
+
+    console.error('[attendance/edit] unexpected error:', error)
+    return jsonNoStore<EditAttendanceResponse>(
+      { error: '서버 오류가 발생했습니다.' },
+      { status: 500 }
+    )
   }
 }

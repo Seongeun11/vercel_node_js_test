@@ -9,13 +9,15 @@ type AttendanceCheckResponse = {
   status?: 'present' | 'late'
   event_id?: string
   check_time?: string
+  attendance_date?: string
+  check_time_kst?: string
   error?: string
 }
 
 type AttendanceCheckRequest = {
   token?: string
 }
-
+/*
 function toKstDateString(date: Date): string {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Seoul',
@@ -25,6 +27,29 @@ function toKstDateString(date: Date): string {
   })
 
   return formatter.format(date)
+}
+&\
+*/
+function toKstDateString(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+}
+
+function toKstDateTimeString(date: Date): string {
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(date)
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
@@ -163,12 +188,21 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 500 }
       )
     }
-
+/*
     return jsonNoStore<AttendanceCheckResponse>({
       success: true,
       status: attendanceStatus,
       event_id: event.id,
       check_time: now.toISOString(),
+    })
+*/
+    return jsonNoStore<AttendanceCheckResponse>({
+      success: true,
+      status: attendanceStatus,
+      event_id: event.id,
+      check_time: now.toISOString(),
+      attendance_date: attendanceDate,
+      check_time_kst: toKstDateTimeString(now),
     })
   } catch (error) {
     if (error instanceof Error && error.message === 'CSRF_BLOCKED') {

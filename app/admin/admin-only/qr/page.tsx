@@ -1,8 +1,10 @@
+// app/admin/qr/page.tsx
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
 import QRCode from 'qrcode'
-//vercel 빌드 형식 dynamic으로 선언
+import AdminHeader from '@/components/admin/AdminHeader'
+
 export const dynamic = 'force-dynamic'
 
 type EventItem = {
@@ -12,10 +14,26 @@ type EventItem = {
   late_threshold_min: number
 }
 
+type EventsListResponse = {
+  items?: EventItem[]
+  error?: string
+}
+
+type QrCreateResponse = {
+  message?: string
+  qr_token?: {
+    id: string
+    token: string
+    event_id: string
+    expires_at: string
+  }
+  error?: string
+}
+
 export default function AdminQrPage() {
   const [events, setEvents] = useState<EventItem[]>([])
   const [eventId, setEventId] = useState('')
-  const [expireMinutes, setExpireMinutes] = useState('60')
+  const [expireMinutes, setExpireMinutes] = useState('3')
 
   const [loading, setLoading] = useState(true)
   const [submitLoading, setSubmitLoading] = useState(false)
@@ -36,8 +54,9 @@ export default function AdminQrPage() {
           credentials: 'include',
           cache: 'no-store',
         })
+
         const text = await response.text()
-        const result = text ? JSON.parse(text) : {}
+        const result: EventsListResponse = text ? JSON.parse(text) : {}
 
         if (!response.ok) {
           setErrorMessage(result?.error || '이벤트 목록을 불러오지 못했습니다.')
@@ -51,15 +70,14 @@ export default function AdminQrPage() {
           setEventId(fetchedEvents[0].id)
         }
       } catch (error) {
-        console.error('이벤트 조회 실패:', error)
-        
+        console.error('[admin/qr] 이벤트 조회 실패:', error)
         setErrorMessage('이벤트 목록 조회 중 오류가 발생했습니다.')
       } finally {
         setLoading(false)
       }
     }
 
-    fetchEvents()
+    void fetchEvents()
   }, [])
 
   const selectedEvent = useMemo(
@@ -107,15 +125,22 @@ export default function AdminQrPage() {
         }),
       })
 
-      const result = await response.json()
+      const text = await response.text()
+      const result: QrCreateResponse = text ? JSON.parse(text) : {}
 
       if (!response.ok) {
         setErrorMessage(result?.error || 'QR 생성에 실패했습니다.')
         return
       }
 
+      const token = result.qr_token?.token
+      if (!token) {
+        setErrorMessage('QR 토큰이 응답에 없습니다.')
+        return
+      }
+
       const origin = window.location.origin
-      const scanUrl = `${origin}/attendance/scan?token=${result.qr_token.token}`
+      const scanUrl = `${origin}/attendance/scan?token=${token}`
 
       setQrUrl(scanUrl)
       setMessage(result?.message || 'QR이 생성되었습니다.')
@@ -127,7 +152,7 @@ export default function AdminQrPage() {
 
       setQrImageUrl(dataUrl)
     } catch (error) {
-      console.error('QR 생성 실패:', error)
+      console.error('[admin/qr] QR 생성 실패:', error)
       setErrorMessage('QR 생성 중 오류가 발생했습니다.')
     } finally {
       setSubmitLoading(false)
@@ -139,59 +164,63 @@ export default function AdminQrPage() {
   }
 
   return (
-    <div
-      style={{
-        border: '1px solid #ddd',
-        borderRadius: '12px',
-        background: '#fff',
-        padding: '20px',
-        maxWidth: '720px',
-      }}
-    >
-      <h2 style={{ marginTop: 0 }}>QR 출석 생성</h2>
-
-      <label style={{ display: 'block', marginBottom: '6px' }}>이벤트 선택</label>
-      <select
-        value={eventId}
-        onChange={(e) => setEventId(e.target.value)}
-        style={{ width: '100%', padding: '10px', marginBottom: '12px', boxSizing: 'border-box' }}
-      >
-        {events.map((item) => (
-          <option key={item.id} value={item.id}>
-            {item.name} / {formatDateTime(item.start_time)}
-          </option>
-        ))}
-      </select>
-
-      {selectedEvent && (
-        <p style={{ marginBottom: '12px', color: '#666' }}>
-          선택된 이벤트: {selectedEvent.name}
-        </p>
-      )}
-
-      <label style={{ display: 'block', marginBottom: '6px' }}>QR 유효 시간(분)</label>
-      <input
-        type="number"
-        min="1"
-        max="60"
-        value={expireMinutes}
-        onChange={(e) => setExpireMinutes(e.target.value)}
-        style={{ width: '100%', padding: '10px', marginBottom: '16px', boxSizing: 'border-box' }}
+    <div style={{ padding: '24px', maxWidth: '720px', margin: '0 auto' }}>
+      <AdminHeader
+        title="QR 생성"
+        description="행사 출석용 QR을 생성하고 스캔 URL을 확인할 수 있습니다."
       />
 
-      <button type="button" onClick={handleCreateQr} disabled={submitLoading}>
-        {submitLoading ? '생성 중...' : 'QR 생성'}
-      </button>
+      <div
+        style={{
+          border: '1px solid #ddd',
+          borderRadius: '12px',
+          background: '#fff',
+          padding: '20px',
+        }}
+      >
+        <label style={{ display: 'block', marginBottom: '6px' }}>이벤트 선택</label>
+        <select
+          value={eventId}
+          onChange={(e) => setEventId(e.target.value)}
+          style={{ width: '100%', padding: '10px', marginBottom: '12px', boxSizing: 'border-box' }}
+        >
+          {events.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name} / {formatDateTime(item.start_time)}
+            </option>
+          ))}
+        </select>
 
-      {message && <p style={{ color: 'green', marginTop: '16px' }}>{message}</p>}
-      {errorMessage && <p style={{ color: 'red', marginTop: '16px' }}>{errorMessage}</p>}
+        {selectedEvent && (
+          <p style={{ marginBottom: '12px', color: '#666' }}>
+            선택된 이벤트: {selectedEvent.name}
+          </p>
+        )}
 
-      {qrImageUrl && (
-        <div style={{ marginTop: '24px' }}>
-          <img src={qrImageUrl} alt="QR Code" />
-          <p style={{ wordBreak: 'break-all' }}>{qrUrl}</p>
-        </div>
-      )}
+        <label style={{ display: 'block', marginBottom: '6px' }}>QR 유효 시간(분)</label>
+        <input
+          type="number"
+          min="1"
+          max="60"
+          value={expireMinutes}
+          onChange={(e) => setExpireMinutes(e.target.value)}
+          style={{ width: '100%', padding: '10px', marginBottom: '16px', boxSizing: 'border-box' }}
+        />
+
+        <button type="button" onClick={handleCreateQr} disabled={submitLoading}>
+          {submitLoading ? '생성 중...' : 'QR 생성'}
+        </button>
+
+        {message && <p style={{ color: 'green', marginTop: '16px' }}>{message}</p>}
+        {errorMessage && <p style={{ color: 'red', marginTop: '16px' }}>{errorMessage}</p>}
+
+        {qrImageUrl && (
+          <div style={{ marginTop: '24px' }}>
+            <img src={qrImageUrl} alt="QR Code" />
+            <p style={{ wordBreak: 'break-all' }}>{qrUrl}</p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

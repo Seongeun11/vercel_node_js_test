@@ -1,82 +1,99 @@
 // app/api/attendance/detail/route.ts
-import { requireRole } from '@/lib/serverAuth'
-import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextRequest } from 'next/server'
-import { assertSameOrigin } from '@/lib/security/csrf'
+import { getSessionProfile } from '@/lib/server-session'
 import { jsonNoStore } from '@/lib/security/api-response'
 
-type DetailAttendanceBody = {
-  target_user_id?: string
-  event_id?: string
-  date?: string
+type AttendanceDetailResponse = {
+  item?: {
+    id: string
+    user_id: string
+    event_id: string
+    date: string
+    status: 'present' | 'late' | 'absent'
+    method: 'manual' | 'qr' | 'nfc'
+    check_time: string
+    created_at: string
+    updated_at: string
+    event: {
+      id: string
+      name: string
+      start_time: string
+      late_threshold_min: number
+    } | null
+  }
+  error?: string
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    assertSameOrigin(request)
- 
-    // 1) 권한 체크 (admin / captain만 조회 가능)
-    const authResult = await requireRole(['admin', 'captain'])
+export async function GET(request: NextRequest): Promise<Response> {
+  const session = await getSessionProfile(['admin', 'captain', 'trainee'])
 
-    if (!authResult.ok || !authResult.user) {
-      return jsonNoStore(
-        { error: authResult.error },
-        { status: authResult.status }
-      )
-    }
-
-    // 2) 요청 파싱
-    const body = (await request.json()) as DetailAttendanceBody
-
-    const targetUserId = String(body.target_user_id || '').trim()
-    const eventId = String(body.event_id || '').trim()
-    const date = String(body.date || '').trim()
-
-    // 3) 입력값 검증
-    if (!targetUserId || !eventId || !date) {
-      return jsonNoStore(
-        { error: '필수 값이 누락되었습니다.' },
-        { status: 400 }
-      )
-    }
-
-    // 날짜 포맷 간단 검증 (YYYY-MM-DD)
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return jsonNoStore(
-        { error: '날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)' },
-        { status: 400 }
-      )
-    }
-
-    // 4) attendance 조회 (service role 사용)
-    const { data, error } = await supabaseAdmin
-      .from('attendance')
-      .select('*')
-      .eq('user_id', targetUserId)
-      .eq('event_id', eventId)
-      .eq('date', date)
-      .maybeSingle()
-
-    if (error) {
-      return jsonNoStore(
-        { error: error.message },
-        { status: 500 }
-      )
-    }
-
-    // 5) 결과 반환
-    return jsonNoStore(
-      {
-        attendance: data ?? null,
-      },
-      { status: 200 }
+  if (!session.ok) {
+    return jsonNoStore<AttendanceDetailResponse>(
+      { error: session.error },
+      { status: session.status }
     )
-  } catch (error) {
-    if (error instanceof Error && error.message === 'CSRF_BLOCKED') {
-      return jsonNoStore(
-        { error: '허용되지 않은 요청입니다.' },
-        { status: 403 }
-      )
-    }  
   }
+
+  const searchParams = request.nextUrl.searchParams
+  const attendanceId = searchParams.get('id')?.trim() || ''
+
+  if (!attendanceId) {
+    return jsonNoStore<AttendanceDetailResponse>(
+      { error: '출석 ID가 필요합니다.' },
+      { status: 400 }
+    )
+  }
+
+  const { data, error } = await session.supabase
+    .from('attendance')
+    .select(`
+      id,
+      user_id,
+      event_id,
+      date,
+      status,
+      method,
+      check_time,
+      created_at,
+      updated_at,
+      event:events (
+        id,
+        name,
+        start_time,
+        late_threshold_min
+      )
+    `)
+    .eq('id', attendanceId)
+    .eq('user_id', session.profile.id)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[attendance/detail] query error:', error)
+    return jsonNoStore<AttendanceDetailResponse>(
+      { error: '출석 상세 조회에 실패했습니다.' },
+      { status: 500 }
+    )
+  }
+
+  if (!data) {
+    return jsonNoStore<AttendanceDetailResponse>(
+      { error: '출석 정보를 찾을 수 없습니다.' },
+      { status: 404 }
+    )
+  }
+
+  return jsonNoStore<AttendanceDetailResponse>({
+    item: {
+      id: data.id,
+      user_id: data.user_id,
+      event_id: data.event_id,
+      date: data.date,
+      status: data.status,
+      method: data.method,
+      check_time: data.check_time,
+      created_at: data.created_at,
+      updated_at: data.updated_at,
+      event: Array.isArray(data.event) ? data.event[0] ?? null : data.event ?? null,
+    },
+  })
 }
