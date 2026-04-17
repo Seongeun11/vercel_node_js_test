@@ -12,8 +12,10 @@ type Props = {
 export default async function AdminOnlyLayout({ children }: Props) {
   const authResult = await requireRole(['admin'])
 
-  if (!authResult.ok) {
-    redirect('/admin/logs')
+ if (!authResult.ok) {
+    if (authResult.status === 401) redirect('/login')
+    if (authResult.status === 403) redirect('/forbidden')
+    redirect('/')
   }
 
   return <>{children}</>

@@ -5,18 +5,52 @@ import { jsonNoStore } from '@/lib/security/api-response'
 
 type AttendanceItem = {
   id: string
+  user_id: string
+  event_id: string
   date: string
   status: 'present' | 'late' | 'absent'
   method: 'manual' | 'qr' | 'nfc'
   check_time: string
   created_at: string
   updated_at: string
+  can_request_change: boolean
+  pending_request_exists: boolean
   event: {
     id: string
     name: string
     start_time: string
     late_threshold_min: number
   } | null
+}
+
+type AttendanceRow = {
+  id: string
+  user_id: string
+  event_id: string
+  date: string
+  status: 'present' | 'late' | 'absent'
+  method: 'manual' | 'qr' | 'nfc'
+  check_time: string
+  created_at: string
+  updated_at: string
+  event:
+    | {
+        id: string
+        name: string
+        start_time: string
+        late_threshold_min: number
+      }
+    | {
+        id: string
+        name: string
+        start_time: string
+        late_threshold_min: number
+      }[]
+    | null
+}
+
+type AttendanceChangeRequestRow = {
+  attendance_id: string
 }
 
 type AttendanceListResponse = {
@@ -26,6 +60,11 @@ type AttendanceListResponse = {
 
 function isValidDateString(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
+function canRequestChange(status: AttendanceItem['status']): boolean {
+  // 현재 정책상 지각/결석 건만 변경 요청 허용
+  return status === 'late' || status === 'absent'
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
@@ -56,10 +95,12 @@ export async function GET(request: NextRequest): Promise<Response> {
     )
   }
 
-  let query = session.supabase
+  let attendanceQuery = session.supabase
     .from('attendance')
     .select(`
       id,
+      user_id,
+      event_id,
       date,
       status,
       method,
@@ -78,14 +119,14 @@ export async function GET(request: NextRequest): Promise<Response> {
     .order('check_time', { ascending: false })
 
   if (dateFrom) {
-    query = query.gte('date', dateFrom)
+    attendanceQuery = attendanceQuery.gte('date', dateFrom)
   }
 
   if (dateTo) {
-    query = query.lte('date', dateTo)
+    attendanceQuery = attendanceQuery.lte('date', dateTo)
   }
 
-  const { data, error } = await query
+  const { data, error } = await attendanceQuery
 
   if (error) {
     console.error('[attendance/list] query error:', error)
@@ -95,16 +136,58 @@ export async function GET(request: NextRequest): Promise<Response> {
     )
   }
 
-  const items: AttendanceItem[] = (data ?? []).map((row) => ({
-    id: row.id,
-    date: row.date,
-    status: row.status,
-    method: row.method,
-    check_time: row.check_time,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-    event: Array.isArray(row.event) ? row.event[0] ?? null : row.event ?? null,
-  }))
+  const attendanceRows = (data ?? []) as AttendanceRow[]
+  const attendanceIds = attendanceRows.map((row) => row.id)
+
+  let pendingRequestAttendanceIdSet = new Set<string>()
+
+  if (attendanceIds.length > 0) {
+    const { data: pendingRequests, error: pendingRequestError } =
+      await session.supabase
+        .from('attendance_change_requests')
+        .select('attendance_id')
+        .in('attendance_id', attendanceIds)
+        .eq('requester_user_id', session.profile.id)
+        .eq('status', 'pending')
+
+    if (pendingRequestError) {
+      console.error(
+        '[attendance/list] pending request query error:',
+        pendingRequestError
+      )
+      return jsonNoStore<AttendanceListResponse>(
+        { error: '출석 변경 요청 정보 조회에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
+
+    pendingRequestAttendanceIdSet = new Set(
+      ((pendingRequests ?? []) as AttendanceChangeRequestRow[]).map(
+        (row) => row.attendance_id
+      )
+    )
+  }
+
+  const items: AttendanceItem[] = attendanceRows.map((row) => {
+    const event = Array.isArray(row.event) ? row.event[0] ?? null : row.event ?? null
+    const pending_request_exists = pendingRequestAttendanceIdSet.has(row.id)
+
+    return {
+      id: row.id,
+      user_id: row.user_id,
+      event_id: row.event_id,
+      date: row.date,
+      status: row.status,
+      method: row.method,
+      check_time: row.check_time,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      can_request_change:
+        canRequestChange(row.status) && !pending_request_exists,
+      pending_request_exists,
+      event,
+    }
+  })
 
   return jsonNoStore<AttendanceListResponse>({
     items,

@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     assertSameOrigin(request)
    
     // 1) 권한 체크
-    const authResult = await requireRole(['admin', 'captain'])
+    const authResult = await requireRole(['admin'])
 
     if (!authResult.ok) {
       return jsonNoStore(

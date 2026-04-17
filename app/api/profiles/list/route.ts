@@ -8,7 +8,7 @@ import { jsonNoStore } from '@/lib/security/api-response'
 export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request)
-    const authResult = await requireRole(['admin', 'captain'])
+    const authResult = await requireRole(['admin'])
 
     if (!authResult.ok) {
       return jsonNoStore(

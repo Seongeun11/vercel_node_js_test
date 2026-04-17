@@ -24,7 +24,7 @@ export default async function AdminLayout({ children }: Props) {
   const authResult = await requireRole(['admin', 'captain'])
 
   if (!authResult.ok) {
-    redirect('/login?next=/admin')
+    redirect('/forbidden')
   }
 
   const user = authResult.user
@@ -70,25 +70,28 @@ export default async function AdminLayout({ children }: Props) {
           </h2>
 
           <nav style={{ display: 'grid', gap: '8px' }}>
-            <Link href="/admin/logs" style={navLinkStyle}>
+            <Link href="/admin/admin_only/logs" style={navLinkStyle}>
               출석 로그
             </Link>
+            {(user.role === 'captain' || user.role === 'admin') && (
+              <Link href="/admin/requests">출석 변경 요청 처리</Link>
+            )}
 
             {user.role === 'admin' && (
               <>
                 <Link href="/admin" style={navLinkStyle}>
                   관리자 홈
                 </Link>
-                <Link href="/admin/admin-only/attendance" style={navLinkStyle}>
-                  출석 현황
+                <Link href="/admin/admin_only/attendance" style={navLinkStyle}>
+                  출석 수정
                 </Link>
-                <Link href="/admin/admin-only/qr" style={navLinkStyle}>
+                <Link href="/admin/admin_only/qr" style={navLinkStyle}>
                   QR 관리
                 </Link>
-                <Link href="/admin/admin-only/events" style={navLinkStyle}>
+                <Link href="/admin/admin_only/events" style={navLinkStyle}>
                   이벤트 관리
                 </Link>
-                <Link href="/admin/admin-only/users" style={navLinkStyle}>
+                <Link href="/admin/admin_only/users" style={navLinkStyle}>
                   사용자 생성
                 </Link>
               </>

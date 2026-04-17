@@ -14,7 +14,7 @@ export default async function LogsLayout({ children }: Props) {
     redirect('/login')
   }
 
-  if (!['admin', 'captain'].includes(user.role)) {
+  if (!['admin'].includes(user.role)) {
     redirect('/')
   }
 

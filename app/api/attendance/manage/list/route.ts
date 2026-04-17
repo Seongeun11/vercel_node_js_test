@@ -48,7 +48,7 @@ function parsePositiveInt(value: string | null, fallback: number, max: number): 
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
-  const authResult = await requireRole(['admin', 'captain'])
+  const authResult = await requireRole(['admin'])
 
   if (!authResult.ok) {
     return jsonNoStore<AttendanceManageListResponse>(

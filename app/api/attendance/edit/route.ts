@@ -62,7 +62,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   try {
     assertSameOrigin(request)
 
-    const authResult = await requireRole(['admin', 'captain'])
+    const authResult = await requireRole(['admin'])
     if (!authResult.ok || !authResult.user) {
       return jsonNoStore<EditAttendanceResponse>(
         { error: authResult.error },

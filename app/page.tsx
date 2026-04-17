@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/serverAuth'
 import LogoutButton from '@/components/LogoutButton'
+import AttendanceChangeRequestButton from '@/components/attendance/attendanceChangeRequestButton'
 
 // 서버에서 사용하는 사용자 타입 정의 (최소 필드만)
 type User = {
@@ -59,14 +60,20 @@ export default async function HomePage() {
             <h2 style={{ marginTop: 0 }}>바로가기</h2>
 
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              {user.role === 'trainee' &&(
+                <>
               <Link href="/attendance/scan">
-                <button type="button">출석 체크</button>
+                <button type="button">출석 체크</button>              
+              </Link>
+              
+              <Link href="/attendance/my">
+                <button type="button">내 출석 조회</button>
               </Link>
 
-              {(user.role === 'admin' || user.role === 'captain') && (
-                <Link href="/admin/logs">
-                  <button type="button">출석 로그</button>
-                </Link>
+              <Link href="/attendance/requests">
+              <button type="button">내 출석 변경 요청</button>
+              </Link>
+              </>
               )}
 
               {user.role === 'admin' && (
@@ -74,18 +81,7 @@ export default async function HomePage() {
                   <Link href="/admin">
                     <button type="button">관리자 페이지</button>
                   </Link>
-                  <Link href="/admin/events">
-                    <button type="button">이벤트 관리</button>
-                  </Link>
-                  <Link href="/admin/qr">
-                    <button type="button">QR 관리</button>
-                  </Link>
-                  <Link href="/admin/attendance">
-                    <button type="button">출석 현황</button>
-                  </Link>
-                  <Link href="/admin/users">
-                    <button type="button">사용자 생성</button>
-                  </Link>
+                  
                 </>
               )}
             </div>
