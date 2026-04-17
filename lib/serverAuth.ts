@@ -1,3 +1,4 @@
+// lib/serverAuth.ts
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 
@@ -35,8 +36,6 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
     return profile as CurrentUser
   } catch (error) {
-   // ❌ 기존: console.error 찍고 있었음
-    // ✅ 수정: build에서는 조용히 무시
     if (process.env.NODE_ENV !== 'production') {
       console.error('[GET_CURRENT_USER_ERROR]', error)
     }

@@ -70,7 +70,7 @@ export default async function AdminLayout({ children }: Props) {
           </h2>
 
           <nav style={{ display: 'grid', gap: '8px' }}>
-            <Link href="/admin/admin_only/logs" style={navLinkStyle}>
+            <Link href="/admin/admin-only/logs" style={navLinkStyle}>
               출석 로그
             </Link>
             {(user.role === 'captain' || user.role === 'admin') && (

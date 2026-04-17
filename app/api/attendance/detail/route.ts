@@ -25,7 +25,7 @@ type AttendanceDetailResponse = {
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
-  const session = await getSessionProfile(['admin', 'captain', 'trainee'])
+  const session = await getSessionProfile(['trainee'])
 
   if (!session.ok) {
     return jsonNoStore<AttendanceDetailResponse>(

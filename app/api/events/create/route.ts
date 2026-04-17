@@ -10,6 +10,7 @@ type CreateEventBody = {
   start_time?: string
   late_threshold_min?: number
   allow_duplicate_check?: boolean
+  is_special_event?: boolean
 }
 
 type CreateEventResponse = {
@@ -38,12 +39,12 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const body = (await request.json()) as CreateEventBody
-console.log('create event body:', body)
+    const isSpecialEvent = Boolean(body.is_special_event)
     const name = String(body.name ?? '').trim()
     const startTimeRaw = String(body.start_time ?? '').trim()
     const lateThresholdMin = Number(body.late_threshold_min ?? 5)
     const allowDuplicateCheck = Boolean(body.allow_duplicate_check)
-    console.log('create event body:', body)
+
     if (!name) {
       return jsonNoStore<CreateEventResponse>(
         { error: '이벤트명을 입력해주세요.' },
@@ -85,12 +86,18 @@ console.log('create event body:', body)
         start_time: startTime.toISOString(),
         late_threshold_min: lateThresholdMin,
         allow_duplicate_check: allowDuplicateCheck,
+        is_special_event: isSpecialEvent,
       })
-      .select('id, name, start_time, late_threshold_min, allow_duplicate_check, created_at')
+      .select(
+        'id, name, start_time, late_threshold_min, allow_duplicate_check, is_special_event, created_at'
+      )
       .single()
 
     if (error || !createdEvent) {
-      console.error('[events/create] insert error:', error)
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[events/create] insert error:', error)
+      }
+
       return jsonNoStore<CreateEventResponse>(
         { error: error?.message || '이벤트 생성에 실패했습니다.' },
         { status: 500 }
@@ -112,7 +119,9 @@ console.log('create event body:', body)
       )
     }
 
-    console.error('[events/create] unexpected error:', error)
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[events/create] unexpected error:', error)
+    }
 
     return jsonNoStore<CreateEventResponse>(
       { error: '서버 오류가 발생했습니다.' },

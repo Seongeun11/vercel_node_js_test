@@ -1,5 +1,4 @@
-// app/api/qr/create/route.ts
-import crypto from 'crypto'
+// app/api/qr/update/route.ts
 import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
@@ -8,13 +7,13 @@ import { jsonNoStore } from '@/lib/security/api-response'
 
 type ExpireUnit = 'minutes' | 'days'
 
-type CreateQrBody = {
-  event_id?: string
+type UpdateQrBody = {
+  id?: string
   expire_unit?: ExpireUnit
   expire_value?: number
 }
 
-type CreateQrResponse = {
+type UpdateQrResponse = {
   message?: string
   qr_token?: {
     id: string
@@ -61,103 +60,81 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     const authResult = await requireRole(['admin'])
     if (!authResult.ok) {
-      return jsonNoStore<CreateQrResponse>(
+      return jsonNoStore<UpdateQrResponse>(
         { error: authResult.error },
         { status: authResult.status }
       )
     }
 
-    const body = (await request.json()) as CreateQrBody
-
-    const eventId = String(body.event_id ?? '').trim()
+    const body = (await request.json()) as UpdateQrBody
+    const id = String(body.id ?? '').trim()
     const expireUnit = (body.expire_unit ?? 'minutes') as ExpireUnit
     const expireValue = Number(body.expire_value ?? 10)
 
-    if (!eventId) {
-      return jsonNoStore<CreateQrResponse>(
-        { error: '이벤트 ID가 필요합니다.' },
+    if (!id) {
+      return jsonNoStore<UpdateQrResponse>(
+        { error: 'QR ID가 필요합니다.' },
         { status: 400 }
       )
     }
 
     const validationError = validateExpireSetting(expireUnit, expireValue)
     if (validationError) {
-      return jsonNoStore<CreateQrResponse>(
+      return jsonNoStore<UpdateQrResponse>(
         { error: validationError },
         { status: 400 }
       )
     }
 
-    const { data: event, error: eventError } = await supabaseAdmin
-      .from('events')
-      .select('id')
-      .eq('id', eventId)
+    const { data: existingQr, error: existingError } = await supabaseAdmin
+      .from('qr_tokens')
+      .select('id, event_id, token, expires_at, used_count, created_at')
+      .eq('id', id)
       .single()
 
-    if (eventError || !event) {
-      return jsonNoStore<CreateQrResponse>(
-        { error: '이벤트를 찾을 수 없습니다.' },
+    if (existingError || !existingQr) {
+      return jsonNoStore<UpdateQrResponse>(
+        { error: '수정할 QR을 찾을 수 없습니다.' },
         { status: 404 }
       )
     }
 
-    const nowIso = new Date().toISOString()
-
-    // ✅ 새 QR 생성 전에 기존 활성 QR 자동 만료
-    const { error: expirePreviousError } = await supabaseAdmin
-      .from('qr_tokens')
-      .update({ expires_at: nowIso })
-      .eq('event_id', eventId)
-      .gt('expires_at', nowIso)
-
-    if (expirePreviousError) {
-      return jsonNoStore<CreateQrResponse>(
-        { error: expirePreviousError.message || '기존 QR 만료 처리에 실패했습니다.' },
-        { status: 500 }
-      )
-    }
-
-    const token = crypto.randomBytes(24).toString('hex')
     const expiresAt = buildExpiresAt(expireUnit, expireValue)
 
-    const { data: createdQr, error: createError } = await supabaseAdmin
+    const { data: updatedQr, error: updateError } = await supabaseAdmin
       .from('qr_tokens')
-      .insert({
-        event_id: eventId,
-        token,
-        expires_at: expiresAt,
-        used_count: 0,
-      })
+      .update({ expires_at: expiresAt })
+      .eq('id', id)
       .select('id, event_id, token, expires_at, used_count, created_at')
       .single()
 
-    if (createError || !createdQr) {
-      return jsonNoStore<CreateQrResponse>(
-        { error: createError?.message || 'QR 생성에 실패했습니다.' },
+    if (updateError || !updatedQr) {
+      return jsonNoStore<UpdateQrResponse>(
+        { error: updateError?.message || 'QR 수정에 실패했습니다.' },
         { status: 500 }
       )
     }
 
-    return jsonNoStore<CreateQrResponse>(
+    return jsonNoStore<UpdateQrResponse>(
       {
-        message: 'QR이 생성되었습니다. 기존 활성 QR은 자동 만료 처리되었습니다.',
-        qr_token: createdQr,
+        message: 'QR 유효 시간이 수정되었습니다.',
+        qr_token: updatedQr,
       },
-      { status: 201 }
+      { status: 200 }
     )
   } catch (error) {
     if (error instanceof Error && error.message === 'CSRF_BLOCKED') {
-      return jsonNoStore<CreateQrResponse>(
+      return jsonNoStore<UpdateQrResponse>(
         { error: '허용되지 않은 요청입니다.' },
         { status: 403 }
       )
     }
 
     if (process.env.NODE_ENV !== 'production') {
-      console.error('[qr/create] unexpected error:', error)
+      console.error('[qr/update] unexpected error:', error)
     }
 
-    return jsonNoStore<CreateQrResponse>(
+    return jsonNoStore<UpdateQrResponse>(
       { error: '서버 오류가 발생했습니다.' },
       { status: 500 }
     )

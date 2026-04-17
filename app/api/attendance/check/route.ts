@@ -56,7 +56,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   try {
     assertSameOrigin(request)
 
-    const session = await getSessionProfile(['admin', 'captain', 'trainee'])
+    const session = await getSessionProfile(['trainee'])
     if (!session.ok) {
       return jsonNoStore<AttendanceCheckResponse>(
         { error: session.error },

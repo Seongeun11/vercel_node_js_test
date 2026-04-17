@@ -15,7 +15,7 @@ type MeResponse = {
 
 export async function GET(): Promise<Response> {
   const session = await getSessionProfile()
-  console.log('session result:', session)
+
 
   if (session.ok) {
     console.log('auth user id:', session.user.id)

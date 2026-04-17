@@ -9,6 +9,7 @@ type EventItem = {
   start_time: string
   late_threshold_min: number
   allow_duplicate_check: boolean
+  is_special_event: boolean
   created_at: string
   updated_at: string
 }
@@ -41,17 +42,16 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   let query = session.supabase
     .from('events')
-    .select(
-      `
+    .select(`
       id,
       name,
       start_time,
       late_threshold_min,
       allow_duplicate_check,
+      is_special_event,
       created_at,
       updated_at
-      `
-    )
+    `)
     .is('deleted_at', null)
 
   if (upcomingOnly) {
@@ -79,6 +79,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       allow_duplicate_check: event.allow_duplicate_check,
       created_at: event.created_at,
       updated_at: event.updated_at,
+      is_special_event: event.is_special_event,
     })),
   })
 }
