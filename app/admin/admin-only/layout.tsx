@@ -1,4 +1,4 @@
-// app/admin/(admin-only)/layout.tsx
+// app/admin/admin-only/layout.tsx
 import type { ReactNode } from 'react'
 import { redirect } from 'next/navigation'
 import { requireRole } from '@/lib/serverAuth'

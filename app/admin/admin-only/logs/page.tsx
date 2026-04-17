@@ -1,4 +1,4 @@
-// app/admin/admin_only/logs/page.tsx
+// app/admin/admin-only/logs/page.tsx
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'

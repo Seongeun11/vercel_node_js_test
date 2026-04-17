@@ -82,16 +82,16 @@ export default async function AdminLayout({ children }: Props) {
                 <Link href="/admin" style={navLinkStyle}>
                   관리자 홈
                 </Link>
-                <Link href="/admin/admin_only/attendance" style={navLinkStyle}>
+                <Link href="/admin/admin-only/attendance" style={navLinkStyle}>
                   출석 수정
                 </Link>
-                <Link href="/admin/admin_only/qr" style={navLinkStyle}>
+                <Link href="/admin/admin-only/qr" style={navLinkStyle}>
                   QR 관리
                 </Link>
-                <Link href="/admin/admin_only/events" style={navLinkStyle}>
+                <Link href="/admin/admin-only/events" style={navLinkStyle}>
                   이벤트 관리
                 </Link>
-                <Link href="/admin/admin_only/users" style={navLinkStyle}>
+                <Link href="/admin/admin-only/users" style={navLinkStyle}>
                   사용자 생성
                 </Link>
               </>

@@ -1,4 +1,4 @@
-// app/admin/admin_only/attendance/AttendanceClient.tsx
+// app/admin/admin-only/attendance/AttendanceClient.tsx
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'

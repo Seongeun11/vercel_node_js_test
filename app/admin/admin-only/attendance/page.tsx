@@ -1,4 +1,4 @@
-// app/admin/admin_only/attendance/page.tsx
+// app/admin/admin-only/attendance/page.tsx
 // 서버 컴포넌트
 import { redirect } from 'next/navigation'
 import { requireRole } from '@/lib/serverAuth'

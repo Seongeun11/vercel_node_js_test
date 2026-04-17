@@ -1,3 +1,4 @@
+//app\admin\page.tsx
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { requireRole } from '@/lib/serverAuth'
@@ -8,8 +9,11 @@ export default async function AdminPage() {
   const authResult = await requireRole(['admin'])
 
   if (!authResult.ok) {
-    redirect('/')
+  if (authResult.status === 401) {
+    redirect('/login')
   }
+  redirect('/forbidden')
+}
 
   return (
     <main style={{ padding: 24 }}>
