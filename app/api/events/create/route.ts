@@ -5,12 +5,16 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
 
+type RecurrenceType = 'none' | 'daily'
+
 type CreateEventBody = {
   name?: string
   start_time?: string
   late_threshold_min?: number
   allow_duplicate_check?: boolean
   is_special_event?: boolean
+  recurrence_type?: RecurrenceType
+  is_active?: boolean
 }
 
 type CreateEventResponse = {
@@ -21,6 +25,9 @@ type CreateEventResponse = {
     start_time: string
     late_threshold_min: number
     allow_duplicate_check: boolean
+    is_special_event: boolean
+    recurrence_type: RecurrenceType
+    is_active: boolean
     created_at: string
   }
   error?: string
@@ -39,11 +46,14 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const body = (await request.json()) as CreateEventBody
-    const isSpecialEvent = Boolean(body.is_special_event)
+
     const name = String(body.name ?? '').trim()
     const startTimeRaw = String(body.start_time ?? '').trim()
     const lateThresholdMin = Number(body.late_threshold_min ?? 5)
     const allowDuplicateCheck = Boolean(body.allow_duplicate_check)
+    const isSpecialEvent = Boolean(body.is_special_event)
+    const recurrenceType = (body.recurrence_type ?? 'none') as RecurrenceType
+    const isActive = body.is_active ?? true
 
     if (!name) {
       return jsonNoStore<CreateEventResponse>(
@@ -79,6 +89,13 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
+    if (!['none', 'daily'].includes(recurrenceType)) {
+      return jsonNoStore<CreateEventResponse>(
+        { error: '반복 규칙은 none 또는 daily만 가능합니다.' },
+        { status: 400 }
+      )
+    }
+
     const { data: createdEvent, error } = await supabaseAdmin
       .from('events')
       .insert({
@@ -87,9 +104,11 @@ export async function POST(request: NextRequest): Promise<Response> {
         late_threshold_min: lateThresholdMin,
         allow_duplicate_check: allowDuplicateCheck,
         is_special_event: isSpecialEvent,
+        recurrence_type: recurrenceType,
+        is_active: Boolean(isActive),
       })
       .select(
-        'id, name, start_time, late_threshold_min, allow_duplicate_check, is_special_event, created_at'
+        'id, name, start_time, late_threshold_min, allow_duplicate_check, is_special_event, recurrence_type, is_active, created_at'
       )
       .single()
 

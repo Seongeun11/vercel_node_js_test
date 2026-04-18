@@ -6,7 +6,7 @@ import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
 
 type ListQrBody = {
-  event_id?: string
+  occurrence_id?: string
 }
 
 export async function POST(request: NextRequest) {
@@ -22,27 +22,34 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as ListQrBody
-    const eventId = String(body.event_id || '').trim()
+    const occurrenceId = String(body.occurrence_id || '').trim()
 
     let query = supabaseAdmin
       .from('qr_tokens')
       .select(`
         id,
         event_id,
+        occurrence_id,
         token,
         expires_at,
         used_count,
         created_at,
-        events (
+        event_occurrences (
           id,
-          name,
-          start_time
-        )
+          occurrence_date,
+          start_time,
+          status
+        ),
+        events (
+           id,
+           name,
+           start_time
+         )
       `)
       .order('created_at', { ascending: false })
 
-    if (eventId) {
-      query = query.eq('event_id', eventId)
+    if (occurrenceId) {
+      query = query.eq('occurrence_id', occurrenceId)
     }
 
     const { data, error } = await query
@@ -62,6 +69,8 @@ export async function POST(request: NextRequest) {
       return {
         ...item,
         is_expired: Number.isNaN(expiresAtMs) ? true : now > expiresAtMs,
+        occurrence_date: item.event_occurrences?.occurrence_date ?? null,
+        occurrence_status: item.event_occurrences?.status ?? null,
       }
     })
 

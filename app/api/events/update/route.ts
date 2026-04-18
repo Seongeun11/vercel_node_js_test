@@ -12,6 +12,8 @@ type UpdateEventBody = {
   late_threshold_min?: number
   allow_duplicate_check?: boolean
   is_special_event?: boolean
+  recurrence_type?: 'none' | 'daily'
+  is_active?: boolean
 }
 
 type UpdateEventResponse = {
@@ -41,12 +43,14 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const body = (await request.json()) as UpdateEventBody
-    const isSpecialEvent = Boolean(body.is_special_event)
     const id = String(body.id ?? '').trim()
     const name = String(body.name ?? '').trim()
     const startTimeRaw = String(body.start_time ?? '').trim()
     const lateThresholdMin = Number(body.late_threshold_min ?? 5)
     const allowDuplicateCheck = Boolean(body.allow_duplicate_check)
+    const isSpecialEvent = Boolean(body.is_special_event)
+    const recurrenceType = String(body.recurrence_type ?? 'none').trim()
+    const isActive = body.is_active ?? true
 
     if (!id) {
       return jsonNoStore<UpdateEventResponse>(
@@ -89,11 +93,17 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
     
+
+    if (!['none', 'daily'].includes(recurrenceType)) {
+      return jsonNoStore(
+        { error: '반복 규칙은 none 또는 daily만 가능합니다.' },
+        { status: 400 }
+      )
+    }
+
     const { data: existingEvent, error: existingError } = await supabaseAdmin
       .from('events')
-      .select(
-        'id, name, start_time, late_threshold_min, allow_duplicate_check, is_special_event, created_at'
-      )
+      .select('id, name, start_time, late_threshold_min, allow_duplicate_check, is_special_event, recurrence_type, is_active, created_at')
       .eq('id', id)
       .single()
       
@@ -113,10 +123,10 @@ export async function POST(request: NextRequest): Promise<Response> {
       late_threshold_min: number
       allow_duplicate_check: boolean
       is_special_event: boolean
+      recurrence_type: 'none' | 'daily'
+      is_active: boolean
     }> = {}
-    if (Boolean(existingEvent.is_special_event) !== isSpecialEvent) {
-      updatePayload.is_special_event = isSpecialEvent
-    }
+
     if (existingEvent.name !== name) {
       updatePayload.name = name
     }
@@ -133,6 +143,18 @@ export async function POST(request: NextRequest): Promise<Response> {
       updatePayload.allow_duplicate_check = allowDuplicateCheck
     }
 
+    if (Boolean(existingEvent.is_special_event) !== isSpecialEvent) {
+      updatePayload.is_special_event = isSpecialEvent
+    }
+
+    if (String(existingEvent.recurrence_type ?? 'none') !== recurrenceType) {
+      updatePayload.recurrence_type = recurrenceType as 'none' | 'daily'
+    }
+
+    if (Boolean(existingEvent.is_active) !== Boolean(isActive)) {
+      updatePayload.is_active = Boolean(isActive)
+    }    
+
     if (Object.keys(updatePayload).length === 0) {
       return jsonNoStore<UpdateEventResponse>(
         { error: '변경된 내용이 없습니다.' },
@@ -144,9 +166,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       .from('events')
       .update(updatePayload)
       .eq('id', id)
-      .select(
-        'id, name, start_time, late_threshold_min, allow_duplicate_check, created_at'
-      )
+      .select('id, name, start_time, late_threshold_min, allow_duplicate_check, is_special_event, recurrence_type, is_active, created_at')
       .single()
 
     if (updateError || !updatedEvent) {
@@ -171,13 +191,14 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
+
     if (process.env.NODE_ENV !== 'production') {
       console.error('[events/update] unexpected error:', error)
     }
 
-    return jsonNoStore<UpdateEventResponse>(
+    return jsonNoStore(
       { error: '서버 오류가 발생했습니다.' },
       { status: 500 }
-    )
+    )    
   }
 }

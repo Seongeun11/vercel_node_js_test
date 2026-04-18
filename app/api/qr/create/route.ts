@@ -9,9 +9,10 @@ import { jsonNoStore } from '@/lib/security/api-response'
 type ExpireUnit = 'minutes' | 'days'
 
 type CreateQrBody = {
-  event_id?: string
+  occurrence_id?: string
   expire_unit?: ExpireUnit
   expire_value?: number
+  
 }
 
 type CreateQrResponse = {
@@ -19,25 +20,27 @@ type CreateQrResponse = {
   qr_token?: {
     id: string
     event_id: string
+    occurrence_id: string
     token: string
     expires_at: string
     used_count: number
     created_at: string
+    
   }
   error?: string
 }
 
 function validateExpireSetting(expireUnit: ExpireUnit, expireValue: number): string {
   if (expireUnit === 'minutes') {
-    if (!Number.isInteger(expireValue) || expireValue < 10 || expireValue % 10 !== 0) {
-      return '분 단위 QR 유효시간은 10분 단위 정수여야 합니다. (예: 10, 20, 30)'
+    if (!Number.isInteger(expireValue) || expireValue < 10 || expireValue % 10 !== 0|| expireValue >1440) {
+      return '분 단위 QR 유효시간은 10분 단위 최대 1440분(24시간)입니다.'
     }
     return ''
   }
 
   if (expireUnit === 'days') {
-    if (!Number.isInteger(expireValue) || expireValue < 1 || expireValue > 30) {
-      return '일 단위 QR 유효시간은 1~30일 사이 정수여야 합니다.'
+    if (!Number.isInteger(expireValue) || expireValue < 1 || expireValue > 365) {
+      return '일 단위 QR 유효시간은 1~365일 사이 정수여야 합니다.'
     }
     return ''
   }
@@ -69,13 +72,13 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     const body = (await request.json()) as CreateQrBody
 
-    const eventId = String(body.event_id ?? '').trim()
+    const occurrenceId = String(body.occurrence_id ?? '').trim()
     const expireUnit = (body.expire_unit ?? 'minutes') as ExpireUnit
     const expireValue = Number(body.expire_value ?? 10)
 
-    if (!eventId) {
+    if (!occurrenceId) {
       return jsonNoStore<CreateQrResponse>(
-        { error: '이벤트 ID가 필요합니다.' },
+        { error: '회차 ID가 필요합니다.' },
         { status: 400 }
       )
     }
@@ -88,16 +91,24 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
-    const { data: event, error: eventError } = await supabaseAdmin
-      .from('events')
-      .select('id')
-      .eq('id', eventId)
+    const { data: occurrence, error: occurrenceError } = await supabaseAdmin
+      .from('event_occurrences')
+      .select('id, event_id, occurrence_date, status')
+      .eq('id', occurrenceId)
       .single()
-
-    if (eventError || !event) {
+    
+    if (occurrenceError || !occurrence) {
       return jsonNoStore<CreateQrResponse>(
-        { error: '이벤트를 찾을 수 없습니다.' },
+        { error: '회차를 찾을 수 없습니다.' },
         { status: 404 }
+      )
+      
+    }
+    
+    if (occurrence.status === 'closed' || occurrence.status === 'archived') {
+      return jsonNoStore<CreateQrResponse>(
+        { error: '종료된 회차에는 QR을 발급할 수 없습니다.' },
+        { status: 400 }
       )
     }
 
@@ -107,7 +118,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     const { error: expirePreviousError } = await supabaseAdmin
       .from('qr_tokens')
       .update({ expires_at: nowIso })
-      .eq('event_id', eventId)
+      .eq('occurrence_id', occurrenceId)
       .gt('expires_at', nowIso)
 
     if (expirePreviousError) {
@@ -123,12 +134,13 @@ export async function POST(request: NextRequest): Promise<Response> {
     const { data: createdQr, error: createError } = await supabaseAdmin
       .from('qr_tokens')
       .insert({
-        event_id: eventId,
+        event_id: occurrence.event_id,
+        occurrence_id: occurrenceId,
         token,
         expires_at: expiresAt,
         used_count: 0,
       })
-      .select('id, event_id, token, expires_at, used_count, created_at')
+      .select('id, event_id, occurrence_id, token, expires_at, used_count, created_at')
       .single()
 
     if (createError || !createdQr) {

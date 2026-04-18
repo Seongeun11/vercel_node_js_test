@@ -18,6 +18,7 @@ type UpdateQrResponse = {
   qr_token?: {
     id: string
     event_id: string
+    occurrence_id: string
     token: string
     expires_at: string
     used_count: number
@@ -26,17 +27,25 @@ type UpdateQrResponse = {
   error?: string
 }
 
-function validateExpireSetting(expireUnit: ExpireUnit, expireValue: number): string {
+function validateExpireSetting(
+  expireUnit: ExpireUnit,
+  expireValue: number
+): string {
   if (expireUnit === 'minutes') {
-    if (!Number.isInteger(expireValue) || expireValue < 10 || expireValue % 10 !== 0) {
-      return '분 단위 QR 유효시간은 10분 단위 정수여야 합니다. (예: 10, 20, 30)'
+    if (
+      !Number.isInteger(expireValue) ||
+      expireValue < 10 ||
+      expireValue % 10 !== 0
+      || expireValue >1440
+    ) {
+      return '분 단위 QR 유효시간은 10분 단위 최대 1440분 (24시간)입니다. (예: 10, 20, 30)'
     }
     return ''
   }
 
   if (expireUnit === 'days') {
-    if (!Number.isInteger(expireValue) || expireValue < 1 || expireValue > 30) {
-      return '일 단위 QR 유효시간은 1~30일 사이 정수여야 합니다.'
+    if (!Number.isInteger(expireValue) || expireValue < 1 || expireValue > 365) {
+      return '일 단위 QR 유효시간은 1~365일 사이 정수여야 합니다.'
     }
     return ''
   }
@@ -86,9 +95,10 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
+    // ✅ 회차 기반 QR인지 확인
     const { data: existingQr, error: existingError } = await supabaseAdmin
       .from('qr_tokens')
-      .select('id, event_id, token, expires_at, used_count, created_at')
+      .select('id, event_id, occurrence_id, token, expires_at, used_count, created_at')
       .eq('id', id)
       .single()
 
@@ -99,13 +109,41 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
+    if (!existingQr.occurrence_id) {
+      return jsonNoStore<UpdateQrResponse>(
+        { error: '회차 기반 QR이 아닙니다. 마이그레이션이 필요합니다.' },
+        { status: 400 }
+      )
+    }
+
+    // ✅ 회차가 실제 존재하는지도 확인
+    const { data: occurrence, error: occurrenceError } = await supabaseAdmin
+      .from('event_occurrences')
+      .select('id,status')
+      .eq('id', existingQr.occurrence_id)
+      .single()
+
+    if (occurrenceError || !occurrence) {
+      return jsonNoStore<UpdateQrResponse>(
+        { error: '연결된 회차를 찾을 수 없습니다.' },
+        { status: 404 }
+      )
+      
+    }
+    if (occurrence.status === 'closed' || occurrence.status === 'archived') {
+      return jsonNoStore<UpdateQrResponse>(
+        { error: '종료된 회차의 QR은 재발급할 수 없습니다.' },
+        { status: 400 }
+      )
+    }
+        
     const expiresAt = buildExpiresAt(expireUnit, expireValue)
 
     const { data: updatedQr, error: updateError } = await supabaseAdmin
       .from('qr_tokens')
       .update({ expires_at: expiresAt })
       .eq('id', id)
-      .select('id, event_id, token, expires_at, used_count, created_at')
+      .select('id, event_id, occurrence_id, token, expires_at, used_count, created_at')
       .single()
 
     if (updateError || !updatedQr) {
@@ -118,7 +156,15 @@ export async function POST(request: NextRequest): Promise<Response> {
     return jsonNoStore<UpdateQrResponse>(
       {
         message: 'QR 유효 시간이 수정되었습니다.',
-        qr_token: updatedQr,
+        qr_token: {
+          id: updatedQr.id,
+          event_id: updatedQr.event_id,
+          occurrence_id: updatedQr.occurrence_id,
+          token: updatedQr.token,
+          expires_at: updatedQr.expires_at,
+          used_count: updatedQr.used_count,
+          created_at: updatedQr.created_at,
+        },
       },
       { status: 200 }
     )

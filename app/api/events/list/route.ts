@@ -10,10 +10,11 @@ type EventItem = {
   late_threshold_min: number
   allow_duplicate_check: boolean
   is_special_event: boolean
+  recurrence_type: 'none' | 'daily'
+  is_active: boolean
   created_at: string
   updated_at: string
 }
-
 type EventsListResponse = {
   items?: EventItem[]
   error?: string
@@ -43,15 +44,17 @@ export async function GET(request: NextRequest): Promise<Response> {
   let query = session.supabase
     .from('events')
     .select(`
-      id,
-      name,
-      start_time,
-      late_threshold_min,
-      allow_duplicate_check,
-      is_special_event,
-      created_at,
-      updated_at
-    `)
+    id,
+    name,
+    start_time,
+    late_threshold_min,
+    allow_duplicate_check,
+    is_special_event,
+    recurrence_type,
+    is_active,
+    created_at,
+    updated_at
+  `)
     .is('deleted_at', null)
 
   if (upcomingOnly) {
@@ -77,9 +80,11 @@ export async function GET(request: NextRequest): Promise<Response> {
       start_time: event.start_time,
       late_threshold_min: event.late_threshold_min,
       allow_duplicate_check: event.allow_duplicate_check,
+      is_special_event: event.is_special_event,
+      recurrence_type: event.recurrence_type,
+      is_active: event.is_active,
       created_at: event.created_at,
       updated_at: event.updated_at,
-      is_special_event: event.is_special_event,
     })),
-  })
+})
 }

@@ -8,6 +8,7 @@ type AttendanceCheckResponse = {
   success?: boolean
   status?: 'present' | 'late'
   event_id?: string
+  occurrence_id?: string
   check_time?: string
   attendance_date?: string
   check_time_kst?: string
@@ -17,19 +18,7 @@ type AttendanceCheckResponse = {
 type AttendanceCheckRequest = {
   token?: string
 }
-/*
-function toKstDateString(date: Date): string {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
 
-  return formatter.format(date)
-}
-&\
-*/
 function toKstDateString(date: Date): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Seoul',
@@ -74,10 +63,13 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
-    // 1) QR 토큰 검증
+    const now = new Date()
+    const attendanceDate = toKstDateString(now)
+
+    // 1) QR 토큰 검증: 이제 occurrence_id 기준이 핵심
     const { data: qrToken, error: qrError } = await session.supabase
       .from('qr_tokens')
-      .select('event_id, expires_at, deleted_at')
+      .select('id, event_id, occurrence_id, expires_at, deleted_at')
       .eq('token', token)
       .is('deleted_at', null)
       .maybeSingle()
@@ -97,7 +89,13 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
-    const now = new Date()
+    if (!qrToken.occurrence_id) {
+      return jsonNoStore<AttendanceCheckResponse>(
+        { error: '회차 기반 QR이 아닙니다. 마이그레이션이 필요합니다.' },
+        { status: 400 }
+      )
+    }
+
     const expiresAt = new Date(qrToken.expires_at)
 
     if (Number.isNaN(expiresAt.getTime()) || expiresAt <= now) {
@@ -107,40 +105,79 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
-    // 2) 이벤트 검증
-    const { data: event, error: eventError } = await session.supabase
-      .from('events')
-      .select('id, start_time, late_threshold_min, deleted_at')
-      .eq('id', qrToken.event_id)
-      .is('deleted_at', null)
+    // 2) 회차 + 이벤트 조회
+    const { data: occurrence, error: occurrenceError } = await session.supabase
+      .from('event_occurrences')
+      .select(`
+        id,
+        event_id,
+        occurrence_date,
+        start_time,
+        status,
+        events (
+          id,
+          start_time,
+          late_threshold_min,
+          deleted_at
+        )
+      `)
+      .eq('id', qrToken.occurrence_id)
       .maybeSingle()
 
-    if (eventError) {
-      console.error('[attendance/check] event query error:', eventError)
+    if (occurrenceError) {
+      console.error('[attendance/check] occurrence query error:', occurrenceError)
       return jsonNoStore<AttendanceCheckResponse>(
-        { error: '행사 조회에 실패했습니다.' },
+        { error: '회차 조회에 실패했습니다.' },
         { status: 500 }
       )
     }
 
-    if (!event) {
+    if (!occurrence) {
+      return jsonNoStore<AttendanceCheckResponse>(
+        { error: '출석 회차를 찾을 수 없습니다.' },
+        { status: 404 }
+      )
+    }
+
+    if (occurrence.status === 'closed' || occurrence.status === 'archived') {
+      return jsonNoStore<AttendanceCheckResponse>(
+        { error: '종료된 출석 회차입니다.' },
+        { status: 400 }
+      )
+    }
+
+    const event = Array.isArray(occurrence.events)
+      ? occurrence.events[0]
+      : occurrence.events
+
+    if (!event || event.deleted_at) {
       return jsonNoStore<AttendanceCheckResponse>(
         { error: '행사를 찾을 수 없습니다.' },
         { status: 404 }
       )
     }
 
-    // 3) 출석 상태 계산
-    const startTime = new Date(event.start_time)
+    // 3) QR의 회차 날짜와 오늘(KST)이 다르면 막음
+    if (occurrence.occurrence_date !== attendanceDate) {
+      return jsonNoStore<AttendanceCheckResponse>(
+        { error: '오늘 출석용 QR이 아닙니다.' },
+        { status: 400 }
+      )
+    }
+
+    // 4) 출석 상태 계산: 회차 start_time 기준
+    const startTime = new Date(occurrence.start_time)
     if (Number.isNaN(startTime.getTime())) {
       return jsonNoStore<AttendanceCheckResponse>(
-        { error: '행사 시작 시간이 올바르지 않습니다.' },
+        { error: '회차 시작 시간이 올바르지 않습니다.' },
         { status: 500 }
       )
     }
 
     const lateThresholdMin =
-      typeof event.late_threshold_min === 'number' ? event.late_threshold_min : 5
+      typeof event.late_threshold_min === 'number'
+        ? event.late_threshold_min
+        : 5
 
     const lateDeadline = new Date(
       startTime.getTime() + lateThresholdMin * 60_000
@@ -149,17 +186,42 @@ export async function POST(request: NextRequest): Promise<Response> {
     const attendanceStatus: 'present' | 'late' =
       now > lateDeadline ? 'late' : 'present'
 
-    // 요구사항의 "동일 사용자 + 동일 행사 + 동일 날짜 1회"
-    // 날짜는 KST 기준으로 맞추는 편이 안전함
-    const attendanceDate = toKstDateString(now)
+    // 5) 중복 체크: user_id + occurrence_id 기준
+    const { data: existingAttendance, error: existingAttendanceError } =
+      await session.supabase
+        .from('attendance')
+        .select('id, status')
+        .eq('user_id', session.profile.id)
+        .eq('occurrence_id', occurrence.id)
+        .maybeSingle()
 
-    // 4) 출석 insert
+    if (existingAttendanceError) {
+      console.error(
+        '[attendance/check] existing attendance query error:',
+        existingAttendanceError
+      )
+      return jsonNoStore<AttendanceCheckResponse>(
+        { error: '기존 출석 조회에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
+
+    if (existingAttendance) {
+      return jsonNoStore<AttendanceCheckResponse>(
+        { error: '이미 오늘 출석 처리되었습니다.' },
+        { status: 409 }
+      )
+    }
+
+    // 6) 출석 insert: occurrence_id 기준
     const { error: insertError } = await session.supabase
       .from('attendance')
       .insert({
         user_id: session.profile.id,
-        event_id: event.id,
-        date: attendanceDate,
+        event_id: occurrence.event_id,      // 기존 컬럼과 공존
+        occurrence_id: occurrence.id,       // 새 기준
+        attendance_date: occurrence.occurrence_date,
+        date: occurrence.occurrence_date,   // 기존 컬럼과 공존
         status: attendanceStatus,
         method: 'qr',
         check_time: now.toISOString(),
@@ -171,14 +233,13 @@ export async function POST(request: NextRequest): Promise<Response> {
       const message = insertError.message?.toLowerCase() ?? ''
       const code = insertError.code ?? ''
 
-      // unique(user_id, event_id, date) 충돌
       if (
         code === '23505' ||
         message.includes('duplicate') ||
         message.includes('unique')
       ) {
         return jsonNoStore<AttendanceCheckResponse>(
-          { error: '이미 출석 처리되었습니다.' },
+          { error: '이미 오늘 출석 처리되었습니다.' },
           { status: 409 }
         )
       }
@@ -188,20 +249,14 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 500 }
       )
     }
-/*
+
     return jsonNoStore<AttendanceCheckResponse>({
       success: true,
       status: attendanceStatus,
-      event_id: event.id,
+      event_id: occurrence.event_id,
+      occurrence_id: occurrence.id,
       check_time: now.toISOString(),
-    })
-*/
-    return jsonNoStore<AttendanceCheckResponse>({
-      success: true,
-      status: attendanceStatus,
-      event_id: event.id,
-      check_time: now.toISOString(),
-      attendance_date: attendanceDate,
+      attendance_date: occurrence.occurrence_date,
       check_time_kst: toKstDateTimeString(now),
     })
   } catch (error) {

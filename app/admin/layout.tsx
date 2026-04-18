@@ -72,9 +72,11 @@ export default async function AdminLayout({ children }: Props) {
           <nav style={{ display: 'grid', gap: '8px' }}>
             <Link href="/admin/admin-only/logs" style={navLinkStyle}>
               출석 로그
+
             </Link>
             {(user.role === 'captain' || user.role === 'admin') && (
-              <Link href="/admin/requests">출석 변경 요청 처리</Link>
+              <Link href="/admin/requests"style={navLinkStyle}>
+                출석 변경 요청 처리</Link>
             )}
 
             {user.role === 'admin' && (
@@ -82,12 +84,17 @@ export default async function AdminLayout({ children }: Props) {
                 <Link href="/admin" style={navLinkStyle}>
                   관리자 홈
                 </Link>
+                <Link href="/admin/admin-only/attendance-today" style={navLinkStyle}>
+        오늘 출석 운영
+        </Link>
                 <Link href="/admin/admin-only/attendance" style={navLinkStyle}>
                   출석 수정
                 </Link>
+                {/* 
                 <Link href="/admin/admin-only/qr" style={navLinkStyle}>
                   QR 관리
                 </Link>
+                */}
                 <Link href="/admin/admin-only/events" style={navLinkStyle}>
                   이벤트 관리
                 </Link>

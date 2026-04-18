@@ -20,16 +20,21 @@ export default async function AdminPage() {
       <h1>관리자 페이지</h1>
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+
         <Link href="/admin/admin-only/events">
           <button type="button">이벤트 관리</button>
-        </Link>
 
+        </Link>
+        <Link href="/admin/admin-only/attendance-today">
+        <button type="button">오늘 출석 운영</button>
+        </Link>
+        
         <Link href="/admin/admin-only/qr">
           <button type="button">QR 관리</button>
         </Link>
 
         <Link href="/admin/admin-only/attendance">
-          <button type="button">출석 현황</button>
+          <button type="button">출석 수정</button>
         </Link>
 
         <Link href="/admin/admin-only/users">
