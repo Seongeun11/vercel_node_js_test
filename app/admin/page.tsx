@@ -34,7 +34,7 @@ export default async function AdminPage() {
         </Link>
 
         <Link href="/admin/admin-only/attendance">
-          <button type="button">출석 수정</button>
+          <button type="button">출석 조회 및 수정</button>
         </Link>
 
         <Link href="/admin/admin-only/users">

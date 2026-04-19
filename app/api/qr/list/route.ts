@@ -64,10 +64,11 @@ export async function POST(request: NextRequest) {
     const now = Date.now()
 
     const qrTokens = (data ?? []).map((item: any) => {
-      const expiresAtMs = new Date(item.expires_at).getTime()
-
+    const expiresAtMs = new Date(item.expires_at).getTime()
+    const origin = request.nextUrl.origin
       return {
         ...item,
+        qr_url: `${origin}/attendance/scan?token=${item.token}`,
         is_expired: Number.isNaN(expiresAtMs) ? true : now > expiresAtMs,
         occurrence_date: item.event_occurrences?.occurrence_date ?? null,
         occurrence_status: item.event_occurrences?.status ?? null,

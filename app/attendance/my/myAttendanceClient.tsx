@@ -155,13 +155,21 @@ export default function MyAttendanceClient() {
           <h1 style={{ margin: 0 }}>내 출석 조회</h1>
           <p style={{ marginTop: '8px', color: '#555' }}>
             본인의 출석 기록을 확인하고 필요한 경우 변경 요청을 생성할 수 있습니다.
+          
           </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+         
+          <div style={{ display: 'flex', gap: '22px', flexWrap: 'wrap' }}>
+          <Link href="/">
+            <button type="button">메인으로</button>
+          </Link>
           <Link href="/attendance/requests">
             <button type="button">내 변경 요청 보기</button>
           </Link>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '22px', flexWrap: 'wrap' }}>
+          
 
           <button
             type="button"

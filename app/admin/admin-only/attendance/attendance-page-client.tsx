@@ -1,7 +1,7 @@
-// app/admin/admin-only/attendance/AttendanceClient.tsx
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import AdminHeader from '@/components/admin/AdminHeader'
 
 type AttendanceStatus = 'present' | 'late' | 'absent'
@@ -42,6 +42,10 @@ type EditAttendanceResponse = {
   error?: string
 }
 
+type AttendanceClientProps = {
+  initialDate: string
+}
+
 const STATUS_OPTIONS: AttendanceStatus[] = ['present', 'late', 'absent']
 const METHOD_OPTIONS: AttendanceMethod[] = ['manual']
 
@@ -72,7 +76,18 @@ function toLocalDateTimeInputValue(value: string): string {
   }
 }
 
-export default function AdminAttendancePage() {
+function formatDate(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
+
+function getTodayLocalDate(): string {
+  return formatDate(new Date())
+}
+
+export default function AdminAttendancePage({ initialDate }: AttendanceClientProps) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
   const [items, setItems] = useState<AttendanceManageItem[]>([])
   const [loading, setLoading] = useState(true)
   const [searchLoading, setSearchLoading] = useState(false)
@@ -82,8 +97,9 @@ export default function AdminAttendancePage() {
   const [message, setMessage] = useState('')
 
   const [userKeyword, setUserKeyword] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const [selectedDate, setSelectedDate] = useState(initialDate)
+  const [dateFrom, setDateFrom] = useState(initialDate)
+  const [dateTo, setDateTo] = useState(initialDate)
 
   const [selectedId, setSelectedId] = useState('')
   const selectedItem = useMemo(
@@ -95,6 +111,16 @@ export default function AdminAttendancePage() {
   const [method, setMethod] = useState<AttendanceMethod>('manual')
   const [checkTime, setCheckTime] = useState('')
   const [reason, setReason] = useState('')
+
+  function syncDate(nextDate: string) {
+    setSelectedDate(nextDate)
+    setDateFrom(nextDate)
+    setDateTo(nextDate)
+
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('date', nextDate)
+    router.replace(`?${params.toString()}`)
+  }
 
   async function fetchAttendance(isInitial = false) {
     try {
@@ -118,12 +144,13 @@ export default function AdminAttendancePage() {
           credentials: 'include',
           cache: 'no-store',
         }
-        
       )
+
       if (response.status === 403) {
         window.location.href = '/forbidden'
         return
-        }
+      }
+
       const text = await response.text()
       const result: AttendanceManageListResponse = text ? JSON.parse(text) : {}
 
@@ -160,7 +187,7 @@ export default function AdminAttendancePage() {
 
   useEffect(() => {
     void fetchAttendance(true)
-  }, [])
+  }, [dateFrom, dateTo])
 
   useEffect(() => {
     if (!selectedItem) return
@@ -226,11 +253,12 @@ export default function AdminAttendancePage() {
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <AdminHeader
-        title="출석 수정"
+        title="출석 조회 및 수정"
         description="관리자만 출석 기록을 조회하고 수정할 수 있습니다."
       />
-      
-      <h1 style={{ marginTop: 0 }}>출석 수정</h1>
+
+      <h1 style={{ marginTop: 0 }}>출석 조회 및 수정</h1>
+
       <div
         style={{
           border: '1px solid #ddd',
@@ -262,30 +290,26 @@ export default function AdminAttendancePage() {
           </div>
 
           <div>
-            <label style={{ display: 'block', marginBottom: '6px' }}>날짜 시작</label>
+            <label style={{ display: 'block', marginBottom: '6px' }}>조회 날짜</label>
             <input
               type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', marginBottom: '6px' }}>날짜 끝</label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
+              value={selectedDate}
+              max={getTodayLocalDate()}
+              onChange={(e) => syncDate(e.target.value)}
               style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
             />
           </div>
         </div>
 
-        <div style={{ marginTop: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ marginTop: '16px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
           <button type="button" onClick={() => void fetchAttendance(false)} disabled={searchLoading}>
             {searchLoading ? '조회 중...' : '조회'}
           </button>
+          <button type="button" onClick={() => syncDate(getTodayLocalDate())}>
+            오늘
+          </button>
+
+          
         </div>
       </div>
 

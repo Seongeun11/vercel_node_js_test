@@ -2,7 +2,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-
+import Link from 'next/link'
 type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
 type AttendanceStatus = 'present' | 'late' | 'absent'
 
@@ -118,15 +118,20 @@ export default function MyAttendanceRequestsClient() {
   }, [])
 
   if (loading) {
-    return <div style={{ padding: '20px' }}>내 변경 요청 목록을 불러오는 중입니다...</div>
+    return <div style={{ padding: '20px' }}> 목록을 불러오는 중입니다...</div>
   }
 
   return (
     <div style={{ padding: '24px', maxWidth: '960px', margin: '0 auto' }}>
+      
       <h1 style={{ marginTop: 0 }}>내 출석 변경 요청</h1>
       <p style={{ color: '#555', marginBottom: '20px' }}>
         내가 요청한 출석 변경 내역과 처리 상태를 확인할 수 있습니다.
+        
       </p>
+      <Link href="/">
+            <button type="button">메인으로</button>
+          </Link>
 
       {errorMessage && (
         <div

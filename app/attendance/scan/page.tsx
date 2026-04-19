@@ -157,9 +157,7 @@ export default function AttendanceScanPage() {
               <button type="button" onClick={() => router.push('/')}>
                 메인으로
               </button>
-              <button type="button" onClick={() => router.push('/attendance')}>
-                출석 페이지로
-              </button>
+              
             </div>
           </>
         )}

@@ -20,27 +20,28 @@ type CreateQrResponse = {
   qr_token?: {
     id: string
     event_id: string
-    occurrence_id: string
+    occurrence_id: string | null
     token: string
     expires_at: string
     used_count: number
     created_at: string
     
   }
+  qr_url?: string
   error?: string
 }
 
 function validateExpireSetting(expireUnit: ExpireUnit, expireValue: number): string {
   if (expireUnit === 'minutes') {
-    if (!Number.isInteger(expireValue) || expireValue < 10 || expireValue % 10 !== 0|| expireValue >1440) {
-      return '분 단위 QR 유효시간은 10분 단위 최대 1440분(24시간)입니다.'
+    if (!Number.isInteger(expireValue) || expireValue < 1 ||  expireValue >24) {
+      return '시간 단위 QR 유효시간은 1~24시간 사이 정수입니다. (예: 1, 2, 3)'
     }
     return ''
   }
 
   if (expireUnit === 'days') {
-    if (!Number.isInteger(expireValue) || expireValue < 1 || expireValue > 365) {
-      return '일 단위 QR 유효시간은 1~365일 사이 정수여야 합니다.'
+    if (!Number.isInteger(expireValue) || expireValue < 1 || expireValue > 1) {
+      return '일 단위 QR 유효시간은 1일 입니다.'
     }
     return ''
   }
@@ -52,7 +53,7 @@ function buildExpiresAt(expireUnit: ExpireUnit, expireValue: number): string {
   const now = Date.now()
 
   if (expireUnit === 'minutes') {
-    return new Date(now + expireValue * 60 * 1000).toISOString()
+    return new Date(now + expireValue * 60* 60 * 1000).toISOString()
   }
 
   return new Date(now + expireValue * 24 * 60 * 60 * 1000).toISOString()
@@ -142,18 +143,19 @@ export async function POST(request: NextRequest): Promise<Response> {
       })
       .select('id, event_id, occurrence_id, token, expires_at, used_count, created_at')
       .single()
-
+    
     if (createError || !createdQr) {
       return jsonNoStore<CreateQrResponse>(
         { error: createError?.message || 'QR 생성에 실패했습니다.' },
         { status: 500 }
       )
     }
-
+    const qrUrl = `${request.nextUrl.origin}/attendance/scan?token=${createdQr.token}`
     return jsonNoStore<CreateQrResponse>(
       {
         message: 'QR이 생성되었습니다. 기존 활성 QR은 자동 만료 처리되었습니다.',
         qr_token: createdQr,
+        qr_url: qrUrl,
       },
       { status: 201 }
     )

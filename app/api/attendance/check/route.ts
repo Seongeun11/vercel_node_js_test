@@ -123,7 +123,8 @@ export async function POST(request: NextRequest): Promise<Response> {
       `)
       .eq('id', qrToken.occurrence_id)
       .maybeSingle()
-
+console.log('[attendance/check] occurrence:', occurrence)
+console.log('[attendance/check] occurrenceError:', occurrenceError)
     if (occurrenceError) {
       console.error('[attendance/check] occurrence query error:', occurrenceError)
       return jsonNoStore<AttendanceCheckResponse>(
@@ -157,13 +158,12 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
-    // 3) QR의 회차 날짜와 오늘(KST)이 다르면 막음
-    if (occurrence.occurrence_date !== attendanceDate) {
-      return jsonNoStore<AttendanceCheckResponse>(
-        { error: '오늘 출석용 QR이 아닙니다.' },
-        { status: 400 }
-      )
-    }
+    if (occurrence.occurrence_date > attendanceDate) {
+    return jsonNoStore<AttendanceCheckResponse>(
+      { error: '아직 시작되지 않은 회차입니다.' },
+      { status: 400 }
+    )
+  }
 
     // 4) 출석 상태 계산: 회차 start_time 기준
     const startTime = new Date(occurrence.start_time)

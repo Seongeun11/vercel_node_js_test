@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import QRCode from 'qrcode'
 
 type ExpireUnit = 'minutes' | 'days'
 type AttendanceStatus = 'present' | 'late' | 'absent'
@@ -31,6 +32,7 @@ type QrItem = {
   event_id: string
   occurrence_id: string
   token: string
+  qr_url?: string
   expires_at: string
   used_count: number
   created_at: string
@@ -323,14 +325,17 @@ export default function TodayOperationsClient() {
 
   function validateQrExpireSetting(expireUnit: ExpireUnit, expireValue: number) {
     if (expireUnit === 'minutes') {
-      if (!Number.isInteger(expireValue) || expireValue < 10 || expireValue % 10 !== 0|| expireValue >1440) {
-        return '분 단위 QR 유효시간은 10분 단위 최대 1440분 (24시간)입니다. (예: 10, 20, 30)'
+      if (!Number.isInteger(expireValue) || 
+      expireValue < 1 ||
+      expireValue >24
+    ) {
+        return '시간 단위 QR 유효시간은 1~24시간 사이 정수입니다. (예: 1, 2, 3)'
       }
       return ''
     }
 
-    if (!Number.isInteger(expireValue) || expireValue < 1 || expireValue > 365) {
-      return '일 단위 QR 유효시간은 1~365일 사이 정수여야 합니다.'
+    if (!Number.isInteger(expireValue) || expireValue < 1 || expireValue > 1) {
+      return '일 단위 QR 유효시간은 1일 입니다.'
     }
 
     return ''
@@ -399,6 +404,17 @@ export default function TodayOperationsClient() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  async function handleCopyQrLink(qrUrl: string) {
+  try {
+    await navigator.clipboard.writeText(qrUrl)
+    setSuccess('QR 링크가 복사되었습니다.')
+    setError('')
+  } catch (error) {
+    console.error('[attendance-today] copy qr link error:', error)
+    setError('QR 링크 복사에 실패했습니다.')
+  }
   }
 
   async function handleReissueQr(qrId: string, occurrenceId: string) {
@@ -562,6 +578,126 @@ export default function TodayOperationsClient() {
       setSubmitting(false)
     }
   }
+
+async function handleOpenQrWindow(qrUrl: string) {
+  try {
+    const popup = window.open('', '_blank', 'width=760,height=860')
+
+    if (!popup) {
+      setError('팝업이 차단되었습니다. 팝업 허용 후 다시 시도해주세요.')
+      return
+    }
+
+    const qrDataUrl = await QRCode.toDataURL(qrUrl, {
+      width: 900,
+      margin: 2,
+      errorCorrectionLevel: 'H',
+    })
+
+    popup.document.write(`
+      <!doctype html>
+      <html lang="ko">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>출석 QR 크게보기</title>
+          <style>
+            body {
+              margin: 0;
+              padding: 24px;
+              background: #111827;
+              color: white;
+              font-family: sans-serif;
+              text-align: center;
+              box-sizing: border-box;
+            }
+            .wrap {
+              max-width: 760px;
+              margin: 0 auto;
+            }
+            .qr-box {
+              background: white;
+              padding: 16px;
+              border-radius: 20px;
+              margin: 20px auto;
+              width: min(80vw, 600px);
+              height: min(80vw, 600px);
+              box-sizing: border-box;
+            }
+            img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+            }
+            .link {
+              margin-top: 12px;
+              word-break: break-all;
+              font-size: 14px;
+              opacity: 0.9;
+            }
+            .actions {
+              margin-top: 20px;
+              display: flex;
+              gap: 8px;
+              justify-content: center;
+              flex-wrap: wrap;
+            }
+            button {
+              padding: 10px 14px;
+              border: none;
+              border-radius: 10px;
+              cursor: pointer;
+              font-weight: 600;
+            }
+            .secondary {
+              background: white;
+              color: #111827;
+            }
+            .primary {
+              background: #2563eb;
+              color: white;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="wrap">
+            <h1>출석 QR 크게보기</h1>
+            <div class="qr-box">
+              <img src="${qrDataUrl}" alt="출석 QR" />
+            </div>
+            <div class="link" id="qr-link">${qrUrl}</div>
+            <div class="actions">
+              <button class="primary" id="copy-button" type="button">링크 복사</button>
+              <button class="secondary" type="button" onclick="window.close()">닫기</button>
+            </div>
+          </div>
+
+          <script>
+            const copyButton = document.getElementById('copy-button')
+            const qrLink = document.getElementById('qr-link')?.textContent || ''
+
+            copyButton?.addEventListener('click', async () => {
+              try {
+                await navigator.clipboard.writeText(qrLink)
+                copyButton.textContent = '복사됨'
+                setTimeout(() => {
+                  copyButton.textContent = '링크 복사'
+                }, 1500)
+              } catch (error) {
+                alert('링크 복사에 실패했습니다.')
+              }
+            })
+          </script>
+        </body>
+      </html>
+    `)
+
+    popup.document.close()
+  } catch (error) {
+    console.error('[attendance-today] open qr window error:', error)
+    setError('QR 크게보기에 실패했습니다.')
+  }
+}
 
   function toggleOccurrenceDetail(occurrenceId: string) {
     setExpandedOccurrenceIds((prev) => ({
@@ -876,7 +1012,7 @@ export default function TodayOperationsClient() {
                         style={{ ...inputStyle, width: 140 }}
                         disabled={submitting}
                       >
-                        <option value="minutes">10분 단위</option>
+                        <option value="minutes">시 단위</option>
                         <option value="days">일 단위</option>
                       </select>
 
@@ -896,7 +1032,7 @@ export default function TodayOperationsClient() {
                       />
 
                       <span style={{ color: '#666' }}>
-                        {expireUnit === 'minutes' ? '분' : '일'}
+                        {expireUnit === 'minutes' ? '시' : '일'}
                       </span>
 
                       <button
@@ -906,6 +1042,7 @@ export default function TodayOperationsClient() {
                       >
                         QR 발급
                       </button>
+                      
                     </div>
                   </div>
 
@@ -928,6 +1065,20 @@ export default function TodayOperationsClient() {
                             <tr key={qr.id}>
                               <td style={tdStyle}>
                                 <code style={codeStyle}>{qr.token}</code>
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenQrWindow(qr.qr_url!)}
+                                >
+                                  크게 보기
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => void handleCopyQrLink(qr.qr_url!)}
+                                >
+                                  링크 복사
+                                </button></div>
                               </td>
                               <td style={tdStyle}>
                                 {new Date(qr.expires_at).toLocaleString()}
