@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 type RecurrenceType = 'none' | 'daily'
-
+type WeekdayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 type EventItem = {
   id: string
   name: string
@@ -13,6 +13,7 @@ type EventItem = {
   allow_duplicate_check: boolean
   is_special_event: boolean
   recurrence_type: RecurrenceType
+  recurrence_days: WeekdayCode[]
   is_active: boolean
 }
 
@@ -23,9 +24,18 @@ type EventFormState = {
   allow_duplicate_check: boolean
   is_special_event: boolean
   recurrence_type: RecurrenceType
+  recurrence_days: WeekdayCode[]
   is_active: boolean
 }
-
+const WEEKDAY_OPTIONS: { label: string; value: WeekdayCode }[] = [
+  { label: '월', value: 'mon' },
+  { label: '화', value: 'tue' },
+  { label: '수', value: 'wed' },
+  { label: '목', value: 'thu' },
+  { label: '금', value: 'fri' },
+  { label: '토', value: 'sat' },
+  { label: '일', value: 'sun' },
+]
 const initialForm: EventFormState = {
   name: '',
   start_time: toDateTimeLocalValue(new Date().toISOString()),
@@ -33,9 +43,31 @@ const initialForm: EventFormState = {
   allow_duplicate_check: false,
   is_special_event: false,
   recurrence_type: 'none',
+  recurrence_days: [],
   is_active: true,
 }
+function normalizeRecurrenceDays(days: WeekdayCode[]): WeekdayCode[] {
+  const unique = Array.from(new Set(days))
+  return WEEKDAY_OPTIONS.map((option) => option.value).filter((day) =>
+    unique.includes(day)
+  )
+}
 
+function formatRecurrenceDays(days: WeekdayCode[]) {
+  if (!days.length) return '반복 없음'
+
+  const labelMap: Record<WeekdayCode, string> = {
+    mon: '월',
+    tue: '화',
+    wed: '수',
+    thu: '목',
+    fri: '금',
+    sat: '토',
+    sun: '일',
+  }
+
+  return days.map((day) => labelMap[day]).join(', ')
+}
 export default function EventsClient() {
   const [events, setEvents] = useState<EventItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -100,6 +132,21 @@ export default function EventsClient() {
     }))
   }
 
+  function toggleRecurrenceDay(day: WeekdayCode) {
+    setForm((prev) => {
+      const nextDays = prev.recurrence_days.includes(day)
+        ? prev.recurrence_days.filter((item) => item !== day)
+        : [...prev.recurrence_days, day]
+
+      const normalizedDays = normalizeRecurrenceDays(nextDays)
+
+      return {
+        ...prev,
+        recurrence_days: normalizedDays,
+        recurrence_type: normalizedDays.length > 0 ? 'daily' : 'none',
+      }
+    })
+  }
   function validateEventForm() {
     const name = form.name.trim()
     const startTime = form.start_time.trim()
@@ -154,6 +201,7 @@ export default function EventsClient() {
         allow_duplicate_check: form.allow_duplicate_check,
         is_special_event: form.is_special_event,
         recurrence_type: form.recurrence_type,
+        recurrence_days: form.recurrence_days,
         is_active: form.is_active,
       }
 
@@ -167,7 +215,13 @@ export default function EventsClient() {
         },
         body: JSON.stringify(payload),
       })
+      const hasInvalidDay = form.recurrence_days.some(
+        (day) => !WEEKDAY_OPTIONS.map((option) => option.value).includes(day)
+      )
 
+      if (hasInvalidDay) {
+        return '반복 요일 값이 올바르지 않습니다.'
+      }
       const data = await res.json()
 
       if (!res.ok) {
@@ -205,6 +259,9 @@ export default function EventsClient() {
       allow_duplicate_check: Boolean(event.allow_duplicate_check),
       is_special_event: Boolean(event.is_special_event),
       recurrence_type: event.recurrence_type ?? 'none',
+      recurrence_days: Array.isArray(event.recurrence_days)
+      ? normalizeRecurrenceDays(event.recurrence_days)
+      : [],
       is_active: Boolean(event.is_active),
     })
   }
@@ -301,20 +358,41 @@ export default function EventsClient() {
             />
           </label>
 
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span>반복 규칙</span>
-            <select
-              value={form.recurrence_type}
-              onChange={(e) =>
-                handleChange('recurrence_type', e.target.value as RecurrenceType)
-              }
-              style={inputStyle}
-              disabled={submitting}
-            >
-              <option value="none">반복 없음</option>
-              <option value="daily">매일</option>
-            </select>
-          </label>
+          <div style={{ display: 'grid', gap: 6 }}>
+          <span>반복 요일</span>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {WEEKDAY_OPTIONS.map((option) => (
+              <label
+                key={option.value}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 10px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 8,
+                  background: form.recurrence_days.includes(option.value) ? '#eff6ff' : '#fff',
+                  cursor: submitting ? 'not-allowed' : 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.recurrence_days.includes(option.value)}
+                  onChange={() => toggleRecurrenceDay(option.value)}
+                  disabled={submitting}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+
+          <div style={{ fontSize: 13, color: '#666' }}>
+            {form.recurrence_days.length > 0
+              ? `선택된 요일: ${formatRecurrenceDays(form.recurrence_days)}`
+              : '반복 없음'}
+          </div>
+        </div>
 
           <label style={checkboxLabelStyle}>
             <input
@@ -415,7 +493,7 @@ export default function EventsClient() {
                       {new Date(event.start_time).toLocaleString()}
                     </td>
                     <td style={tdStyle}>
-                      {event.recurrence_type === 'daily' ? '매일' : '반복 없음'}
+                      {formatRecurrenceDays(event.recurrence_days ?? [])}
                     </td>
                     <td style={tdStyle}>{event.late_threshold_min}분</td>
                     <td style={tdStyle}>

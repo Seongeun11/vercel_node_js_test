@@ -327,9 +327,9 @@ export default function TodayOperationsClient() {
     if (expireUnit === 'minutes') {
       if (!Number.isInteger(expireValue) || 
       expireValue < 1 ||
-      expireValue >24
+      expireValue >6
     ) {
-        return '시간 단위 QR 유효시간은 1~24시간 사이 정수입니다. (예: 1, 2, 3)'
+        return '시간 단위 QR 유효시간은 1~6시간 사이 정수입니다. (예: 1, 2, 3)'
       }
       return ''
     }

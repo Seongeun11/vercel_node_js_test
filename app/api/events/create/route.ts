@@ -6,6 +6,7 @@ import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
 
 type RecurrenceType = 'none' | 'daily'
+type WeekdayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 
 type CreateEventBody = {
   name?: string
@@ -14,6 +15,7 @@ type CreateEventBody = {
   allow_duplicate_check?: boolean
   is_special_event?: boolean
   recurrence_type?: RecurrenceType
+  recurrence_days?: string[]
   is_active?: boolean
 }
 
@@ -27,10 +29,44 @@ type CreateEventResponse = {
     allow_duplicate_check: boolean
     is_special_event: boolean
     recurrence_type: RecurrenceType
+    recurrence_days: WeekdayCode[]
     is_active: boolean
     created_at: string
   }
   error?: string
+}
+
+const ALLOWED_WEEKDAYS: WeekdayCode[] = [
+  'mon',
+  'tue',
+  'wed',
+  'thu',
+  'fri',
+  'sat',
+  'sun',
+]
+
+function hasOnlyAllowedWeekdays(input: unknown): boolean {
+  if (!Array.isArray(input)) return false
+
+  return input.every((value) =>
+    ALLOWED_WEEKDAYS.includes(String(value).trim().toLowerCase() as WeekdayCode)
+  )
+}
+
+function normalizeRecurrenceDays(input: unknown): WeekdayCode[] {
+  if (!Array.isArray(input)) return []
+
+  const normalized = input
+    .map((value) => String(value).trim().toLowerCase())
+    .filter((value): value is WeekdayCode =>
+      ALLOWED_WEEKDAYS.includes(value as WeekdayCode)
+    )
+
+  const unique = Array.from(new Set(normalized))
+
+  // 항상 월~일 순서로 저장
+  return ALLOWED_WEEKDAYS.filter((day) => unique.includes(day))
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
@@ -52,7 +88,6 @@ export async function POST(request: NextRequest): Promise<Response> {
     const lateThresholdMin = Number(body.late_threshold_min ?? 5)
     const allowDuplicateCheck = Boolean(body.allow_duplicate_check)
     const isSpecialEvent = Boolean(body.is_special_event)
-    const recurrenceType = (body.recurrence_type ?? 'none') as RecurrenceType
     const isActive = body.is_active ?? true
 
     if (!name) {
@@ -89,12 +124,19 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
-    if (!['none', 'daily'].includes(recurrenceType)) {
+    if (
+      body.recurrence_days !== undefined &&
+      !hasOnlyAllowedWeekdays(body.recurrence_days)
+    ) {
       return jsonNoStore<CreateEventResponse>(
-        { error: '반복 규칙은 none 또는 daily만 가능합니다.' },
+        { error: '반복 요일 값이 올바르지 않습니다.' },
         { status: 400 }
       )
     }
+
+    const recurrenceDays = normalizeRecurrenceDays(body.recurrence_days)
+    const recurrenceType: RecurrenceType =
+      recurrenceDays.length > 0 ? 'daily' : 'none'
 
     const { data: createdEvent, error } = await supabaseAdmin
       .from('events')
@@ -104,11 +146,12 @@ export async function POST(request: NextRequest): Promise<Response> {
         late_threshold_min: lateThresholdMin,
         allow_duplicate_check: allowDuplicateCheck,
         is_special_event: isSpecialEvent,
-        recurrence_type: recurrenceType,
+        recurrence_type: recurrenceType, // 기존 호환 유지
+        recurrence_days: recurrenceDays, // 새 컬럼 저장
         is_active: Boolean(isActive),
       })
       .select(
-        'id, name, start_time, late_threshold_min, allow_duplicate_check, is_special_event, recurrence_type, is_active, created_at'
+        'id, name, start_time, late_threshold_min, allow_duplicate_check, is_special_event, recurrence_type, recurrence_days, is_active, created_at'
       )
       .single()
 
@@ -126,7 +169,10 @@ export async function POST(request: NextRequest): Promise<Response> {
     return jsonNoStore<CreateEventResponse>(
       {
         message: '이벤트가 생성되었습니다.',
-        event: createdEvent,
+        event: {
+          ...createdEvent,
+          recurrence_days: createdEvent.recurrence_days ?? [],
+        },
       },
       { status: 201 }
     )
