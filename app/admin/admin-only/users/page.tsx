@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import AdminHeader from '@/components/admin/AdminHeader'
+import UserBulkUpload from './user-bulk-upload'
 
 type UserRole = 'admin' | 'captain' | 'trainee'
 
@@ -162,6 +163,8 @@ export default function AdminUsersPage() {
         {message && <p style={{ color: 'green', marginTop: '16px' }}>{message}</p>}
         {errorMessage && <p style={{ color: 'red', marginTop: '16px' }}>{errorMessage}</p>}
       </div>
+        {/* 새 엑셀 일괄 등록 섹션 */}
+  <UserBulkUpload />
     </div>
   )
 }

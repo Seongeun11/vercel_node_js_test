@@ -32,8 +32,7 @@ export async function GET() {
 
       return NextResponse.json(
         {
-          error: '변경 요청 큐를 불러오지 못했습니다.',
-          detail: error.message,
+          error: '변경 요청 큐를 불러오지 못했습니다.'
         },
         { status: 400 }
       )

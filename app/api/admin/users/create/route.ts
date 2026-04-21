@@ -62,7 +62,6 @@ export async function POST(request: NextRequest) {
       return jsonNoStore(
         {
           error: '입력값이 올바르지 않습니다.',
-          details: parsed.error.flatten(),
         },
         { status: 400 }
       )
