@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
 
-type ExpireUnit = 'minutes' | 'days'
+type ExpireUnit = 'hours' | 'days'
 
 type UpdateQrBody = {
   id?: string
@@ -31,7 +31,7 @@ function validateExpireSetting(
   expireUnit: ExpireUnit,
   expireValue: number
 ): string {
-  if (expireUnit === 'minutes') {
+  if (expireUnit === 'hours') {
     if (
       !Number.isInteger(expireValue) ||
       expireValue < 1 ||
@@ -51,15 +51,22 @@ function validateExpireSetting(
 
   return '유효시간 단위가 올바르지 않습니다.'
 }
+function buildExpiresAt(
+  baseTime: string,
+  expireUnit: ExpireUnit,
+  expireValue: number
+): string {
+  const baseMs = new Date(baseTime).getTime()
 
-function buildExpiresAt(expireUnit: ExpireUnit, expireValue: number): string {
-  const now = Date.now()
-
-  if (expireUnit === 'minutes') {
-    return new Date(now + expireValue * 60 * 60 * 1000).toISOString()
+  if (Number.isNaN(baseMs)) {
+    throw new Error('INVALID_OCCURRENCE_START_TIME')
   }
 
-  return new Date(now + expireValue * 24 * 60 * 60 * 1000).toISOString()
+  if (expireUnit === 'hours') {
+    return new Date(baseMs + expireValue * 60 * 60 * 1000).toISOString()
+  }
+
+  return new Date(baseMs + expireValue * 24 * 60 * 60 * 1000).toISOString()
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
@@ -76,8 +83,8 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     const body = (await request.json()) as UpdateQrBody
     const id = String(body.id ?? '').trim()
-    const expireUnit = (body.expire_unit ?? 'minutes') as ExpireUnit
-    const expireValue = Number(body.expire_value ?? 10)
+    const expireUnit = (body.expire_unit ?? 'hours') as ExpireUnit
+    const expireValue = Number(body.expire_value ?? 1)
 
     if (!id) {
       return jsonNoStore<UpdateQrResponse>(
@@ -118,7 +125,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     // ✅ 회차가 실제 존재하는지도 확인
     const { data: occurrence, error: occurrenceError } = await supabaseAdmin
       .from('event_occurrences')
-      .select('id,status')
+      .select('id,start_time,status')
       .eq('id', existingQr.occurrence_id)
       .single()
 
@@ -136,7 +143,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
         
-    const expiresAt = buildExpiresAt(expireUnit, expireValue)
+    const expiresAt = buildExpiresAt(occurrence.start_time,expireUnit, expireValue)
 
     const { data: updatedQr, error: updateError } = await supabaseAdmin
       .from('qr_tokens')
@@ -174,6 +181,12 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 403 }
       )
     }
+    if (error instanceof Error && error.message === 'INVALID_OCCURRENCE_START_TIME') {
+  return jsonNoStore<UpdateQrResponse>(
+    { error: '회차 시작 시간이 올바르지 않습니다.' },
+    { status: 500 }
+  )
+}
 
     if (process.env.NODE_ENV !== 'production') {
       console.error('[qr/update] unexpected error:', error)
@@ -183,5 +196,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       { error: '서버 오류가 발생했습니다.' },
       { status: 500 }
     )
+    
   }
+  
 }

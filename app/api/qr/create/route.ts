@@ -6,7 +6,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
 
-type ExpireUnit = 'minutes' | 'days'
+type ExpireUnit = 'hours' | 'days'
 
 type CreateQrBody = {
   occurrence_id?: string
@@ -21,6 +21,7 @@ type CreateQrResponse = {
     id: string
     event_id: string
     occurrence_id: string | null
+    
     token: string
     expires_at: string
     used_count: number
@@ -32,7 +33,7 @@ type CreateQrResponse = {
 }
 
 function validateExpireSetting(expireUnit: ExpireUnit, expireValue: number): string {
-  if (expireUnit === 'minutes') {
+  if (expireUnit === 'hours') {
     if (!Number.isInteger(expireValue) || expireValue < 1 ||  expireValue >6) {
       return '시간 단위 QR 유효시간은 1~6시간 사이 정수입니다. (예: 1, 2, 3)'
     }
@@ -49,14 +50,22 @@ function validateExpireSetting(expireUnit: ExpireUnit, expireValue: number): str
   return '유효시간 단위가 올바르지 않습니다.'
 }
 
-function buildExpiresAt(expireUnit: ExpireUnit, expireValue: number): string {
-  const now = Date.now()
+function buildExpiresAt(
+  baseTime: string,
+  expireUnit: ExpireUnit,
+  expireValue: number
+): string {
+  const baseMs = new Date(baseTime).getTime()
 
-  if (expireUnit === 'minutes') {
-    return new Date(now + expireValue * 60* 60 * 1000).toISOString()
+  if (Number.isNaN(baseMs)) {
+    throw new Error('INVALID_OCCURRENCE_START_TIME')
   }
 
-  return new Date(now + expireValue * 24 * 60 * 60 * 1000).toISOString()
+  if (expireUnit === 'hours') {
+    return new Date(baseMs + expireValue * 60 * 60 * 1000).toISOString()
+  }
+
+  return new Date(baseMs + expireValue * 24 * 60 * 60 * 1000).toISOString()
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
@@ -74,7 +83,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     const body = (await request.json()) as CreateQrBody
 
     const occurrenceId = String(body.occurrence_id ?? '').trim()
-    const expireUnit = (body.expire_unit ?? 'minutes') as ExpireUnit
+    const expireUnit = (body.expire_unit ?? 'hours') as ExpireUnit
     const expireValue = Number(body.expire_value ?? 10)
 
     if (!occurrenceId) {
@@ -94,7 +103,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     const { data: occurrence, error: occurrenceError } = await supabaseAdmin
       .from('event_occurrences')
-      .select('id, event_id, occurrence_date, status')
+      .select('id, event_id, occurrence_date,start_time, status')
       .eq('id', occurrenceId)
       .single()
     
@@ -130,7 +139,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const token = crypto.randomBytes(24).toString('hex')
-    const expiresAt = buildExpiresAt(expireUnit, expireValue)
+    const expiresAt = buildExpiresAt(occurrence.start_time, expireUnit, expireValue)
 
     const { data: createdQr, error: createError } = await supabaseAdmin
       .from('qr_tokens')
@@ -166,6 +175,13 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 403 }
       )
     }
+    if (error instanceof Error && error.message === 'INVALID_OCCURRENCE_START_TIME') {
+  return jsonNoStore<CreateQrResponse>(
+    { error: '회차 시작 시간이 올바르지 않습니다.' },
+    { status: 500 }
+  )
+}
+    
 
     if (process.env.NODE_ENV !== 'production') {
       console.error('[qr/create] unexpected error:', error)
@@ -175,5 +191,6 @@ export async function POST(request: NextRequest): Promise<Response> {
       { error: '서버 오류가 발생했습니다.' },
       { status: 500 }
     )
+    
   }
 }

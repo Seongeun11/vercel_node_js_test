@@ -1,9 +1,11 @@
+//app\admin\admin-only\attendance-today\today-operations-client.tsx
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
 import QRCode from 'qrcode'
 
-type ExpireUnit = 'minutes' | 'days'
+type ExpireUnit = 'hours' | 'days'
+type WeekdayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 type AttendanceStatus = 'present' | 'late' | 'absent'
 
 type TodayOccurrenceItem = {
@@ -23,6 +25,7 @@ type TodayOccurrenceItem = {
     allow_duplicate_check: boolean
     is_special_event: boolean
     recurrence_type: 'none' | 'daily'
+    recurrence_days: WeekdayCode[]
     is_active: boolean
   } | null
 }
@@ -324,7 +327,7 @@ export default function TodayOperationsClient() {
   }, [])
 
   function validateQrExpireSetting(expireUnit: ExpireUnit, expireValue: number) {
-    if (expireUnit === 'minutes') {
+    if (expireUnit === 'hours') {
       if (!Number.isInteger(expireValue) || 
       expireValue < 1 ||
       expireValue >6
@@ -361,9 +364,9 @@ export default function TodayOperationsClient() {
   }
 
   async function handleCreateQr(occurrenceId: string) {
-    const expireUnit = qrExpireUnitMap[occurrenceId] ?? 'minutes'
+    const expireUnit = qrExpireUnitMap[occurrenceId] ?? 'hours'
     const expireValue = Number(
-      qrExpireValueMap[occurrenceId] ?? (expireUnit === 'minutes' ? '10' : '1')
+      qrExpireValueMap[occurrenceId] ?? (expireUnit === 'hours' ? '1' : '1')
     )
 
     const validationError = validateQrExpireSetting(expireUnit, expireValue)
@@ -418,9 +421,9 @@ export default function TodayOperationsClient() {
   }
 
   async function handleReissueQr(qrId: string, occurrenceId: string) {
-    const expireUnit = qrExpireUnitMap[occurrenceId] ?? 'minutes'
+    const expireUnit = qrExpireUnitMap[occurrenceId] ?? 'hours'
     const expireValue = Number(
-      qrExpireValueMap[occurrenceId] ?? (expireUnit === 'minutes' ? '10' : '1')
+      qrExpireValueMap[occurrenceId] ?? (expireUnit === 'hours' ? '1' : '1')
     )
 
     const validationError = validateQrExpireSetting(expireUnit, expireValue)
@@ -784,9 +787,9 @@ async function handleOpenQrWindow(qrUrl: string) {
             const expanded = expandedOccurrenceIds[item.id] ?? false
             const expandedMissing = expandedMissingIds[item.id] ?? false
 
-            const expireUnit = qrExpireUnitMap[item.id] ?? 'minutes'
+            const expireUnit = qrExpireUnitMap[item.id] ?? 'hours'
             const expireValue =
-              qrExpireValueMap[item.id] ?? (expireUnit === 'minutes' ? '10' : '1')
+              qrExpireValueMap[item.id] ?? (expireUnit === 'hours' ? '1' : '1')
 
             return (
               <article key={item.id} style={panelStyle}>
@@ -810,9 +813,15 @@ async function handleOpenQrWindow(qrUrl: string) {
                       시작 시간: {new Date(item.start_time).toLocaleString()}
                     </div>
                     <div style={{ color: '#666', marginTop: 4 }}>
-                      상태: {formatOccurrenceStatus(item.status)} / 반복 규칙:{' '}
-                      {item.events?.recurrence_type === 'daily' ? '매일' : '반복 없음'}
-                    </div>
+  상태: {formatOccurrenceStatus(item.status)}
+</div>
+<div style={{ color: '#666', marginTop: 4 }}>
+  반복 요일:{' '}
+  {formatRecurrenceDays(
+    item.events?.recurrence_days,
+    item.events?.recurrence_type
+  )}
+</div>
                     <div style={{ color: '#666', marginTop: 4 }}>
                       특별 행사: {item.events?.is_special_event ? '예' : '아니오'} / 지각 기준:{' '}
                       {item.events?.late_threshold_min ?? 5}분
@@ -1006,20 +1015,20 @@ async function handleOpenQrWindow(qrUrl: string) {
                           }))
                           setQrExpireValueMap((prev) => ({
                             ...prev,
-                            [item.id]: nextUnit === 'minutes' ? '10' : '1',
+                            [item.id]: nextUnit === 'hours' ? '1' : '1',
                           }))
                         }}
                         style={{ ...inputStyle, width: 140 }}
                         disabled={submitting}
                       >
-                        <option value="minutes">시 단위</option>
+                        <option value="hours">시 단위</option>
                         <option value="days">일 단위</option>
                       </select>
 
                       <input
                         type="number"
-                        min={expireUnit === 'minutes' ? 10 : 1}
-                        step={expireUnit === 'minutes' ? 10 : 1}
+                        min={expireUnit === 'hours' ? 1 : 1}
+                        step={expireUnit === 'hours' ? 1 : 1}
                         value={expireValue}
                         onChange={(e) =>
                           setQrExpireValueMap((prev) => ({
@@ -1032,7 +1041,7 @@ async function handleOpenQrWindow(qrUrl: string) {
                       />
 
                       <span style={{ color: '#666' }}>
-                        {expireUnit === 'minutes' ? '시' : '일'}
+                        {expireUnit === 'hours' ? '시' : '일'}
                       </span>
 
                       <button
@@ -1176,6 +1185,37 @@ function formatRole(role: 'admin' | 'captain' | 'trainee') {
     default:
       return role
   }
+}
+
+function formatRecurrenceDays(
+  days: WeekdayCode[] | null | undefined,
+  recurrenceType?: 'none' | 'daily'
+) {
+  const labelMap: Record<WeekdayCode, string> = {
+    mon: '월',
+    tue: '화',
+    wed: '수',
+    thu: '목',
+    fri: '금',
+    sat: '토',
+    sun: '일',
+  }
+
+  const normalizedDays = Array.isArray(days)
+    ? Array.from(new Set(days)).filter((day): day is WeekdayCode =>
+        ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].includes(day)
+      )
+    : []
+
+  if (normalizedDays.length > 0) {
+    return normalizedDays.map((day) => labelMap[day]).join(', ')
+  }
+
+  if (recurrenceType === 'daily') {
+    return '매일'
+  }
+
+  return '반복 없음'
 }
 
 const panelStyle: React.CSSProperties = {
