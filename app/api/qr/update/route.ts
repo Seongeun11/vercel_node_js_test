@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
 
-type ExpireUnit = 'hours' | 'days'
+type ExpireUnit = 'hours' | 'days' | 'unlimited'
 
 type UpdateQrBody = {
   id?: string
@@ -20,7 +20,7 @@ type UpdateQrResponse = {
     event_id: string
     occurrence_id: string
     token: string
-    expires_at: string
+    expires_at: string | null
     used_count: number
     created_at: string
   }
@@ -31,6 +31,10 @@ function validateExpireSetting(
   expireUnit: ExpireUnit,
   expireValue: number
 ): string {
+  if (expireUnit === 'unlimited') {
+    return ''
+  }
+
   if (expireUnit === 'hours') {
     if (
       !Number.isInteger(expireValue) ||
@@ -55,9 +59,11 @@ function buildExpiresAt(
   baseTime: string,
   expireUnit: ExpireUnit,
   expireValue: number
-): string {
+): string | null {
   const baseMs = new Date(baseTime).getTime()
-
+  if (expireUnit === 'unlimited') {
+    return null
+  }
   if (Number.isNaN(baseMs)) {
     throw new Error('INVALID_OCCURRENCE_START_TIME')
   }

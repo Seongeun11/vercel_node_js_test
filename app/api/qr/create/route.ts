@@ -6,7 +6,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
 
-type ExpireUnit = 'hours' | 'days'
+type ExpireUnit = 'hours' | 'days' | 'unlimited'
 
 type CreateQrBody = {
   occurrence_id?: string
@@ -23,7 +23,7 @@ type CreateQrResponse = {
     occurrence_id: string | null
     
     token: string
-    expires_at: string
+    expires_at: string  | null
     used_count: number
     created_at: string
     
@@ -33,6 +33,9 @@ type CreateQrResponse = {
 }
 
 function validateExpireSetting(expireUnit: ExpireUnit, expireValue: number): string {
+  if (expireUnit === 'unlimited') {
+    return ''
+  }
   if (expireUnit === 'hours') {
     if (!Number.isInteger(expireValue) || expireValue < 1 ||  expireValue >6) {
       return '시간 단위 QR 유효시간은 1~6시간 사이 정수입니다. (예: 1, 2, 3)'
@@ -54,9 +57,11 @@ function buildExpiresAt(
   baseTime: string,
   expireUnit: ExpireUnit,
   expireValue: number
-): string {
+): string | null {
   const baseMs = new Date(baseTime).getTime()
-
+  if (expireUnit === 'unlimited') {
+    return null
+  }
   if (Number.isNaN(baseMs)) {
     throw new Error('INVALID_OCCURRENCE_START_TIME')
   }
@@ -129,7 +134,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       .from('qr_tokens')
       .update({ expires_at: nowIso })
       .eq('occurrence_id', occurrenceId)
-      .gt('expires_at', nowIso)
+      .or(`expires_at.gt.${nowIso},expires_at.is.null`)
 
     if (expirePreviousError) {
       return jsonNoStore<CreateQrResponse>(

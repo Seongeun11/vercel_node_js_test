@@ -95,7 +95,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 400 }
       )
     }
-
+  if (qrToken.expires_at) {
     const expiresAt = new Date(qrToken.expires_at)
 
     if (Number.isNaN(expiresAt.getTime()) || expiresAt <= now) {
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 410 }
       )
     }
-
+  }
     // 2) 회차 + 이벤트 조회
     const { data: occurrence, error: occurrenceError } = await session.supabase
       .from('event_occurrences')
@@ -123,8 +123,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       `)
       .eq('id', qrToken.occurrence_id)
       .maybeSingle()
-console.log('[attendance/check] occurrence:', occurrence)
-console.log('[attendance/check] occurrenceError:', occurrenceError)
+
     if (occurrenceError) {
       console.error('[attendance/check] occurrence query error:', occurrenceError)
       return jsonNoStore<AttendanceCheckResponse>(

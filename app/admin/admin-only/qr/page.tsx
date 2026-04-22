@@ -25,7 +25,10 @@ type QrCreateResponse = {
     id: string
     token: string
     event_id: string
-    expires_at: string
+    expires_at: string | null
+    used_count: number
+    created_at: string
+    updated_at: string
   }
   error?: string
 }

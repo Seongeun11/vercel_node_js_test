@@ -2,7 +2,7 @@
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextRequest } from 'next/server'
-import { assertSameOrigin } from '@/lib/security/csrf'
+
 import { jsonNoStore } from '@/lib/security/api-response'
 
 type AttendanceLogRow = {
@@ -31,8 +31,7 @@ type LogAction = 'create' | 'update' | 'correct' | 'mark_absent' | 'delete'
 
 export async function GET(request: NextRequest) {
   try {
-    // 민감한 admin 로그 조회 API이므로 same-origin 유지
-    assertSameOrigin(request)
+
 
     // admin만 전체 감사 로그 조회 가능
     const authResult = await requireRole(['admin'])

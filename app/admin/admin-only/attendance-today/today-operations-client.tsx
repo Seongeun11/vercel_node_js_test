@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import QRCode from 'qrcode'
 
-type ExpireUnit = 'hours' | 'days'
+type ExpireUnit = 'hours' | 'days' | 'unlimited'
 type WeekdayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 type AttendanceStatus = 'present' | 'late' | 'absent'
 
@@ -36,7 +36,7 @@ type QrItem = {
   occurrence_id: string
   token: string
   qr_url?: string
-  expires_at: string
+  expires_at: string | null
   used_count: number
   created_at: string
   is_expired: boolean
@@ -327,6 +327,9 @@ export default function TodayOperationsClient() {
   }, [])
 
   function validateQrExpireSetting(expireUnit: ExpireUnit, expireValue: number) {
+    if (expireUnit === 'unlimited') {
+      return ''
+    }  
     if (expireUnit === 'hours') {
       if (!Number.isInteger(expireValue) || 
       expireValue < 1 ||
@@ -364,9 +367,9 @@ export default function TodayOperationsClient() {
   }
 
   async function handleCreateQr(occurrenceId: string) {
-    const expireUnit = qrExpireUnitMap[occurrenceId] ?? 'hours'
+    const expireUnit = qrExpireUnitMap[occurrenceId] ?? 'unlimited'
     const expireValue = Number(
-      qrExpireValueMap[occurrenceId] ?? (expireUnit === 'hours' ? '1' : '1')
+      qrExpireValueMap[occurrenceId] ?? (expireUnit === 'unlimited' ? '0' : '1')
     )
 
     const validationError = validateQrExpireSetting(expireUnit, expireValue)
@@ -421,9 +424,9 @@ export default function TodayOperationsClient() {
   }
 
   async function handleReissueQr(qrId: string, occurrenceId: string) {
-    const expireUnit = qrExpireUnitMap[occurrenceId] ?? 'hours'
+    const expireUnit = qrExpireUnitMap[occurrenceId] ?? 'unlimited'
     const expireValue = Number(
-      qrExpireValueMap[occurrenceId] ?? (expireUnit === 'hours' ? '1' : '1')
+      qrExpireValueMap[occurrenceId] ?? (expireUnit === 'unlimited' ? '0' : '1')
     )
 
     const validationError = validateQrExpireSetting(expireUnit, expireValue)
@@ -787,9 +790,9 @@ async function handleOpenQrWindow(qrUrl: string) {
             const expanded = expandedOccurrenceIds[item.id] ?? false
             const expandedMissing = expandedMissingIds[item.id] ?? false
 
-            const expireUnit = qrExpireUnitMap[item.id] ?? 'hours'
+            const expireUnit = qrExpireUnitMap[item.id] ?? 'unlimited'
             const expireValue =
-              qrExpireValueMap[item.id] ?? (expireUnit === 'hours' ? '1' : '1')
+              qrExpireValueMap[item.id] ?? (expireUnit === 'unlimited' ? '0' : '1')
 
             return (
               <article key={item.id} style={panelStyle}>
@@ -1015,21 +1018,23 @@ async function handleOpenQrWindow(qrUrl: string) {
                           }))
                           setQrExpireValueMap((prev) => ({
                             ...prev,
-                            [item.id]: nextUnit === 'hours' ? '1' : '1',
+                            [item.id]: nextUnit === 'unlimited' ? '0' : '1',
                           }))
                         }}
                         style={{ ...inputStyle, width: 140 }}
                         disabled={submitting}
                       >
+                        
                         <option value="hours">시 단위</option>
                         <option value="days">일 단위</option>
+                        <option value="unlimited">무제한</option>
                       </select>
 
                       <input
                         type="number"
-                        min={expireUnit === 'hours' ? 1 : 1}
-                        step={expireUnit === 'hours' ? 1 : 1}
-                        value={expireValue}
+                        min={1}
+                        step={1}
+                        value={expireUnit === 'unlimited' ? '0' : expireValue}
                         onChange={(e) =>
                           setQrExpireValueMap((prev) => ({
                             ...prev,
@@ -1037,11 +1042,15 @@ async function handleOpenQrWindow(qrUrl: string) {
                           }))
                         }
                         style={{ ...inputStyle, width: 120 }}
-                        disabled={submitting}
+                        disabled={submitting || expireUnit === 'unlimited'}
                       />
 
                       <span style={{ color: '#666' }}>
-                        {expireUnit === 'hours' ? '시' : '일'}
+                        {expireUnit === 'hours'
+                          ? '시'
+                          : expireUnit === 'days'
+                            ? '일'
+                            : '무제한'}
                       </span>
 
                       <button
@@ -1090,9 +1099,11 @@ async function handleOpenQrWindow(qrUrl: string) {
                                 </button></div>
                               </td>
                               <td style={tdStyle}>
-                                {new Date(qr.expires_at).toLocaleString()}
+                                {qr.expires_at ? new Date(qr.expires_at).toLocaleString() : '무제한'}
                               </td>
-                              <td style={tdStyle}>{qr.is_expired ? '만료됨' : '유효'}</td>
+                              <td style={tdStyle}>
+                                {qr.expires_at === null ? '무제한' : qr.is_expired ? '만료됨' : '유효'}
+                              </td>
                               <td style={tdStyle}>{qr.used_count}</td>
                               <td style={tdStyle}>
                                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

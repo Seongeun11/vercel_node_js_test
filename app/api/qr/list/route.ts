@@ -12,8 +12,8 @@ type ListQrBody = {
 export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request)
-    const authResult = await requireRole(['admin'])
 
+    const authResult = await requireRole(['admin'])
     if (!authResult.ok) {
       return jsonNoStore(
         { error: authResult.error },
@@ -41,10 +41,10 @@ export async function POST(request: NextRequest) {
           status
         ),
         events (
-           id,
-           name,
-           start_time
-         )
+          id,
+          name,
+          start_time
+        )
       `)
       .order('created_at', { ascending: false })
 
@@ -62,14 +62,20 @@ export async function POST(request: NextRequest) {
     }
 
     const now = Date.now()
+    const origin = request.nextUrl.origin
 
     const qrTokens = (data ?? []).map((item: any) => {
-    const expiresAtMs = new Date(item.expires_at).getTime()
-    const origin = request.nextUrl.origin
+      const expiresAtMs = item.expires_at ? new Date(item.expires_at).getTime() : null
+
       return {
         ...item,
         qr_url: `${origin}/attendance/scan?token=${item.token}`,
-        is_expired: Number.isNaN(expiresAtMs) ? true : now > expiresAtMs,
+        is_expired:
+          expiresAtMs === null
+            ? false
+            : Number.isNaN(expiresAtMs)
+              ? true
+              : now > expiresAtMs,
         occurrence_date: item.event_occurrences?.occurrence_date ?? null,
         occurrence_status: item.event_occurrences?.status ?? null,
       }
@@ -88,6 +94,7 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       )
     }
+
     if (process.env.NODE_ENV !== 'production') {
       console.error('[qr/list] unexpected error:', error)
     }
