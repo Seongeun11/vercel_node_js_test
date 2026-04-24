@@ -95,6 +95,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 400 }
       )
     }
+// expires_at이 null이면 무제한 QR로 간주합니다.
+// 값이 있을 때만 만료 시간을 검사합니다.
   if (qrToken.expires_at) {
     const expiresAt = new Date(qrToken.expires_at)
 
