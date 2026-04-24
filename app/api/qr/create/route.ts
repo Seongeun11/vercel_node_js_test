@@ -5,6 +5,7 @@ import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
+import { generateQrToken, hashQrToken, maskQrToken } from '@/lib/security/qr-token'
 
 type ExpireUnit = 'hours' | 'days' | 'unlimited'
 
@@ -22,7 +23,7 @@ type CreateQrResponse = {
     event_id: string
     occurrence_id: string | null
     
-    token: string
+    token_preview: string
     expires_at: string  | null
     used_count: number
     created_at: string
@@ -143,7 +144,10 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
-    const token = crypto.randomBytes(24).toString('hex')
+    //const token = crypto.randomBytes(24).toString('hex')
+    const rawToken = generateQrToken()
+    const tokenHash = hashQrToken(rawToken)
+
     const expiresAt = buildExpiresAt(occurrence.start_time, expireUnit, expireValue)
 
     const { data: createdQr, error: createError } = await supabaseAdmin
@@ -151,7 +155,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       .insert({
         event_id: occurrence.event_id,
         occurrence_id: occurrenceId,
-        token,
+        token_hash: tokenHash,
         expires_at: expiresAt,
         used_count: 0,
       })
@@ -164,12 +168,18 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 500 }
       )
     }
-    const qrUrl = `${request.nextUrl.origin}/attendance/scan?token=${createdQr.token}`
+    //const qrUrl = `${request.nextUrl.origin}/attendance/scan?token=${createdQr.token}`
+    const qrUrl = `${request.nextUrl.origin}/attendance/scan?token=${rawToken}`
+
     return jsonNoStore<CreateQrResponse>(
       {
         message: 'QR이 생성되었습니다. 기존 활성 QR은 자동 만료 처리되었습니다.',
-        qr_token: createdQr,
-        qr_url: qrUrl,
+    qr_token: {
+      ...createdQr,
+      token_preview: maskQrToken(rawToken),
+    
+    },
+    qr_url: qrUrl,
       },
       { status: 201 }
     )
