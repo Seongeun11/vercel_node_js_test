@@ -1,4 +1,5 @@
 // app/api/attendance/check/route.ts
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextRequest } from 'next/server'
 import { getSessionProfile } from '@/lib/server-session'
 import { assertSameOrigin } from '@/lib/security/csrf'
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     const attendanceDate = toKstDateString(now)
 
     // 1) QR 토큰 검증: 이제 occurrence_id 기준이 핵심
-    const { data: qrToken, error: qrError } = await session.supabase
+    const { data: qrToken, error: qrError } = await supabaseAdmin
       .from('qr_tokens')
       .select('id, event_id, occurrence_id, expires_at, deleted_at')
       .eq('token', token)

@@ -1,4 +1,5 @@
-// app/api/admin/attendance/list/route.ts
+// app/admin/admin-only/attendance/list/route.ts
+
 import { NextRequest } from 'next/server'
 import { getSessionProfile } from '@/lib/server-session'
 import { jsonNoStore } from '@/lib/security/api-response'
