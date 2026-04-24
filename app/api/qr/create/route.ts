@@ -1,5 +1,5 @@
 // app/api/qr/create/route.ts
-import crypto from 'crypto'
+
 import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
