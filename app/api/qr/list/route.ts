@@ -27,25 +27,24 @@ export async function POST(request: NextRequest) {
     let query = supabaseAdmin
       .from('qr_tokens')
       .select(`
+      id,
+      event_id,
+      occurrence_id,
+      expires_at,
+      used_count,
+      created_at,
+      event_occurrences (
         id,
-        event_id,
-        occurrence_id,
-        token,
-        expires_at,
-        used_count,
-        created_at,
-        event_occurrences (
-          id,
-          occurrence_date,
-          start_time,
-          status
-        ),
-        events (
-          id,
-          name,
-          start_time
-        )
-      `)
+        occurrence_date,
+        start_time,
+        status
+      ),
+      events (
+        id,
+        name,
+        start_time
+      )
+    `)
       .order('created_at', { ascending: false })
 
     if (occurrenceId) {
@@ -65,11 +64,14 @@ export async function POST(request: NextRequest) {
     const origin = request.nextUrl.origin
 
     const qrTokens = (data ?? []).map((item: any) => {
-      const expiresAtMs = item.expires_at ? new Date(item.expires_at).getTime() : null
+    const expiresAtMs = item.expires_at
+      ? new Date(item.expires_at).getTime()
+      : null
 
       return {
         ...item,
-        qr_url: `${origin}/attendance/scan?token=${item.token}`,
+        // 원본 토큰은 재표시하지 않음
+        qr_url: null,
         is_expired:
           expiresAtMs === null
             ? false
