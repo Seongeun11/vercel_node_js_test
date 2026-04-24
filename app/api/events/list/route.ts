@@ -28,7 +28,7 @@ function parseBooleanParam(value: string | null): boolean | null {
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
-  const session = await getSessionProfile()
+  const session = await getSessionProfile(['admin'])
 
   if (!session.ok) {
     return jsonNoStore<EventsListResponse>(

@@ -1,9 +1,11 @@
-// app/api/events/update/route.ts
 import { NextRequest } from 'next/server'
 import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+
+type RecurrenceType = 'none' | 'daily'
+type WeekdayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 
 type UpdateEventBody = {
   id?: string
@@ -12,7 +14,8 @@ type UpdateEventBody = {
   late_threshold_min?: number
   allow_duplicate_check?: boolean
   is_special_event?: boolean
-  recurrence_type?: 'none' | 'daily'
+  recurrence_type?: RecurrenceType
+  recurrence_days?: WeekdayCode[]
   is_active?: boolean
 }
 
@@ -24,9 +27,34 @@ type UpdateEventResponse = {
     start_time: string
     late_threshold_min: number
     allow_duplicate_check: boolean
+    is_special_event: boolean
+    recurrence_type: RecurrenceType
+    recurrence_days: WeekdayCode[]
+    is_active: boolean
     created_at: string
   }
   error?: string
+}
+
+const WEEKDAY_CODES: WeekdayCode[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+
+function normalizeRecurrenceDays(value: unknown): WeekdayCode[] {
+  if (!Array.isArray(value)) return []
+
+  const unique = Array.from(new Set(value.map((item) => String(item).trim())))
+
+  return WEEKDAY_CODES.filter((day) => unique.includes(day))
+}
+
+function hasInvalidRecurrenceDay(value: unknown): boolean {
+  if (!Array.isArray(value)) return false
+
+  return value.some((item) => !WEEKDAY_CODES.includes(String(item).trim() as WeekdayCode))
+}
+
+function sameDays(a: WeekdayCode[], b: WeekdayCode[]): boolean {
+  if (a.length !== b.length) return false
+  return a.every((day, index) => day === b[index])
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
@@ -43,13 +71,16 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const body = (await request.json()) as UpdateEventBody
+
     const id = String(body.id ?? '').trim()
     const name = String(body.name ?? '').trim()
     const startTimeRaw = String(body.start_time ?? '').trim()
     const lateThresholdMin = Number(body.late_threshold_min ?? 5)
     const allowDuplicateCheck = Boolean(body.allow_duplicate_check)
     const isSpecialEvent = Boolean(body.is_special_event)
-    const recurrenceType = String(body.recurrence_type ?? 'none').trim()
+    const recurrenceType = String(body.recurrence_type ?? 'none').trim() as RecurrenceType
+    const recurrenceDays =
+      recurrenceType === 'daily' ? normalizeRecurrenceDays(body.recurrence_days) : []
     const isActive = body.is_active ?? true
 
     if (!id) {
@@ -92,27 +123,50 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 400 }
       )
     }
-    
 
     if (!['none', 'daily'].includes(recurrenceType)) {
-      return jsonNoStore(
+      return jsonNoStore<UpdateEventResponse>(
         { error: '반복 규칙은 none 또는 daily만 가능합니다.' },
+        { status: 400 }
+      )
+    }
+
+    if (hasInvalidRecurrenceDay(body.recurrence_days)) {
+      return jsonNoStore<UpdateEventResponse>(
+        { error: '반복 요일 값이 올바르지 않습니다.' },
+        { status: 400 }
+      )
+    }
+
+    if (recurrenceType === 'daily' && recurrenceDays.length === 0) {
+      return jsonNoStore<UpdateEventResponse>(
+        { error: '반복 요일을 1개 이상 선택해주세요.' },
         { status: 400 }
       )
     }
 
     const { data: existingEvent, error: existingError } = await supabaseAdmin
       .from('events')
-      .select('id, name, start_time, late_threshold_min, allow_duplicate_check, is_special_event, recurrence_type, is_active, created_at')
+      .select(`
+        id,
+        name,
+        start_time,
+        late_threshold_min,
+        allow_duplicate_check,
+        is_special_event,
+        recurrence_type,
+        recurrence_days,
+        is_active,
+        created_at
+      `)
       .eq('id', id)
       .single()
-      
+
     if (existingError || !existingEvent) {
       return jsonNoStore<UpdateEventResponse>(
         { error: '수정할 이벤트를 찾을 수 없습니다.' },
         { status: 404 }
       )
-      
     }
 
     const nextStartTimeIso = startTime.toISOString()
@@ -123,37 +177,33 @@ export async function POST(request: NextRequest): Promise<Response> {
       late_threshold_min: number
       allow_duplicate_check: boolean
       is_special_event: boolean
-      recurrence_type: 'none' | 'daily'
+      recurrence_type: RecurrenceType
+      recurrence_days: WeekdayCode[]
       is_active: boolean
     }> = {}
 
-    if (existingEvent.name !== name) {
-      updatePayload.name = name
-    }
+    const existingDays = normalizeRecurrenceDays(existingEvent.recurrence_days)
 
-    if (existingEvent.start_time !== nextStartTimeIso) {
-      updatePayload.start_time = nextStartTimeIso
-    }
-
+    if (existingEvent.name !== name) updatePayload.name = name
+    if (existingEvent.start_time !== nextStartTimeIso) updatePayload.start_time = nextStartTimeIso
     if (Number(existingEvent.late_threshold_min) !== lateThresholdMin) {
       updatePayload.late_threshold_min = lateThresholdMin
     }
-
     if (Boolean(existingEvent.allow_duplicate_check) !== allowDuplicateCheck) {
       updatePayload.allow_duplicate_check = allowDuplicateCheck
     }
-
     if (Boolean(existingEvent.is_special_event) !== isSpecialEvent) {
       updatePayload.is_special_event = isSpecialEvent
     }
-
     if (String(existingEvent.recurrence_type ?? 'none') !== recurrenceType) {
-      updatePayload.recurrence_type = recurrenceType as 'none' | 'daily'
+      updatePayload.recurrence_type = recurrenceType
     }
-
+    if (!sameDays(existingDays, recurrenceDays)) {
+      updatePayload.recurrence_days = recurrenceDays
+    }
     if (Boolean(existingEvent.is_active) !== Boolean(isActive)) {
       updatePayload.is_active = Boolean(isActive)
-    }    
+    }
 
     if (Object.keys(updatePayload).length === 0) {
       return jsonNoStore<UpdateEventResponse>(
@@ -166,7 +216,18 @@ export async function POST(request: NextRequest): Promise<Response> {
       .from('events')
       .update(updatePayload)
       .eq('id', id)
-      .select('id, name, start_time, late_threshold_min, allow_duplicate_check, is_special_event, recurrence_type, is_active, created_at')
+      .select(`
+        id,
+        name,
+        start_time,
+        late_threshold_min,
+        allow_duplicate_check,
+        is_special_event,
+        recurrence_type,
+        recurrence_days,
+        is_active,
+        created_at
+      `)
       .single()
 
     if (updateError || !updatedEvent) {
@@ -179,7 +240,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     return jsonNoStore<UpdateEventResponse>(
       {
         message: '이벤트가 수정되었습니다.',
-        event: updatedEvent,
+        event: updatedEvent as UpdateEventResponse['event'],
       },
       { status: 200 }
     )
@@ -191,14 +252,13 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
-
     if (process.env.NODE_ENV !== 'production') {
       console.error('[events/update] unexpected error:', error)
     }
 
-    return jsonNoStore(
+    return jsonNoStore<UpdateEventResponse>(
       { error: '서버 오류가 발생했습니다.' },
       { status: 500 }
-    )    
+    )
   }
 }

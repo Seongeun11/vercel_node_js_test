@@ -4,6 +4,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextRequest } from 'next/server'
 import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
+//qr 암호/복호화
+import { decryptQrToken, maskQrToken } from '@/lib/security/qr-token' 
 
 type ListQrBody = {
   occurrence_id?: string
@@ -30,6 +32,7 @@ export async function POST(request: NextRequest) {
       id,
       event_id,
       occurrence_id,
+      token_encrypted,
       expires_at,
       used_count,
       created_at,
@@ -60,26 +63,46 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const now = Date.now()
-    const origin = request.nextUrl.origin
 
-    const qrTokens = (data ?? []).map((item: any) => {
-    const expiresAtMs = item.expires_at
-      ? new Date(item.expires_at).getTime()
-      : null
+    const origin = request.nextUrl.origin
+    const now = Date.now()
+
+    const qrTokens = (data ?? []).map((qr) => {
+      let rawToken: string | null = null
+      let qrUrl: string | null = null
+      let tokenPreview = '복원 불가'
+
+      if (qr.token_encrypted) {
+        try {
+          rawToken = decryptQrToken(qr.token_encrypted)
+          qrUrl = `${origin}/attendance/scan?token=${rawToken}`
+          tokenPreview = maskQrToken(rawToken)
+        } catch {
+          rawToken = null
+          qrUrl = null
+          tokenPreview = '복호화 실패'
+        }
+      }
+
+      const expiresAtMs = qr.expires_at
+        ? new Date(qr.expires_at).getTime()
+        : null
 
       return {
-        ...item,
-        // 원본 토큰은 재표시하지 않음
-        qr_url: null,
+        id: qr.id,
+        event_id: qr.event_id,
+        occurrence_id: qr.occurrence_id,
+        token_preview: tokenPreview,
+        qr_url: qrUrl,
+        expires_at: qr.expires_at,
+        used_count: qr.used_count,
+        created_at: qr.created_at,
         is_expired:
           expiresAtMs === null
             ? false
             : Number.isNaN(expiresAtMs)
               ? true
               : now > expiresAtMs,
-        occurrence_date: item.event_occurrences?.occurrence_date ?? null,
-        occurrence_status: item.event_occurrences?.status ?? null,
       }
     })
 

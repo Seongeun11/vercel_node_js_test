@@ -1,3 +1,4 @@
+// app/api/admin/users/bulk-upload/route.ts
 import { NextRequest } from 'next/server'
 import * as XLSX from 'xlsx'
 import { requireRole } from '@/lib/serverAuth'
@@ -9,12 +10,22 @@ import { writeAdminAuditLog } from '@/lib/admin-audit'
 import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
 
+type UserRole = 'admin' | 'captain' | 'trainee'
+
 type BulkUserRow = {
   student_id?: string
   full_name?: string
   password?: string
-  role?: 'admin' | 'captain' | 'trainee'
+  role?: UserRole | string
   cohort_no?: number | string
+}
+
+type NormalizedBulkUserRow = {
+  student_id: string
+  full_name: string
+  password: string
+  role: UserRole
+  cohort_no: number | null
 }
 
 type BulkCreateResultItem = {
@@ -23,6 +34,21 @@ type BulkCreateResultItem = {
   success: boolean
   message: string
 }
+
+const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024
+const MAX_ROWS = 300
+const MAX_SHEETS = 1
+
+const REQUIRED_COLUMNS = ['student_id', 'full_name', 'password', 'role'] as const
+const OPTIONAL_COLUMNS = ['cohort_no'] as const
+
+const ALLOWED_EXTENSIONS = ['.xlsx', '.xls']
+const ALLOWED_MIME_TYPES = [
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'application/octet-stream',
+  '',
+]
 
 function normalizeSupabaseAuthError(message?: string): string {
   if (!message) return '사용자 생성 실패'
@@ -41,11 +67,55 @@ function normalizeSupabaseAuthError(message?: string): string {
   return message
 }
 
-function normalizeRow(row: BulkUserRow) {
+function hasAllowedExtension(fileName: string): boolean {
+  const lowerName = fileName.toLowerCase()
+  return ALLOWED_EXTENSIONS.some((extension) => lowerName.endsWith(extension))
+}
+
+function validateUploadFile(file: File): string {
+  if (!file.name || !hasAllowedExtension(file.name)) {
+    return '엑셀 파일(.xlsx, .xls)만 업로드할 수 있습니다.'
+  }
+
+  if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+    return '허용되지 않은 파일 형식입니다.'
+  }
+
+  if (file.size <= 0) {
+    return '빈 파일은 업로드할 수 없습니다.'
+  }
+
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    return '파일 크기는 최대 2MB까지 허용됩니다.'
+  }
+
+  return ''
+}
+
+function validateColumns(headers: string[]): string {
+  const normalizedHeaders = headers.map((header) => header.trim()).filter(Boolean)
+  const allowedColumns = new Set<string>([...REQUIRED_COLUMNS, ...OPTIONAL_COLUMNS])
+
+  for (const requiredColumn of REQUIRED_COLUMNS) {
+    if (!normalizedHeaders.includes(requiredColumn)) {
+      return `필수 컬럼이 없습니다: ${requiredColumn}`
+    }
+  }
+
+  const unknownColumns = normalizedHeaders.filter((header) => !allowedColumns.has(header))
+
+  if (unknownColumns.length > 0) {
+    return `허용되지 않은 컬럼이 있습니다: ${unknownColumns.join(', ')}`
+  }
+
+  return ''
+}
+
+function normalizeRow(row: BulkUserRow): NormalizedBulkUserRow {
   const studentId = String(row.student_id ?? '').trim()
   const fullName = String(row.full_name ?? '').trim()
   const password = String(row.password ?? '').trim()
-  const role = String(row.role ?? '').trim() as 'admin' | 'captain' | 'trainee'
+  const role = String(row.role ?? '').trim() as UserRole
   const cohortRaw = String(row.cohort_no ?? '').trim()
 
   return {
@@ -57,18 +127,30 @@ function normalizeRow(row: BulkUserRow) {
   }
 }
 
-function validateRow(row: ReturnType<typeof normalizeRow>): string {
+function validateRow(row: NormalizedBulkUserRow): string {
   if (!row.student_id) return '학번이 비어 있습니다.'
+  if (!/^\d{8,8}$/.test(row.student_id)) {
+    return '학번은 8자리 숫자여야 합니다.'
+  }
+
   if (!row.full_name) return '이름이 비어 있습니다.'
+  if (row.full_name.length > 50) {
+    return '이름은 최대 50자까지 허용됩니다.'
+  }
+
   if (!row.password) return '비밀번호가 비어 있습니다.'
+  if (row.password.length < 8 || row.password.length > 20) {
+    return '비밀번호는 8~20자 사이여야 합니다.'
+  }
 
   if (!['admin', 'captain', 'trainee'].includes(row.role)) {
     return '역할(role)은 admin, captain, trainee 중 하나여야 합니다.'
   }
 
+  // profiles 체크 제약조건: cohort_no is null or cohort_no > 0
   if (row.cohort_no !== null) {
-    if (!Number.isInteger(row.cohort_no) || row.cohort_no < 0) {
-      return '기수(cohort_no)는 0 이상 정수여야 합니다.'
+    if (!Number.isInteger(row.cohort_no) || row.cohort_no <= 0) {
+      return '기수(cohort_no)는 1 이상 정수여야 합니다.'
     }
   }
 
@@ -79,6 +161,7 @@ export async function POST(request: NextRequest) {
   const clientIp = getClientIp(request)
 
   try {
+    // 관리자 대량 생성 POST API이므로 CSRF 방어 유지
     assertSameOrigin(request)
 
     const authResult = await requireRole(['admin'])
@@ -107,9 +190,7 @@ export async function POST(request: NextRequest) {
       })
 
       return jsonNoStore(
-        {
-          error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
-        },
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
         {
           status: 429,
           headers: {
@@ -129,20 +210,62 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const buffer = await file.arrayBuffer()
-    const workbook = XLSX.read(buffer, { type: 'array' })
-    const firstSheetName = workbook.SheetNames[0]
+    const fileValidationError = validateUploadFile(file)
+    if (fileValidationError) {
+      return jsonNoStore(
+        { error: fileValidationError },
+        { status: 400 }
+      )
+    }
 
-    if (!firstSheetName) {
+    const buffer = await file.arrayBuffer()
+
+    const workbook = XLSX.read(buffer, {
+      type: 'array',
+      cellDates: false,
+      cellHTML: false,
+      cellNF: false,
+      cellStyles: false,
+      WTF: false,
+    })
+
+    if (workbook.SheetNames.length === 0) {
       return jsonNoStore(
         { error: '엑셀 시트를 찾을 수 없습니다.' },
         { status: 400 }
       )
     }
 
+    if (workbook.SheetNames.length > MAX_SHEETS) {
+      return jsonNoStore(
+        { error: '엑셀 시트는 1개만 허용됩니다.' },
+        { status: 400 }
+      )
+    }
+
+    const firstSheetName = workbook.SheetNames[0]
     const sheet = workbook.Sheets[firstSheetName]
+
+    const headerRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
+      defval: '',
+      blankrows: false,
+    })
+
+    const headers = (headerRows[0] ?? []).map((value) => String(value ?? '').trim())
+    const columnValidationError = validateColumns(headers)
+
+    if (columnValidationError) {
+      return jsonNoStore(
+        { error: columnValidationError },
+        { status: 400 }
+      )
+    }
+
     const rows = XLSX.utils.sheet_to_json<BulkUserRow>(sheet, {
       defval: '',
+      raw: false,
+      blankrows: false,
     })
 
     if (!rows.length) {
@@ -152,14 +275,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (rows.length > 300) {
+    if (rows.length > MAX_ROWS) {
       return jsonNoStore(
-        { error: '한 번에 최대 300명까지만 등록할 수 있습니다.' },
+        { error: `한 번에 최대 ${MAX_ROWS}명까지만 등록할 수 있습니다.` },
         { status: 400 }
       )
     }
 
     const results: BulkCreateResultItem[] = []
+    const seenStudentIds = new Set<string>()
 
     for (let index = 0; index < rows.length; index += 1) {
       const rowNumber = index + 2
@@ -175,6 +299,18 @@ export async function POST(request: NextRequest) {
         })
         continue
       }
+
+      if (seenStudentIds.has(normalized.student_id)) {
+        results.push({
+          row: rowNumber,
+          student_id: normalized.student_id,
+          success: false,
+          message: '엑셀 파일 안에 중복된 학번이 있습니다.',
+        })
+        continue
+      }
+
+      seenStudentIds.add(normalized.student_id)
 
       const email = studentIdToEmail(normalized.student_id)
 
@@ -263,6 +399,8 @@ export async function POST(request: NextRequest) {
       action: 'admin.user_bulk_create.completed',
       metadata: {
         client_ip: clientIp,
+        file_name: file.name,
+        file_size: file.size,
         total_count: results.length,
         success_count: successCount,
         failed_count: failedCount,
@@ -288,6 +426,8 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       )
     }
+
+    console.error('[admin/users/bulk-upload] unexpected error:', error)
 
     return jsonNoStore(
       { error: '서버 오류가 발생했습니다.' },

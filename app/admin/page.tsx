@@ -40,6 +40,7 @@ export default async function AdminPage() {
         <Link href="/admin/admin-only/users">
           <button type="button">사용자 생성</button>
         </Link>
+
       </div>
     </main>
   )

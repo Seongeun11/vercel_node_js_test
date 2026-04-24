@@ -150,5 +150,13 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       )
     }
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[auth/login] unexpected error:', error)
+    }
+
+    return jsonNoStore(
+      { error: '로그인 중 서버 오류가 발생했습니다.' },
+      { status: 500 }
+    )
   }
 }

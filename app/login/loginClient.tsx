@@ -1,5 +1,5 @@
 'use client'
-
+//app\login\loginClient.tsx
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { KeyboardEvent } from 'react'
@@ -43,6 +43,7 @@ export default function LoginClient() {
     }
 
     try {
+      
       setLoading(true)
 
       const response = await fetch('/api/auth/login', {
@@ -86,11 +87,11 @@ export default function LoginClient() {
   }
 
   return (
-    <div style={{ padding: 20 }}>
+    <div style={{ padding: 0 }}>
       <h2>출석 로그인</h2>
 
       <input
-        style={{ margin: '10px' }}
+        style={{ margin: '0px' }}
         placeholder="학번"
         type="text"
         value={studentId}
@@ -102,6 +103,7 @@ export default function LoginClient() {
       />
 
       <input
+      style={{ margin: '10px' }}
         placeholder="비밀번호"
         type="password"
         value={password}

@@ -1,10 +1,10 @@
-// app/admin/admin-only/events/eventsClient.tsx
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
 
 type RecurrenceType = 'none' | 'daily'
 type WeekdayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
+
 type EventItem = {
   id: string
   name: string
@@ -27,6 +27,7 @@ type EventFormState = {
   recurrence_days: WeekdayCode[]
   is_active: boolean
 }
+
 const WEEKDAY_OPTIONS: { label: string; value: WeekdayCode }[] = [
   { label: '월', value: 'mon' },
   { label: '화', value: 'tue' },
@@ -36,6 +37,18 @@ const WEEKDAY_OPTIONS: { label: string; value: WeekdayCode }[] = [
   { label: '토', value: 'sat' },
   { label: '일', value: 'sun' },
 ]
+
+const WEEKDAY_CODES = WEEKDAY_OPTIONS.map((option) => option.value)
+
+function toDateTimeLocalValue(isoString: string) {
+  const date = new Date(isoString)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const offset = date.getTimezoneOffset()
+  const localDate = new Date(date.getTime() - offset * 60 * 1000)
+  return localDate.toISOString().slice(0, 16)
+}
+
 const initialForm: EventFormState = {
   name: '',
   start_time: toDateTimeLocalValue(new Date().toISOString()),
@@ -46,8 +59,12 @@ const initialForm: EventFormState = {
   recurrence_days: [],
   is_active: true,
 }
-function normalizeRecurrenceDays(days: WeekdayCode[]): WeekdayCode[] {
-  const unique = Array.from(new Set(days))
+
+function normalizeRecurrenceDays(days: unknown): WeekdayCode[] {
+  if (!Array.isArray(days)) return []
+
+  const unique = Array.from(new Set(days.map((day) => String(day).trim())))
+
   return WEEKDAY_OPTIONS.map((option) => option.value).filter((day) =>
     unique.includes(day)
   )
@@ -68,6 +85,7 @@ function formatRecurrenceDays(days: WeekdayCode[]) {
 
   return days.map((day) => labelMap[day]).join(', ')
 }
+
 export default function EventsClient() {
   const [events, setEvents] = useState<EventItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -147,22 +165,18 @@ export default function EventsClient() {
       }
     })
   }
+
   function validateEventForm() {
     const name = form.name.trim()
     const startTime = form.start_time.trim()
     const lateThreshold = Number(form.late_threshold_min)
+    const hasInvalidDay = form.recurrence_days.some(
+      (day) => !WEEKDAY_CODES.includes(day)
+    )
 
-    if (!name) {
-      return '이벤트 이름을 입력해주세요.'
-    }
-
-    if (!startTime) {
-      return '시작 시간을 입력해주세요.'
-    }
-
-    if (Number.isNaN(new Date(startTime).getTime())) {
-      return '시작 시간 형식이 올바르지 않습니다.'
-    }
+    if (!name) return '이벤트 이름을 입력해주세요.'
+    if (!startTime) return '시작 시간을 입력해주세요.'
+    if (Number.isNaN(new Date(startTime).getTime())) return '시작 시간 형식이 올바르지 않습니다.'
 
     if (
       !Number.isInteger(lateThreshold) ||
@@ -174,6 +188,14 @@ export default function EventsClient() {
 
     if (!['none', 'daily'].includes(form.recurrence_type)) {
       return '반복 규칙이 올바르지 않습니다.'
+    }
+
+    if (hasInvalidDay) {
+      return '반복 요일 값이 올바르지 않습니다.'
+    }
+
+    if (form.recurrence_type === 'daily' && form.recurrence_days.length === 0) {
+      return '반복 요일을 1개 이상 선택해주세요.'
     }
 
     return ''
@@ -201,7 +223,7 @@ export default function EventsClient() {
         allow_duplicate_check: form.allow_duplicate_check,
         is_special_event: form.is_special_event,
         recurrence_type: form.recurrence_type,
-        recurrence_days: form.recurrence_days,
+        recurrence_days: form.recurrence_type === 'daily' ? form.recurrence_days : [],
         is_active: form.is_active,
       }
 
@@ -215,13 +237,7 @@ export default function EventsClient() {
         },
         body: JSON.stringify(payload),
       })
-      const hasInvalidDay = form.recurrence_days.some(
-        (day) => !WEEKDAY_OPTIONS.map((option) => option.value).includes(day)
-      )
 
-      if (hasInvalidDay) {
-        return '반복 요일 값이 올바르지 않습니다.'
-      }
       const data = await res.json()
 
       if (!res.ok) {
@@ -230,9 +246,7 @@ export default function EventsClient() {
         )
       }
 
-      setSuccess(
-        isEditing ? '이벤트가 수정되었습니다.' : '이벤트가 생성되었습니다.'
-      )
+      setSuccess(isEditing ? '이벤트가 수정되었습니다.' : '이벤트가 생성되었습니다.')
       resetForm()
       await refreshEvents()
     } catch (err) {
@@ -240,8 +254,8 @@ export default function EventsClient() {
         err instanceof Error
           ? err.message
           : isEditing
-          ? '이벤트 수정 중 오류 발생'
-          : '이벤트 생성 중 오류 발생'
+            ? '이벤트 수정 중 오류 발생'
+            : '이벤트 생성 중 오류 발생'
       )
     } finally {
       setSubmitting(false)
@@ -252,16 +266,17 @@ export default function EventsClient() {
     setError('')
     setSuccess('')
     setEditingId(event.id)
+
+    const days = normalizeRecurrenceDays(event.recurrence_days)
+
     setForm({
       name: event.name,
       start_time: toDateTimeLocalValue(event.start_time),
       late_threshold_min: String(event.late_threshold_min ?? 5),
       allow_duplicate_check: Boolean(event.allow_duplicate_check),
       is_special_event: Boolean(event.is_special_event),
-      recurrence_type: event.recurrence_type ?? 'none',
-      recurrence_days: Array.isArray(event.recurrence_days)
-      ? normalizeRecurrenceDays(event.recurrence_days)
-      : [],
+      recurrence_type: days.length > 0 ? 'daily' : 'none',
+      recurrence_days: days,
       is_active: Boolean(event.is_active),
     })
   }
@@ -290,9 +305,7 @@ export default function EventsClient() {
         throw new Error(data.error || '이벤트 삭제 실패')
       }
 
-      if (editingId === id) {
-        resetForm()
-      }
+      if (editingId === id) resetForm()
 
       setSuccess('이벤트가 삭제되었습니다.')
       await refreshEvents()
@@ -317,9 +330,7 @@ export default function EventsClient() {
       </div>
 
       <section style={panelStyle}>
-        <h3 style={{ marginTop: 0 }}>
-          {isEditing ? '이벤트 수정' : '이벤트 생성'}
-        </h3>
+        <h3 style={{ marginTop: 0 }}>{isEditing ? '이벤트 수정' : '이벤트 생성'}</h3>
 
         <div style={{ display: 'grid', gap: 12, maxWidth: 560 }}>
           <label style={{ display: 'grid', gap: 6 }}>
@@ -359,48 +370,46 @@ export default function EventsClient() {
           </label>
 
           <div style={{ display: 'grid', gap: 6 }}>
-          <span>반복 요일</span>
+            <span>반복 요일</span>
 
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {WEEKDAY_OPTIONS.map((option) => (
-              <label
-                key={option.value}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '8px 10px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: 8,
-                  background: form.recurrence_days.includes(option.value) ? '#eff6ff' : '#fff',
-                  cursor: submitting ? 'not-allowed' : 'pointer',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={form.recurrence_days.includes(option.value)}
-                  onChange={() => toggleRecurrenceDay(option.value)}
-                  disabled={submitting}
-                />
-                <span>{option.label}</span>
-              </label>
-            ))}
-          </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {WEEKDAY_OPTIONS.map((option) => (
+                <label
+                  key={option.value}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 10px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 8,
+                    background: form.recurrence_days.includes(option.value) ? '#eff6ff' : '#fff',
+                    cursor: submitting ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.recurrence_days.includes(option.value)}
+                    onChange={() => toggleRecurrenceDay(option.value)}
+                    disabled={submitting}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </div>
 
-          <div style={{ fontSize: 13, color: '#666' }}>
-            {form.recurrence_days.length > 0
-              ? `선택된 요일: ${formatRecurrenceDays(form.recurrence_days)}`
-              : '반복 없음'}
+            <div style={{ fontSize: 13, color: '#666' }}>
+              {form.recurrence_days.length > 0
+                ? `선택된 요일: ${formatRecurrenceDays(form.recurrence_days)}`
+                : '반복 없음'}
+            </div>
           </div>
-        </div>
 
           <label style={checkboxLabelStyle}>
             <input
               type="checkbox"
               checked={form.allow_duplicate_check}
-              onChange={(e) =>
-                handleChange('allow_duplicate_check', e.target.checked)
-              }
+              onChange={(e) => handleChange('allow_duplicate_check', e.target.checked)}
               disabled={submitting}
             />
             <span>중복 출석 허용</span>
@@ -410,9 +419,7 @@ export default function EventsClient() {
             <input
               type="checkbox"
               checked={form.is_special_event}
-              onChange={(e) =>
-                handleChange('is_special_event', e.target.checked)
-              }
+              onChange={(e) => handleChange('is_special_event', e.target.checked)}
               disabled={submitting}
             />
             <span>특별 행사</span>
@@ -434,19 +441,11 @@ export default function EventsClient() {
               disabled={submitting}
               style={primaryButtonStyle}
             >
-              {submitting
-                ? '처리중...'
-                : isEditing
-                ? '이벤트 수정'
-                : '이벤트 생성'}
+              {submitting ? '처리중...' : isEditing ? '이벤트 수정' : '이벤트 생성'}
             </button>
 
             {isEditing && (
-              <button
-                onClick={resetForm}
-                disabled={submitting}
-                style={secondaryButtonStyle}
-              >
+              <button onClick={resetForm} disabled={submitting} style={secondaryButtonStyle}>
                 수정 취소
               </button>
             )}
@@ -486,43 +485,39 @@ export default function EventsClient() {
                 </tr>
               </thead>
               <tbody>
-                {events.map((event) => (
-                  <tr key={event.id}>
-                    <td style={tdStyle}>{event.name}</td>
-                    <td style={tdStyle}>
-                      {new Date(event.start_time).toLocaleString()}
-                    </td>
-                    <td style={tdStyle}>
-                      {formatRecurrenceDays(event.recurrence_days ?? [])}
-                    </td>
-                    <td style={tdStyle}>{event.late_threshold_min}분</td>
-                    <td style={tdStyle}>
-                      {event.is_special_event ? '예' : '아니오'}
-                    </td>
-                    <td style={tdStyle}>
-                      {event.allow_duplicate_check ? '허용' : '불가'}
-                    </td>
-                    <td style={tdStyle}>{event.is_active ? '활성' : '비활성'}</td>
-                    <td style={tdStyle}>
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <button
-                          onClick={() => startEditEvent(event)}
-                          disabled={submitting}
-                          style={secondaryButtonStyle}
-                        >
-                          수정
-                        </button>
-                        <button
-                          onClick={() => void handleDeleteEvent(event.id)}
-                          disabled={submitting}
-                          style={dangerButtonStyle}
-                        >
-                          삭제
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {events.map((event) => {
+                  const days = normalizeRecurrenceDays(event.recurrence_days)
+
+                  return (
+                    <tr key={event.id}>
+                      <td style={tdStyle}>{event.name}</td>
+                      <td style={tdStyle}>{new Date(event.start_time).toLocaleString()}</td>
+                      <td style={tdStyle}>{formatRecurrenceDays(days)}</td>
+                      <td style={tdStyle}>{event.late_threshold_min}분</td>
+                      <td style={tdStyle}>{event.is_special_event ? '예' : '아니오'}</td>
+                      <td style={tdStyle}>{event.allow_duplicate_check ? '허용' : '불가'}</td>
+                      <td style={tdStyle}>{event.is_active ? '활성' : '비활성'}</td>
+                      <td style={tdStyle}>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <button
+                            onClick={() => startEditEvent(event)}
+                            disabled={submitting}
+                            style={secondaryButtonStyle}
+                          >
+                            수정
+                          </button>
+                          <button
+                            onClick={() => void handleDeleteEvent(event.id)}
+                            disabled={submitting}
+                            style={dangerButtonStyle}
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -530,15 +525,6 @@ export default function EventsClient() {
       </section>
     </div>
   )
-}
-
-function toDateTimeLocalValue(isoString: string) {
-  const date = new Date(isoString)
-  if (Number.isNaN(date.getTime())) return ''
-
-  const offset = date.getTimezoneOffset()
-  const localDate = new Date(date.getTime() - offset * 60 * 1000)
-  return localDate.toISOString().slice(0, 16)
 }
 
 const panelStyle: React.CSSProperties = {

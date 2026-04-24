@@ -101,6 +101,10 @@ export default async function AdminLayout({ children }: Props) {
                 <Link href="/admin/admin-only/users" style={navLinkStyle}>
                   사용자 생성
                 </Link>
+                        
+            <Link href="/admin/admin-only/export" style={navLinkStyle}>
+              엑셀로 내보내기
+            </Link>
               </>
             )}
 

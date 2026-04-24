@@ -5,7 +5,12 @@ import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
-import { generateQrToken, hashQrToken, maskQrToken } from '@/lib/security/qr-token'
+import {
+  generateQrToken,
+  hashQrToken,
+  encryptQrToken,
+  maskQrToken,
+} from '@/lib/security/qr-token'
 
 type ExpireUnit = 'hours' | 'days' | 'unlimited'
 
@@ -147,18 +152,20 @@ export async function POST(request: NextRequest): Promise<Response> {
     //const token = crypto.randomBytes(24).toString('hex')
     const rawToken = generateQrToken()
     const tokenHash = hashQrToken(rawToken)
+    const tokenEncrypted = encryptQrToken(rawToken)
 
     const expiresAt = buildExpiresAt(occurrence.start_time, expireUnit, expireValue)
 
     const { data: createdQr, error: createError } = await supabaseAdmin
-      .from('qr_tokens')
-      .insert({
-        event_id: occurrence.event_id,
-        occurrence_id: occurrenceId,
-        token_hash: tokenHash,
-        expires_at: expiresAt,
-        used_count: 0,
-      })
+  .from('qr_tokens')
+  .insert({
+    event_id: occurrence.event_id,
+    occurrence_id: occurrenceId,
+    token_hash: tokenHash,
+    token_encrypted: tokenEncrypted,
+    expires_at: expiresAt,
+    used_count: 0,
+  })
       // token 컬럼 조회 금지
       .select('id, event_id, occurrence_id, expires_at, used_count, created_at')
       .single<CreatedQrRow>()

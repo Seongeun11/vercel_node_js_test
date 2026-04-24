@@ -2,7 +2,6 @@
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/serverAuth'
 import LogoutButton from '@/components/LogoutButton'
-import AttendanceChangeRequestButton from '@/components/attendance/attendanceChangeRequestButton'
 
 // 서버에서 사용하는 사용자 타입 정의 (최소 필드만)
 type User = {
@@ -62,10 +61,11 @@ export default async function HomePage() {
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               {user.role === 'trainee' &&(
                 <>
+              {/*
               <Link href="/attendance/scan">
                 <button type="button">출석 체크</button>              
               </Link>
-              
+              */}
               <Link href="/attendance/my">
                 <button type="button">내 출석 조회</button>
               </Link>

@@ -164,6 +164,9 @@ export default function AdminUsersPage() {
               placeholder="초기 비밀번호 입력"
               style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
             />
+             <p style={{ margin: '6px 0 0', color: '#666', fontSize: '13px' }}>
+    8자리 이상 입력하세요.
+  </p>
           </div>
           <div>
   <label style={{ display: 'block', marginBottom: '6px' }}>기수</label>
@@ -173,11 +176,11 @@ export default function AdminUsersPage() {
     step="1"
     value={cohortNo}
     onChange={(event) => setCohortNo(event.target.value)}
-    placeholder="예: 12"
+    placeholder="예: 10"
     style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
   />
   <p style={{ margin: '6px 0 0', color: '#666', fontSize: '13px' }}>
-    선택 입력입니다. 입력 시 1 이상 정수만 가능합니다.
+    기수: 1 이상 정수만 가능합니다.
   </p>
 </div>
 
