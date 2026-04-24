@@ -15,6 +15,21 @@ export const adminUserCreateSchema = z.object({
     .min(2, '이름은 2자 이상이어야 합니다.')
     .max(50, '이름은 50자 이하여야 합니다.'),
   role: z.enum(['admin', 'captain', 'trainee']),
+  // DB 제약조건: cohort_no is null or cohort_no > 0
+  cohort_no: z
+    .union([z.string(), z.number(), z.null(), z.undefined()])
+    .transform((value) => {
+      if (value === null || value === undefined) return null
+
+      const text = String(value).trim()
+      if (text === '') return null
+
+      return Number(text)
+    })
+    .refine(
+      (value) => value === null || (Number.isInteger(value) && value > 0),
+      '기수는 1 이상 정수여야 합니다.'
+    ),
 })
 
 export type AdminUserCreateInput = z.infer<typeof adminUserCreateSchema>

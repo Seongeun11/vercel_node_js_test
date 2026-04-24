@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
       password,
       full_name: fullName,
       role,
+      cohort_no: cohortNo,
     } = parsed.data
 
     const email = studentIdToEmail(studentId)
@@ -191,6 +192,7 @@ export async function POST(request: NextRequest) {
           student_id: studentId,
           full_name: fullName,
           role,
+          cohort_no: cohortNo,
         },
       })
 
@@ -216,7 +218,7 @@ export async function POST(request: NextRequest) {
     const { data: createdProfile, error: createdProfileError } =
       await supabaseAdmin
         .from('profiles')
-        .select('id, student_id, full_name, role, created_at')
+        .select('id, student_id, full_name, role, cohort_no, created_at')
         .eq('id', createdAuth.user.id)
         .maybeSingle()
 

@@ -33,9 +33,9 @@ type TodayOccurrenceItem = {
 type QrItem = {
   id: string
   event_id: string
-  occurrence_id: string
-  token: string
-  qr_url?: string
+  occurrence_id: string | null
+  token_preview?: string | null
+  qr_url?: string | null
   expires_at: string | null
   used_count: number
   created_at: string
@@ -43,7 +43,20 @@ type QrItem = {
   occurrence_date?: string | null
   occurrence_status?: string | null
 }
-
+type QrCreateResponse = {
+  message?: string
+  qr_token?: {
+    id: string
+    event_id: string
+    occurrence_id: string | null
+    expires_at: string | null
+    used_count: number
+    created_at: string
+    token_preview?: string | null
+  }
+  qr_url?: string
+  error?: string
+}
 type AttendanceSummary = {
   total_checked_count: number
   present_count: number
@@ -367,60 +380,95 @@ export default function TodayOperationsClient() {
   }
 
   async function handleCreateQr(occurrenceId: string) {
-    const expireUnit = qrExpireUnitMap[occurrenceId] ?? 'unlimited'
-    const expireValue = Number(
-      qrExpireValueMap[occurrenceId] ?? (expireUnit === 'unlimited' ? '0' : '1')
-    )
+  const expireUnit = qrExpireUnitMap[occurrenceId] ?? 'unlimited'
+  const expireValue = Number(
+    qrExpireValueMap[occurrenceId] ?? (expireUnit === 'unlimited' ? '0' : '1')
+  )
 
-    const validationError = validateQrExpireSetting(expireUnit, expireValue)
-    if (validationError) {
-      setError(validationError)
+  const validationError = validateQrExpireSetting(expireUnit, expireValue)
+  if (validationError) {
+    setError(validationError)
+    setSuccess('')
+    return
+  }
+
+  try {
+    setSubmitting(true)
+    setError('')
+    setSuccess('')
+
+    const res = await fetch('/api/qr/create', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        occurrence_id: occurrenceId,
+        expire_unit: expireUnit,
+        expire_value: expireValue,
+      }),
+    })
+
+    const data = (await res.json()) as QrCreateResponse
+
+    if (!res.ok) {
+      throw new Error(data.error || 'QR 생성에 실패했습니다.')
+    }
+
+    if (!data.qr_url || !data.qr_token) {
+      throw new Error('QR 링크가 응답에 없습니다.')
+    }
+
+    const nextQr: QrItem = {
+      id: data.qr_token.id,
+      event_id: data.qr_token.event_id,
+      occurrence_id: data.qr_token.occurrence_id,
+      token_preview: data.qr_token.token_preview ?? null,
+      qr_url: data.qr_url,
+      expires_at: data.qr_token.expires_at,
+      used_count: data.qr_token.used_count,
+      created_at: data.qr_token.created_at,
+      is_expired: false,
+    }
+
+    // 중요: 생성 직후에는 /api/qr/list로 덮어쓰지 말고
+    // create 응답의 qr_url을 가진 객체를 직접 state에 넣는다.
+    setQrMap((prev) => ({
+      ...prev,
+      [occurrenceId]: [
+        nextQr,
+        ...(prev[occurrenceId] ?? []).map((qr) => ({
+          ...qr,
+          is_expired: true,
+          qr_url: null,
+        })),
+      ],
+    }))
+
+    setSuccess(data.message || 'QR이 생성되었습니다.')
+  } catch (err) {
+    setError(err instanceof Error ? err.message : 'QR 생성 중 오류가 발생했습니다.')
+  } finally {
+    setSubmitting(false)
+  }
+}
+
+  async function handleCopyQrLink(qrUrl?: string | null) {
+    if (!qrUrl) {
+      setError('이 QR은 원본 링크를 복원할 수 없습니다. 새 QR을 발급해주세요.')
       setSuccess('')
       return
     }
 
     try {
-      setSubmitting(true)
+      await navigator.clipboard.writeText(qrUrl)
+      setSuccess('QR 링크가 복사되었습니다.')
       setError('')
-      setSuccess('')
-
-      const res = await fetch('/api/qr/create', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          occurrence_id: occurrenceId,
-          expire_unit: expireUnit,
-          expire_value: expireValue,
-        }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || 'QR 생성에 실패했습니다.')
-      }
-
-      await fetchQrByOccurrence(occurrenceId)
-      setSuccess(data.message || 'QR이 생성되었습니다.')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'QR 생성 중 오류가 발생했습니다.')
-    } finally {
-      setSubmitting(false)
+    } catch (error) {
+      console.error('[attendance-today] copy qr link error:', error)
+      setError('QR 링크 복사에 실패했습니다.')
     }
-  }
-
-  async function handleCopyQrLink(qrUrl: string) {
-  try {
-    await navigator.clipboard.writeText(qrUrl)
-    setSuccess('QR 링크가 복사되었습니다.')
-    setError('')
-  } catch (error) {
-    console.error('[attendance-today] copy qr link error:', error)
-    setError('QR 링크 복사에 실패했습니다.')
-  }
   }
 
   async function handleReissueQr(qrId: string, occurrenceId: string) {
@@ -460,7 +508,7 @@ export default function TodayOperationsClient() {
         throw new Error(data.error || 'QR 재발급에 실패했습니다.')
       }
 
-      await fetchQrByOccurrence(occurrenceId)
+      //await fetchQrByOccurrence(occurrenceId)
       setSuccess(data.message || 'QR 유효 시간이 수정되었습니다.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'QR 재발급 중 오류가 발생했습니다.')
@@ -584,9 +632,25 @@ export default function TodayOperationsClient() {
       setSubmitting(false)
     }
   }
+  async function createQrDataUrl(qrUrl: string): Promise<string> {
+    const canvas = document.createElement('canvas')
+
+    await QRCode.toCanvas(canvas, qrUrl, {
+      width: 900,
+      margin: 2,
+      errorCorrectionLevel: 'H',
+    })
+
+    return canvas.toDataURL('image/png')
+  }
 
 async function handleOpenQrWindow(qrUrl: string) {
   try {
+    if (!qrUrl) {
+      setError('QR 링크가 없습니다. 새 QR을 발급해주세요.')
+      return
+    }
+
     const popup = window.open('', '_blank', 'width=760,height=860')
 
     if (!popup) {
@@ -594,106 +658,32 @@ async function handleOpenQrWindow(qrUrl: string) {
       return
     }
 
-    const qrDataUrl = await QRCode.toDataURL(qrUrl, {
-      width: 900,
-      margin: 2,
-      errorCorrectionLevel: 'H',
-    })
+    const qrDataUrl = await createQrDataUrl(qrUrl)
 
     popup.document.write(`
       <!doctype html>
       <html lang="ko">
         <head>
           <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <title>출석 QR 크게보기</title>
-          <style>
-            body {
-              margin: 0;
-              padding: 24px;
-              background: #111827;
-              color: white;
-              font-family: sans-serif;
-              text-align: center;
-              box-sizing: border-box;
-            }
-            .wrap {
-              max-width: 760px;
-              margin: 0 auto;
-            }
-            .qr-box {
-              background: white;
-              padding: 16px;
-              border-radius: 20px;
-              margin: 20px auto;
-              width: min(80vw, 600px);
-              height: min(80vw, 600px);
-              box-sizing: border-box;
-            }
-            img {
-              width: 100%;
-              height: 100%;
-              object-fit: contain;
-            }
-            .link {
-              margin-top: 12px;
-              word-break: break-all;
-              font-size: 14px;
-              opacity: 0.9;
-            }
-            .actions {
-              margin-top: 20px;
-              display: flex;
-              gap: 8px;
-              justify-content: center;
-              flex-wrap: wrap;
-            }
-            button {
-              padding: 10px 14px;
-              border: none;
-              border-radius: 10px;
-              cursor: pointer;
-              font-weight: 600;
-            }
-            .secondary {
-              background: white;
-              color: #111827;
-            }
-            .primary {
-              background: #2563eb;
-              color: white;
-            }
-          </style>
         </head>
-        <body>
-          <div class="wrap">
-            <h1>출석 QR 크게보기</h1>
-            <div class="qr-box">
-              <img src="${qrDataUrl}" alt="출석 QR" />
-            </div>
-            <div class="link" id="qr-link">${qrUrl}</div>
-            <div class="actions">
-              <button class="primary" id="copy-button" type="button">링크 복사</button>
-              <button class="secondary" type="button" onclick="window.close()">닫기</button>
-            </div>
+        <body style="margin:0;padding:24px;background:#111827;color:white;text-align:center;font-family:sans-serif;">
+          <h1>출석 QR 크게보기</h1>
+
+          <div style="background:white;padding:16px;border-radius:20px;margin:20px auto;width:min(80vw,600px);height:min(80vw,600px);box-sizing:border-box;">
+            <img src="${qrDataUrl}" alt="출석 QR" style="width:100%;height:100%;object-fit:contain;" />
           </div>
 
-          <script>
-            const copyButton = document.getElementById('copy-button')
-            const qrLink = document.getElementById('qr-link')?.textContent || ''
+          <div style="word-break:break-all;font-size:14px;">${qrUrl}</div>
 
-            copyButton?.addEventListener('click', async () => {
-              try {
-                await navigator.clipboard.writeText(qrLink)
-                copyButton.textContent = '복사됨'
-                setTimeout(() => {
-                  copyButton.textContent = '링크 복사'
-                }, 1500)
-              } catch (error) {
-                alert('링크 복사에 실패했습니다.')
-              }
-            })
-          </script>
+          <div style="margin-top:20px;">
+            <button onclick="navigator.clipboard.writeText('${qrUrl}').then(() => alert('복사되었습니다.'))">
+              링크 복사
+            </button>
+            <button onclick="window.close()">
+              닫기
+            </button>
+          </div>
         </body>
       </html>
     `)
@@ -704,7 +694,6 @@ async function handleOpenQrWindow(qrUrl: string) {
     setError('QR 크게보기에 실패했습니다.')
   }
 }
-
   function toggleOccurrenceDetail(occurrenceId: string) {
     setExpandedOccurrenceIds((prev) => ({
       ...prev,
@@ -1082,7 +1071,9 @@ async function handleOpenQrWindow(qrUrl: string) {
                           {qrs.map((qr) => (
                             <tr key={qr.id}>
                               <td style={tdStyle}>
-                                <code style={codeStyle}>{qr.token}</code>
+                                <code style={codeStyle}>
+  {qr.token_preview ?? '원본 토큰 비공개'}
+</code>
                                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                                 <button
                                   type="button"

@@ -14,6 +14,7 @@ type CreateUserResponse = {
     student_id: string
     full_name: string
     role: UserRole
+    cohort_no: number
   }
   error?: string
 }
@@ -29,6 +30,7 @@ export default function AdminUsersPage() {
   const [fullName, setFullName] = useState('')
   const [role, setRole] = useState<UserRole>('trainee')
   const [password, setPassword] = useState('')
+  const [cohortNo, setCohortNo] = useState('')
 
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
@@ -40,6 +42,7 @@ export default function AdminUsersPage() {
 
     const normalizedStudentId = studentId.trim()
     const normalizedFullName = fullName.trim()
+    const normalizedCohortNo = cohortNo.trim()
 
     if (!normalizedStudentId) {
       setErrorMessage('학번을 입력해주세요.')
@@ -55,7 +58,14 @@ export default function AdminUsersPage() {
       setErrorMessage('초기 비밀번호를 입력해주세요.')
       return
     }
+    if (normalizedCohortNo) {
+    const cohortNumber = Number(normalizedCohortNo)
 
+    if (!Number.isInteger(cohortNumber) || cohortNumber <= 0) {
+      setErrorMessage('기수는 1 이상 정수로 입력해주세요.')
+      return
+    }
+  }
     try {
       setLoading(true)
 
@@ -68,6 +78,7 @@ export default function AdminUsersPage() {
           full_name: normalizedFullName,
           role,
           password: password,
+          cohort_no: normalizedCohortNo === '' ? null : Number(normalizedCohortNo),
         }),
       })
 
@@ -154,6 +165,21 @@ export default function AdminUsersPage() {
               style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
             />
           </div>
+          <div>
+  <label style={{ display: 'block', marginBottom: '6px' }}>기수</label>
+  <input
+    type="number"
+    min="1"
+    step="1"
+    value={cohortNo}
+    onChange={(event) => setCohortNo(event.target.value)}
+    placeholder="예: 12"
+    style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
+  />
+  <p style={{ margin: '6px 0 0', color: '#666', fontSize: '13px' }}>
+    선택 입력입니다. 입력 시 1 이상 정수만 가능합니다.
+  </p>
+</div>
 
           <button type="button" onClick={handleCreateUser} disabled={loading}>
             {loading ? '생성 중...' : '사용자 생성'}

@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server'
 import { getSessionProfile } from '@/lib/server-session'
 import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
+import { hashQrToken } from '@/lib/security/qr-token'
 
 type AttendanceCheckResponse = {
   success?: boolean
@@ -55,6 +56,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const body = (await request.json()) as AttendanceCheckRequest
+    //const token = typeof body?.token === 'string' ? body.token.trim() : ''
+    // 요청 토큰
     const token = typeof body?.token === 'string' ? body.token.trim() : ''
 
     if (!token) {
@@ -66,12 +69,12 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     const now = new Date()
     const attendanceDate = toKstDateString(now)
-
+    const tokenHash = hashQrToken(token)
     // 1) QR 토큰 검증: 이제 occurrence_id 기준이 핵심
     const { data: qrToken, error: qrError } = await supabaseAdmin
       .from('qr_tokens')
       .select('id, event_id, occurrence_id, expires_at, deleted_at')
-      .eq('token', token)
+      .eq('token_hash', tokenHash)
       .is('deleted_at', null)
       .maybeSingle()
 

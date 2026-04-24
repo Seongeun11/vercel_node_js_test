@@ -1,4 +1,4 @@
-// app/admin/qr/page.tsx
+// app/admin/admin-only/qr/page.tsx
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -23,26 +23,29 @@ type QrCreateResponse = {
   message?: string
   qr_token?: {
     id: string
-    token: string
     event_id: string
+    occurrence_id: string | null
     expires_at: string | null
     used_count: number
     created_at: string
-    updated_at: string
+    token_preview: string
   }
+  qr_url?: string
   error?: string
 }
 
 export default function AdminQrPage() {
   const [events, setEvents] = useState<EventItem[]>([])
   const [eventId, setEventId] = useState('')
-  const [expireMinutes, setExpireMinutes] = useState('3')
+  const [expireMinutes, setExpireMinutes] = useState('60')
 
   const [loading, setLoading] = useState(true)
   const [submitLoading, setSubmitLoading] = useState(false)
 
   const [qrUrl, setQrUrl] = useState('')
   const [qrImageUrl, setQrImageUrl] = useState('')
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false)
+
   const [message, setMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -66,7 +69,7 @@ export default function AdminQrPage() {
           return
         }
 
-        const fetchedEvents = result?.items ?? []
+        const fetchedEvents = result.items ?? []
         setEvents(fetchedEvents)
 
         if (fetchedEvents.length > 0) {
@@ -104,14 +107,36 @@ export default function AdminQrPage() {
     }
   }
 
+  async function handleCopyQrUrl() {
+    if (!qrUrl) {
+      alert('복사할 QR 링크가 없습니다.')
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(qrUrl)
+      alert('QR 링크가 복사되었습니다.')
+    } catch {
+      setErrorMessage('QR 링크 복사에 실패했습니다.')
+    }
+  }
+
   async function handleCreateQr() {
     setMessage('')
     setErrorMessage('')
     setQrUrl('')
     setQrImageUrl('')
+    setIsQrModalOpen(false)
 
     if (!eventId) {
       setErrorMessage('이벤트를 선택해주세요.')
+      return
+    }
+
+    const minutes = Number(expireMinutes)
+
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 360) {
+      setErrorMessage('QR 유효 시간은 1~360분 사이 정수여야 합니다.')
       return
     }
 
@@ -124,7 +149,7 @@ export default function AdminQrPage() {
         credentials: 'include',
         body: JSON.stringify({
           event_id: eventId,
-          expire_minutes: Number(expireMinutes),
+          expire_minutes: minutes,
         }),
       })
 
@@ -132,23 +157,20 @@ export default function AdminQrPage() {
       const result: QrCreateResponse = text ? JSON.parse(text) : {}
 
       if (!response.ok) {
-        setErrorMessage(result?.error || 'QR 생성에 실패했습니다.')
+        setErrorMessage(result.error || 'QR 생성에 실패했습니다.')
         return
       }
 
-      const token = result.qr_token?.token
-      if (!token) {
-        setErrorMessage('QR 토큰이 응답에 없습니다.')
+      // 핵심: token을 직접 조합하지 않고 백엔드 qr_url만 사용
+      if (!result.qr_url) {
+        setErrorMessage('QR 링크가 응답에 없습니다.')
         return
       }
 
-      const origin = window.location.origin
-      const scanUrl = `${origin}/attendance/scan?token=${token}`
+      setQrUrl(result.qr_url)
+      setMessage(result.message || 'QR이 생성되었습니다.')
 
-      setQrUrl(scanUrl)
-      setMessage(result?.message || 'QR이 생성되었습니다.')
-
-      const dataUrl = await QRCode.toDataURL(scanUrl, {
+      const dataUrl = await QRCode.toDataURL(result.qr_url, {
         width: 280,
         margin: 2,
       })
@@ -185,7 +207,12 @@ export default function AdminQrPage() {
         <select
           value={eventId}
           onChange={(e) => setEventId(e.target.value)}
-          style={{ width: '100%', padding: '10px', marginBottom: '12px', boxSizing: 'border-box' }}
+          style={{
+            width: '100%',
+            padding: '10px',
+            marginBottom: '12px',
+            boxSizing: 'border-box',
+          }}
         >
           {events.map((item) => (
             <option key={item.id} value={item.id}>
@@ -204,10 +231,15 @@ export default function AdminQrPage() {
         <input
           type="number"
           min="1"
-          max="60"
+          max="360"
           value={expireMinutes}
           onChange={(e) => setExpireMinutes(e.target.value)}
-          style={{ width: '100%', padding: '10px', marginBottom: '16px', boxSizing: 'border-box' }}
+          style={{
+            width: '100%',
+            padding: '10px',
+            marginBottom: '16px',
+            boxSizing: 'border-box',
+          }}
         />
 
         <button type="button" onClick={handleCreateQr} disabled={submitLoading}>
@@ -221,9 +253,64 @@ export default function AdminQrPage() {
           <div style={{ marginTop: '24px' }}>
             <img src={qrImageUrl} alt="QR Code" />
             <p style={{ wordBreak: 'break-all' }}>{qrUrl}</p>
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+              <button type="button" onClick={handleCopyQrUrl}>
+                QR 링크 복사
+              </button>
+
+              <button type="button" onClick={() => setIsQrModalOpen(true)}>
+                QR 크게보기
+              </button>
+            </div>
           </div>
         )}
       </div>
+
+      {isQrModalOpen && qrImageUrl && (
+        <div
+          onClick={() => setIsQrModalOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            background: 'rgba(0, 0, 0, 0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              padding: '24px',
+              borderRadius: '16px',
+              textAlign: 'center',
+              maxWidth: '520px',
+              width: '100%',
+            }}
+          >
+            <img
+              src={qrImageUrl}
+              alt="QR Code Large"
+              style={{
+                width: '420px',
+                height: '420px',
+                maxWidth: '80vw',
+                maxHeight: '80vw',
+              }}
+            />
+
+            <p style={{ wordBreak: 'break-all', marginTop: '12px' }}>{qrUrl}</p>
+
+            <button type="button" onClick={() => setIsQrModalOpen(false)}>
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
