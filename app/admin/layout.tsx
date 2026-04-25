@@ -82,7 +82,7 @@ export default async function AdminLayout({ children }: Props) {
             {user.role === 'admin' && (
               <>
                 <Link href="/admin" style={navLinkStyle}>
-                  관리자 홈
+                  월별 출석 현황
                 </Link>
                 <Link href="/admin/admin-only/attendance-today" style={navLinkStyle}>
         오늘 출석 운영

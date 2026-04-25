@@ -85,7 +85,7 @@ export default function LoginClient() {
       void handleLogin()
     }
   }
-
+/*
   return (
     <div style={{ padding: 0 }}>
       <h2>출석 로그인</h2>
@@ -139,6 +139,83 @@ export default function LoginClient() {
             color: '#ff4d4f',
             fontSize: '13px',
             margin: 0,
+            fontWeight: '500',
+          }}
+        >
+          ⚠️ {errorMessage}
+        </p>
+      )}
+    </div>
+  )
+    */
+
+  return (
+    <div style={{ 
+      padding: '20px', 
+      display: 'flex',          // Flexbox 활성화
+      flexDirection: 'column',  // 세로 방향으로 나열
+      gap: '10px',             // 요소들 사이의 일정한 간격 (margin 대신 사용 권장)
+      maxWidth: '300px'         // 로그인 폼이 너무 넓어지지 않도록 제한 (선택 사항)
+    }}>
+      <h2 style={{ margin: '0 0 10px 0' }}>출석 로그인</h2>
+
+      <input
+        style={{ 
+          padding: '10px',
+          borderRadius: '4px',
+          border: '1px solid #ccc'
+        }}
+        placeholder="학번"
+        type="text"
+        value={studentId}
+        onChange={(e) => {
+          setStudentId(e.target.value)
+          if (errorMessage) setErrorMessage('')
+        }}
+        autoComplete="username"
+      />
+
+      <input
+        style={{ 
+          padding: '10px',
+          borderRadius: '4px',
+          border: '1px solid #ccc'
+        }}
+        placeholder="비밀번호"
+        type="password"
+        value={password}
+        onChange={(e) => {
+          setPassword(e.target.value)
+          if (errorMessage) setErrorMessage('')
+        }}
+        onKeyDown={handlePasswordKeyDown}
+        autoComplete="current-password"
+      />
+
+      <button
+        type="button"
+        onClick={() => void handleLogin()}
+        disabled={loading}
+        style={{
+          padding: '12px',
+          borderRadius: '5px',
+          backgroundColor: '#0070f3',
+          color: 'white',
+          border: 'none',
+          cursor: loading ? 'not-allowed' : 'pointer',
+          opacity: loading ? 0.7 : 1,
+          fontWeight: 'bold'
+        }}
+      >
+        {loading ? '로그인 중...' : '로그인'}
+      </button>
+
+      {errorMessage && (
+        <p
+          style={{
+            color: '#ff4d4f',
+            fontSize: '13px',
+            margin: '5px 0 0 0',
             fontWeight: '500',
           }}
         >

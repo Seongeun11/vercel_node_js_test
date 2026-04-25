@@ -5,6 +5,8 @@ import { getSessionProfile } from '@/lib/server-session'
 import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
 import { hashQrToken } from '@/lib/security/qr-token'
+import { checkRateLimit } from '@/lib/rate-limit'
+
 
 type AttendanceCheckResponse = {
   success?: boolean
@@ -54,7 +56,31 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: session.status }
       )
     }
+    /**
+     * 출석 체크 Rate Limit
+     * - 사용자 ID 기준
+     * - 1분에 최대 10회
+     * - QR 토큰 검증/DB 조회 전에 차단하여 서버 부하 방지
+     */
+    const rateLimit = await checkRateLimit(
+      `attendance-check:user:${session.profile.id}`,
+      10,
+      60
+    )
 
+    if (!rateLimit.ok) {
+      return jsonNoStore<AttendanceCheckResponse>(
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(rateLimit.resetInSeconds),
+            'X-RateLimit-Remaining': String(rateLimit.remaining),
+            'X-RateLimit-Reset': String(rateLimit.resetInSeconds),
+          },
+        }
+      )
+    }
     const body = (await request.json()) as AttendanceCheckRequest
     //const token = typeof body?.token === 'string' ? body.token.trim() : ''
     // 요청 토큰
@@ -78,6 +104,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       .is('deleted_at', null)
       .maybeSingle()
 
+    
     if (qrError) {
       console.error('[attendance/check] qr query error:', qrError)
       return jsonNoStore<AttendanceCheckResponse>(
@@ -201,10 +228,10 @@ export async function POST(request: NextRequest): Promise<Response> {
         .maybeSingle()
 
     if (existingAttendanceError) {
-      console.error(
+      /*console.error(
         '[attendance/check] existing attendance query error:',
         existingAttendanceError
-      )
+      )*/
       return jsonNoStore<AttendanceCheckResponse>(
         { error: '기존 출석 조회에 실패했습니다.' },
         { status: 500 }
@@ -233,7 +260,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       })
 
     if (insertError) {
-      console.error('[attendance/check] insert error:', insertError)
+      //console.error('[attendance/check] insert error:', insertError)
 
       const message = insertError.message?.toLowerCase() ?? ''
       const code = insertError.code ?? ''
@@ -272,7 +299,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
-    console.error('[attendance/check] unexpected error:', error)
+    //console.error('[attendance/check] unexpected error:', error)
     return jsonNoStore<AttendanceCheckResponse>(
       { error: '서버 오류가 발생했습니다.' },
       { status: 500 }

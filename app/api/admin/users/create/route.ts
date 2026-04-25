@@ -282,5 +282,9 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       )
     }
+    return jsonNoStore(
+      { error: '서버 오류가 발생했습니다.' },
+      { status: 500 }
+    )
   }
 }
