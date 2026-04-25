@@ -1,4 +1,5 @@
 // app/api/event-occurrences/ensure-today/today/route.ts
+// 화면 표시전 최종필터
 import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
@@ -6,58 +7,76 @@ import { jsonNoStore } from '@/lib/security/api-response'
 
 type WeekdayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 type RecurrenceType = 'none' | 'daily'
+type OccurrenceStatus = 'scheduled' | 'open' | 'closed' | 'archived'
+
+type TodayOccurrenceItem = {
+  id: string
+  event_id: string
+  occurrence_date: string
+  start_time: string
+  end_time: string | null
+  status: OccurrenceStatus
+  created_at: string
+  updated_at: string
+  events: {
+    id: string
+    name: string
+    start_time: string
+    late_threshold_min: number
+    allow_duplicate_check: boolean
+    is_special_event: boolean
+    recurrence_type: RecurrenceType
+    recurrence_days: WeekdayCode[]
+    is_active: boolean
+  } | null
+}
 
 type TodayOccurrenceResponse = {
   date?: string
-  items?: {
-    id: string
-    event_id: string
-    occurrence_date: string
-    start_time: string
-    end_time: string | null
-    status: 'scheduled' | 'open' | 'closed' | 'archived'
-    created_at: string
-    updated_at: string
-    events: {
-      id: string
-      name: string
-      start_time: string
-      late_threshold_min: number
-      allow_duplicate_check: boolean
-      is_special_event: boolean
-      recurrence_type: RecurrenceType
-      recurrence_days: WeekdayCode[]
-      is_active: boolean
-    } | null
-  }[]
+  weekday?: WeekdayCode
+  items?: TodayOccurrenceItem[]
   error?: string
 }
 
+const SEOUL_TIME_ZONE = 'Asia/Seoul'
+const WEEKDAY_CODES: WeekdayCode[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+
 function getKstTodayDateString(date = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Seoul',
+    timeZone: SEOUL_TIME_ZONE,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
   }).format(date)
 }
 
-function normalizeRecurrenceDays(input: unknown): WeekdayCode[] {
-  const allowed: WeekdayCode[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+function getKstWeekdayCode(date = new Date()): WeekdayCode {
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: SEOUL_TIME_ZONE,
+    weekday: 'short',
+  }).format(date)
 
+  const map: Record<string, WeekdayCode> = {
+    Mon: 'mon',
+    Tue: 'tue',
+    Wed: 'wed',
+    Thu: 'thu',
+    Fri: 'fri',
+    Sat: 'sat',
+    Sun: 'sun',
+  }
+
+  return map[weekday] ?? 'mon'
+}
+
+function normalizeRecurrenceDays(input: unknown): WeekdayCode[] {
   if (!Array.isArray(input)) return []
 
   const unique = Array.from(
-    new Set(
-      input
-        .map((value) => String(value).trim().toLowerCase())
-        .filter((value): value is WeekdayCode =>
-          allowed.includes(value as WeekdayCode)
-        )
-    )
+    new Set(input.map((value) => String(value).trim().toLowerCase()))
   )
 
-  return allowed.filter((day) => unique.includes(day))
+  return WEEKDAY_CODES.filter((day) => unique.includes(day))
 }
 
 export async function GET(_request: NextRequest): Promise<Response> {
@@ -72,6 +91,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
     }
 
     const todayKstDate = getKstTodayDateString()
+    const todayWeekday = getKstWeekdayCode()
 
     const { data, error } = await supabaseAdmin
       .from('event_occurrences')
@@ -97,6 +117,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
         )
       `)
       .eq('occurrence_date', todayKstDate)
+      .neq('status', 'archived')
       .order('start_time', { ascending: true })
 
     if (error) {
@@ -108,12 +129,23 @@ export async function GET(_request: NextRequest): Promise<Response> {
       )
     }
 
-    const items =
-      Array.isArray(data)
-        ? data.map((row: any) => {
+    const items: TodayOccurrenceItem[] = Array.isArray(data)
+      ? data
+          .map((row: any): TodayOccurrenceItem | null => {
             const event = Array.isArray(row.events)
               ? row.events[0] ?? null
               : row.events ?? null
+
+            if (!event) return null
+
+            const recurrenceType = (event.recurrence_type ?? 'none') as RecurrenceType
+            const recurrenceDays = normalizeRecurrenceDays(event.recurrence_days)
+            const isActive = Boolean(event.is_active)
+
+            // 이벤트가 비활성화되었거나 오늘 요일 대상이 아니면 목록에서 제외
+            if (!isActive) return null
+            if (recurrenceType !== 'daily') return null
+            if (!recurrenceDays.includes(todayWeekday)) return null
 
             return {
               id: row.id,
@@ -121,28 +153,28 @@ export async function GET(_request: NextRequest): Promise<Response> {
               occurrence_date: row.occurrence_date,
               start_time: row.start_time,
               end_time: row.end_time,
-              status: row.status,
+              status: row.status as OccurrenceStatus,
               created_at: row.created_at,
               updated_at: row.updated_at,
-              events: event
-                ? {
-                    id: event.id,
-                    name: event.name,
-                    start_time: event.start_time,
-                    late_threshold_min: event.late_threshold_min,
-                    allow_duplicate_check: Boolean(event.allow_duplicate_check),
-                    is_special_event: Boolean(event.is_special_event),
-                    recurrence_type: (event.recurrence_type ?? 'none') as RecurrenceType,
-                    recurrence_days: normalizeRecurrenceDays(event.recurrence_days),
-                    is_active: Boolean(event.is_active),
-                  }
-                : null,
+              events: {
+                id: event.id,
+                name: event.name,
+                start_time: event.start_time,
+                late_threshold_min: event.late_threshold_min,
+                allow_duplicate_check: Boolean(event.allow_duplicate_check),
+                is_special_event: Boolean(event.is_special_event),
+                recurrence_type: recurrenceType,
+                recurrence_days: recurrenceDays,
+                is_active: isActive,
+              },
             }
           })
-        : []
+          .filter((item): item is TodayOccurrenceItem => item !== null)
+      : []
 
     return jsonNoStore<TodayOccurrenceResponse>({
       date: todayKstDate,
+      weekday: todayWeekday,
       items,
     })
   } catch (error) {

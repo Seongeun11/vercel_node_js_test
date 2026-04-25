@@ -2,6 +2,8 @@
 import { NextRequest } from 'next/server'
 import { getSessionProfile } from '@/lib/server-session'
 import { jsonNoStore } from '@/lib/security/api-response'
+type WeekdayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
+
 
 type EventItem = {
   id: string
@@ -11,6 +13,7 @@ type EventItem = {
   allow_duplicate_check: boolean
   is_special_event: boolean
   recurrence_type: 'none' | 'daily'
+  recurrence_days: WeekdayCode[]
   is_active: boolean
   created_at: string
   updated_at: string
@@ -19,6 +22,7 @@ type EventsListResponse = {
   items?: EventItem[]
   error?: string
 }
+const WEEKDAY_CODES: WeekdayCode[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 
 function parseBooleanParam(value: string | null): boolean | null {
   if (value === null) return null
@@ -26,7 +30,15 @@ function parseBooleanParam(value: string | null): boolean | null {
   if (value === 'false') return false
   return null
 }
+function normalizeRecurrenceDays(input: unknown): WeekdayCode[] {
+  if (!Array.isArray(input)) return []
 
+  const unique = Array.from(
+    new Set(input.map((value) => String(value).trim().toLowerCase()))
+  )
+
+  return WEEKDAY_CODES.filter((day) => unique.includes(day))
+}
 export async function GET(request: NextRequest): Promise<Response> {
   const session = await getSessionProfile(['admin'])
 
@@ -51,6 +63,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     allow_duplicate_check,
     is_special_event,
     recurrence_type,
+    recurrence_days,
     is_active,
     created_at,
     updated_at
@@ -82,6 +95,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       allow_duplicate_check: event.allow_duplicate_check,
       is_special_event: event.is_special_event,
       recurrence_type: event.recurrence_type,
+      recurrence_days: normalizeRecurrenceDays(event.recurrence_days),
       is_active: event.is_active,
       created_at: event.created_at,
       updated_at: event.updated_at,

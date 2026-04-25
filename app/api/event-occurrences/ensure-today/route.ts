@@ -1,4 +1,5 @@
 // app/api/event-occurrences/ensure-today/route.ts
+// DB정리하는 역할
 import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
@@ -6,6 +7,23 @@ import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
 
 const SEOUL_TIME_ZONE = 'Asia/Seoul'
+
+type WeekdayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
+
+type DailyEventRow = {
+  id: string
+  name: string
+  start_time: string
+  recurrence_type: 'none' | 'daily'
+  recurrence_days: WeekdayCode[] | null
+  is_active: boolean
+}
+
+type TodayOccurrenceRow = {
+  id: string
+  event_id: string
+  status: 'scheduled' | 'open' | 'closed' | 'archived'
+}
 
 function getSeoulDateParts(date: Date) {
   const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -39,17 +57,33 @@ function getTodayInSeoul(): string {
   return `${year}-${month}-${day}`
 }
 
+function getTodayWeekdayInSeoul(): WeekdayCode {
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: SEOUL_TIME_ZONE,
+    weekday: 'short',
+  }).format(new Date())
+
+  const map: Record<string, WeekdayCode> = {
+    Mon: 'mon',
+    Tue: 'tue',
+    Wed: 'wed',
+    Thu: 'thu',
+    Fri: 'fri',
+    Sat: 'sat',
+    Sun: 'sun',
+  }
+
+  return map[weekday] ?? 'mon'
+}
+
 function buildOccurrenceStart(baseIso: string, targetDate: string): string {
-  // baseIso에 저장된 "시:분:초"를 유지하되, targetDate 날짜로 회차 생성
-  // 운영 기준을 Asia/Seoul로 고정
   const base = new Date(baseIso)
+
   if (Number.isNaN(base.getTime())) {
     throw new Error('INVALID_EVENT_START_TIME')
   }
 
   const { hour, minute, second } = getSeoulDateParts(base)
-
-  // 서울 기준 targetDate HH:mm:ss 를 UTC ISO로 변환
   const seoulLocalIso = `${targetDate}T${hour}:${minute}:${second}+09:00`
   const localDate = new Date(seoulLocalIso)
 
@@ -60,12 +94,14 @@ function buildOccurrenceStart(baseIso: string, targetDate: string): string {
   return localDate.toISOString()
 }
 
-type DailyEventRow = {
-  id: string
-  name: string
-  start_time: string
-  recurrence_type: 'none' | 'daily'
-  is_active: boolean
+function normalizeRecurrenceDays(days: unknown): WeekdayCode[] {
+  const validDays: WeekdayCode[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+
+  if (!Array.isArray(days)) return []
+
+  const unique = Array.from(new Set(days.map((day) => String(day).trim())))
+
+  return validDays.filter((day) => unique.includes(day))
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
@@ -73,6 +109,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     assertSameOrigin(request)
 
     const authResult = await requireRole(['admin'])
+
     if (!authResult.ok) {
       return jsonNoStore(
         { error: authResult.error },
@@ -81,10 +118,18 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const today = getTodayInSeoul()
+    const todayWeekday = getTodayWeekdayInSeoul()
 
     const { data: events, error: eventsError } = await supabaseAdmin
       .from('events')
-      .select('id, name, start_time, recurrence_type, is_active')
+      .select(`
+        id,
+        name,
+        start_time,
+        recurrence_type,
+        recurrence_days,
+        is_active
+      `)
       .eq('is_active', true)
       .eq('recurrence_type', 'daily')
 
@@ -95,64 +140,132 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
+    const targetEvents = ((events ?? []) as DailyEventRow[]).filter((event) => {
+      const recurrenceDays = normalizeRecurrenceDays(event.recurrence_days)
+      return recurrenceDays.includes(todayWeekday)
+    })
+
+    const targetEventIdSet = new Set(targetEvents.map((event) => event.id))
+
+    // 오늘 요일에서 제외된 기존 회차 정리
+    const { data: todayOccurrences, error: cleanupQueryError } = await supabaseAdmin
+      .from('event_occurrences')
+      .select('id, event_id, status')
+      .eq('occurrence_date', today)
+      .neq('status', 'archived')
+
+    if (cleanupQueryError) {
+      return jsonNoStore(
+        { error: '오늘 회차 정리 조회에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
+
+    const staleOccurrenceIds = ((todayOccurrences ?? []) as TodayOccurrenceRow[])
+      .filter((occurrence) => !targetEventIdSet.has(occurrence.event_id))
+      .filter((occurrence) => occurrence.status !== 'closed')
+      .map((occurrence) => occurrence.id)
+
+    if (staleOccurrenceIds.length > 0) {
+      const { error: archiveError } = await supabaseAdmin
+        .from('event_occurrences')
+        .update({ status: 'archived' })
+        .in('id', staleOccurrenceIds)
+
+      if (archiveError) {
+        return jsonNoStore(
+          { error: '요일에서 제외된 오늘 회차 정리에 실패했습니다.' },
+          { status: 500 }
+        )
+      }
+    }
+
     const created: string[] = []
     const skipped: string[] = []
     const failed: Array<{ event_id: string; reason: string }> = []
 
-    for (const event of (events ?? []) as DailyEventRow[]) {
+    for (const event of targetEvents) {
       try {
         const startTime = buildOccurrenceStart(event.start_time, today)
 
-        // unique(event_id, occurrence_date)를 전제로 upsert 사용
-        const { data: upserted, error: upsertError } = await supabaseAdmin
+        const { data: existingOccurrence, error: existingError } = await supabaseAdmin
           .from('event_occurrences')
-          .upsert(
-            {
-              event_id: event.id,
-              occurrence_date: today,
-              start_time: startTime,
-              status: 'open',
-            },
-            {
-              onConflict: 'event_id,occurrence_date',
-              ignoreDuplicates: false,
-            }
-          )
-          .select('id, event_id')
-          .single()
+          .select('id, status')
+          .eq('event_id', event.id)
+          .eq('occurrence_date', today)
+          .maybeSingle()
 
-        if (upsertError) {
+        if (existingError) {
           failed.push({
             event_id: event.id,
-            reason: upsertError.message,
+            reason: existingError.message,
           })
           continue
         }
 
-        // 이미 있었는지 여부를 정확히 구분하려면 한 번 더 확인하는 방식도 가능하지만,
-        // 지금은 "존재하지 않으면 생성, 있으면 유지"가 목적이라 성공 처리
-        if (upserted?.event_id) {
-          created.push(event.id)
-        } else {
+        if (existingOccurrence) {
+          if (existingOccurrence.status === 'archived') {
+            const { error: reopenError } = await supabaseAdmin
+              .from('event_occurrences')
+              .update({
+                start_time: startTime,
+                status: 'open',
+              })
+              .eq('id', existingOccurrence.id)
+
+            if (reopenError) {
+              failed.push({
+                event_id: event.id,
+                reason: reopenError.message,
+              })
+              continue
+            }
+
+            created.push(event.id)
+            continue
+          }
+
           skipped.push(event.id)
+          continue
         }
+
+        const { error: insertError } = await supabaseAdmin
+          .from('event_occurrences')
+          .insert({
+            event_id: event.id,
+            occurrence_date: today,
+            start_time: startTime,
+            status: 'open',
+          })
+
+        if (insertError) {
+          failed.push({
+            event_id: event.id,
+            reason: insertError.message,
+          })
+          continue
+        }
+
+        created.push(event.id)
       } catch (error) {
         failed.push({
           event_id: event.id,
-          reason:
-            error instanceof Error ? error.message : 'UNKNOWN_ERROR',
+          reason: error instanceof Error ? error.message : 'UNKNOWN_ERROR',
         })
       }
     }
 
     return jsonNoStore(
       {
-        message: '오늘 회차 생성 완료',
+        message: '오늘 회차 동기화가 완료되었습니다.',
         date: today,
+        weekday: todayWeekday,
         created_count: created.length,
         created_event_ids: created,
         skipped_count: skipped.length,
         skipped_event_ids: skipped,
+        archived_count: staleOccurrenceIds.length,
+        archived_occurrence_ids: staleOccurrenceIds,
         failed_count: failed.length,
         failed,
       },

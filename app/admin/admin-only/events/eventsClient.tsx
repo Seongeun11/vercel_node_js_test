@@ -70,8 +70,10 @@ function normalizeRecurrenceDays(days: unknown): WeekdayCode[] {
   )
 }
 
-function formatRecurrenceDays(days: WeekdayCode[]) {
-  if (!days.length) return '반복 없음'
+function formatRecurrenceDays(days: WeekdayCode[] | null | undefined) {
+  const normalizedDays = normalizeRecurrenceDays(days)
+
+  if (normalizedDays.length === 0) return '반복 없음'
 
   const labelMap: Record<WeekdayCode, string> = {
     mon: '월',
@@ -83,7 +85,7 @@ function formatRecurrenceDays(days: WeekdayCode[]) {
     sun: '일',
   }
 
-  return days.map((day) => labelMap[day]).join(', ')
+  return normalizedDays.map((day) => labelMap[day]).join(', ')
 }
 
 export default function EventsClient() {
@@ -492,7 +494,7 @@ export default function EventsClient() {
                     <tr key={event.id}>
                       <td style={tdStyle}>{event.name}</td>
                       <td style={tdStyle}>{new Date(event.start_time).toLocaleString()}</td>
-                      <td style={tdStyle}>{formatRecurrenceDays(days)}</td>
+                      <td style={tdStyle}>{formatRecurrenceDays(event.recurrence_days)}</td>
                       <td style={tdStyle}>{event.late_threshold_min}분</td>
                       <td style={tdStyle}>{event.is_special_event ? '예' : '아니오'}</td>
                       <td style={tdStyle}>{event.allow_duplicate_check ? '허용' : '불가'}</td>

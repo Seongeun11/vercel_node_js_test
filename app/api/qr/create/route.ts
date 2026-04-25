@@ -134,7 +134,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const nowIso = new Date().toISOString()
-
+/*
     // ✅ 새 QR 생성 전에 기존 활성 QR 자동 만료
     const { error: expirePreviousError } = await supabaseAdmin
       .from('qr_tokens')
@@ -148,6 +148,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 500 }
       )
     }
+      */
 
     //const token = crypto.randomBytes(24).toString('hex')
     const rawToken = generateQrToken()
