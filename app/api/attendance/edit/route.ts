@@ -65,8 +65,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     const authResult = await requireRole(['admin'])
     if (!authResult.ok || !authResult.user) {
       return jsonNoStore<EditAttendanceResponse>(
-        { error: authResult.error },
-        { status: authResult.status }
+        { error: '인증이 필요합니다.' },
+      { status: 401 }
       )
     }
 

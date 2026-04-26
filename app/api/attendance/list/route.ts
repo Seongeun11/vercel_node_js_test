@@ -72,8 +72,8 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   if (!session.ok) {
     return jsonNoStore<AttendanceListResponse>(
-      { error: session.error },
-      { status: session.status }
+      { error: '인증이 필요합니다.' },
+      { status: 401 }
     )
   }
 

@@ -69,6 +69,19 @@ function formatAction(action: LogAction) {
   }
 }
 
+function formatRole(role: ProfileMeta['role'] | null | undefined) {
+  switch (role) {
+    case 'admin':
+      return '관리자'
+    case 'captain':
+      return '캡틴'
+    case 'trainee':
+      return '수련생'
+    default:
+      return '-'
+  }
+}
+
 function stringifySafe(value: unknown) {
   try {
     return JSON.stringify(value ?? {}, null, 2)
@@ -82,6 +95,61 @@ function getStatusLabel(value: unknown) {
   if (value === 'late') return '지각'
   if (value === 'absent') return '결석'
   return String(value ?? '-')
+}
+
+function formatFieldName(key: string): string {
+  const labelMap: Record<string, string> = {
+    status: '출석 상태',
+    check_time: '체크 시각',
+    attendance_date: '출석 날짜',
+    date: '날짜',
+    method: '출석 방식',
+    reason: '사유',
+    event_id: '이벤트',
+    user_id: '사용자',
+    target_user_id: '대상 사용자',
+    changed_by: '변경자',
+    occurrence_id: '회차',
+    attendance_id: '출석 기록',
+  }
+
+  return labelMap[key] ?? key
+}
+
+function formatFieldValue(key: string, value: unknown): string {
+  if (key === 'status') return getStatusLabel(value)
+
+  if (key.includes('time') && typeof value === 'string') {
+    return formatDateTime(value)
+  }
+
+  if (value === null || value === undefined || value === '') return '-'
+
+  if (typeof value === 'object') {
+    return stringifySafe(value)
+  }
+
+  return String(value)
+}
+
+function buildLogTitle(item: AttendanceLogItem): string {
+  const targetName = item.target_user_profile?.full_name ?? '알 수 없는 사용자'
+  const eventName = item.event_meta?.name ?? '알 수 없는 이벤트'
+
+  switch (item.action) {
+    case 'create':
+      return `${targetName}님의 ${eventName} 출석 기록이 생성되었습니다.`
+    case 'update':
+      return `${targetName}님의 ${eventName} 출석 기록이 수정되었습니다.`
+    case 'correct':
+      return `${targetName}님의 ${eventName} 출석 기록이 정정되었습니다.`
+    case 'mark_absent':
+      return `${targetName}님이 ${eventName}에서 결석 처리되었습니다.`
+    case 'delete':
+      return `${targetName}님의 ${eventName} 출석 기록이 삭제되었습니다.`
+    default:
+      return `${targetName}님의 출석 로그가 기록되었습니다.`
+  }
 }
 
 function extractChangedFields(
@@ -98,7 +166,6 @@ function extractChangedFields(
       const before = beforeValue?.[key]
       const after = afterValue?.[key]
 
-      // 값 변화가 없는 필드는 제외
       if (JSON.stringify(before) === JSON.stringify(after)) {
         return null
       }
@@ -121,7 +188,6 @@ export default function AdminAttendanceLogsPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>('')
 
-  // 필터 상태
   const [eventId, setEventId] = useState('')
   const [targetUserId, setTargetUserId] = useState('')
   const [changedBy, setChangedBy] = useState('')
@@ -140,6 +206,7 @@ export default function AdminAttendanceLogsPage() {
       if (changedBy.trim()) params.set('changed_by', changedBy.trim())
       if (dateFrom.trim()) params.set('date_from', dateFrom.trim())
       if (dateTo.trim()) params.set('date_to', dateTo.trim())
+
       params.set('limit', '100')
 
       const response = await fetch(`/api/logs?${params.toString()}`, {
@@ -189,90 +256,49 @@ export default function AdminAttendanceLogsPage() {
     <main style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '8px' }}>
-          출석 로그
+          출석 감사 로그
         </h1>
         <p style={{ color: '#666', margin: 0 }}>
-          관리자 전용 감사 로그 조회 페이지입니다.
+          출석 생성, 수정, 정정, 결석 처리, 삭제 이력을 확인합니다.
         </p>
       </div>
 
-      {/* 필터 영역 */}
-      <section
-        style={{
-          border: '1px solid #e5e7eb',
-          borderRadius: '12px',
-          padding: '16px',
-          marginBottom: '20px',
-          background: '#fff',
-        }}
-      >
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: '12px',
-            marginBottom: '12px',
-          }}
-        >
-          <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>
-              이벤트 ID
-            </label>
-            <input
-              value={eventId}
-              onChange={(e) => setEventId(e.target.value)}
-              placeholder="event_id"
-              style={inputStyle}
-            />
-          </div>
+      <section style={filterPanelStyle}>
+        <div style={filterGridStyle}>
+          <FilterInput
+            label="이벤트 ID"
+            value={eventId}
+            onChange={setEventId}
+            placeholder="event_id"
+          />
 
-          <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>
-              대상 사용자 ID
-            </label>
-            <input
-              value={targetUserId}
-              onChange={(e) => setTargetUserId(e.target.value)}
-              placeholder="target_user_id"
-              style={inputStyle}
-            />
-          </div>
+          <FilterInput
+            label="대상 사용자 ID"
+            value={targetUserId}
+            onChange={setTargetUserId}
+            placeholder="target_user_id"
+          />
 
-          <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>
-              변경자 ID
-            </label>
-            <input
-              value={changedBy}
-              onChange={(e) => setChangedBy(e.target.value)}
-              placeholder="changed_by"
-              style={inputStyle}
-            />
-          </div>
+          <FilterInput
+            label="변경자 ID"
+            value={changedBy}
+            onChange={setChangedBy}
+            placeholder="changed_by"
+          />
 
-          <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>
-              시작일
-            </label>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              style={inputStyle}
-            />
-          </div>
+          <FilterInput
+            label="시작일"
+            type="date"
+            value={dateFrom}
+            onChange={setDateFrom}
+          />
 
-          <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>
-              종료일
-            </label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              style={inputStyle}
-            />
-          </div>
+          <FilterInput
+            label="종료일"
+            type="date"
+            value={dateTo}
+            onChange={setDateTo}
+          />
         </div>
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -281,37 +307,30 @@ export default function AdminAttendanceLogsPage() {
           </button>
 
           <button
-            onClick={() => {
-              resetFilters()
-            }}
-            style={secondaryButtonStyle}
-            disabled={!hasActiveFilter}
-          >
-            필터 초기화
-          </button>
+  type="button"
+  onClick={() => {
+    if (!hasActiveFilter) return
+    resetFilters()
+  }}
+  style={{
+    ...secondaryButtonStyle,
+    opacity: hasActiveFilter ? 1 : 0.5,
+    cursor: hasActiveFilter ? 'pointer' : 'not-allowed',
+  }}
+>
+  필터 초기화
+</button>
         </div>
       </section>
 
-      {/* 상태 표시 */}
-      {loading && (
-        <div style={infoBoxStyle}>
-          로그를 불러오는 중입니다...
-        </div>
-      )}
+      {loading && <div style={infoBoxStyle}>로그를 불러오는 중입니다...</div>}
 
-      {!loading && error && (
-        <div style={errorBoxStyle}>
-          {error}
-        </div>
-      )}
+      {!loading && error && <div style={errorBoxStyle}>{error}</div>}
 
       {!loading && !error && items.length === 0 && (
-        <div style={infoBoxStyle}>
-          조회된 로그가 없습니다.
-        </div>
+        <div style={infoBoxStyle}>조회된 로그가 없습니다.</div>
       )}
 
-      {/* 로그 목록 */}
       {!loading && !error && items.length > 0 && (
         <section style={{ display: 'grid', gap: '16px' }}>
           {items.map((item) => {
@@ -321,154 +340,92 @@ export default function AdminAttendanceLogsPage() {
             )
 
             return (
-              <article
-                key={item.id}
-                style={{
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '14px',
-                  padding: '18px',
-                  background: '#fff',
-                }}
-              >
-                {/* 헤더 */}
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    gap: '12px',
-                    flexWrap: 'wrap',
-                    marginBottom: '14px',
-                  }}
-                >
+              <article key={item.id} style={logCardStyle}>
+                <div style={cardHeaderStyle}>
                   <div>
-                    <div style={{ fontSize: '18px', fontWeight: 800 }}>
-                      {formatAction(item.action)}
-                    </div>
-                    <div style={{ color: '#666', marginTop: '4px', fontSize: '14px' }}>
-                      로그 ID: {item.id}
+                    <div style={logTitleStyle}>{buildLogTitle(item)}</div>
+
+                    <div style={logSubTextStyle}>
+                      작업 유형: {formatAction(item.action)}
                     </div>
                   </div>
 
                   <div style={{ textAlign: 'right', color: '#666', fontSize: '14px' }}>
                     <div>변경 시각</div>
-                    <div style={{ fontWeight: 600, color: '#111' }}>
+                    <div style={{ fontWeight: 700, color: '#111' }}>
                       {formatDateTime(item.changed_at)}
                     </div>
                   </div>
                 </div>
 
-                {/* 기본 정보 */}
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                    gap: '12px',
-                    marginBottom: '16px',
-                  }}
-                >
-                  <div style={metaCardStyle}>
-                    <div style={metaTitleStyle}>이벤트</div>
-                    <div style={metaValueStyle}>
-                      {item.event_meta?.name ?? '알 수 없음'}
-                    </div>
-                    <div style={metaSubStyle}>ID: {item.event_id || '-'}</div>
-                  </div>
+                <div style={metaGridStyle}>
+                  <MetaCard
+                    title="이벤트"
+                    value={item.event_meta?.name ?? '알 수 없음'}
+                    subTexts={[
+                      `날짜: ${item.date || '-'}`,
+                      `시작: ${formatDateTime(item.event_meta?.start_time)}`,
+                    ]}
+                  />
 
-                  <div style={metaCardStyle}>
-                    <div style={metaTitleStyle}>대상 사용자</div>
-                    <div style={metaValueStyle}>
-                      {item.target_user_profile?.full_name ?? '알 수 없음'}
-                    </div>
-                    <div style={metaSubStyle}>
-                      학번: {item.target_user_profile?.student_id ?? '-'}
-                    </div>
-                    <div style={metaSubStyle}>
-                      역할: {item.target_user_profile?.role ?? '-'}
-                    </div>
-                  </div>
+                  <MetaCard
+                    title="대상 사용자"
+                    value={item.target_user_profile?.full_name ?? '알 수 없음'}
+                    subTexts={[
+                      `학번: ${item.target_user_profile?.student_id ?? '-'}`,
+                      `역할: ${formatRole(item.target_user_profile?.role)}`,
+                    ]}
+                  />
 
-                  <div style={metaCardStyle}>
-                    <div style={metaTitleStyle}>변경자</div>
-                    <div style={metaValueStyle}>
-                      {item.changed_by_profile?.full_name ?? '시스템/알 수 없음'}
-                    </div>
-                    <div style={metaSubStyle}>
-                      학번: {item.changed_by_profile?.student_id ?? '-'}
-                    </div>
-                    <div style={metaSubStyle}>
-                      역할: {item.changed_by_profile?.role ?? '-'}
-                    </div>
-                  </div>
+                  <MetaCard
+                    title="변경자"
+                    value={item.changed_by_profile?.full_name ?? '시스템/알 수 없음'}
+                    subTexts={[
+                      `학번: ${item.changed_by_profile?.student_id ?? '-'}`,
+                      `역할: ${formatRole(item.changed_by_profile?.role)}`,
+                    ]}
+                  />
 
-                  <div style={metaCardStyle}>
-                    <div style={metaTitleStyle}>출석 날짜</div>
-                    <div style={metaValueStyle}>{item.date || '-'}</div>
-                    <div style={metaSubStyle}>
-                      attendance_id: {item.attendance_id ?? '-'}
-                    </div>
-                  </div>
+                  <MetaCard
+                    title="출석 기록"
+                    value={item.attendance_id ? '기록 있음' : '기록 없음'}
+                    subTexts={[
+                      `로그 ID: ${item.id}`,
+                      `출석 ID: ${item.attendance_id ?? '-'}`,
+                    ]}
+                  />
                 </div>
 
-                {/* 변경 사유 */}
-                <div style={{ marginBottom: '16px' }}>
-                  <div style={{ fontWeight: 700, marginBottom: '6px' }}>사유</div>
-                  <div
-                    style={{
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '10px',
-                      padding: '12px',
-                      background: '#fafafa',
-                      color: '#333',
-                    }}
-                  >
-                    {item.reason || '-'}
-                  </div>
-                </div>
+                <section style={{ marginBottom: '16px' }}>
+                  <div style={sectionTitleStyle}>사유</div>
+                  <div style={reasonBoxStyle}>{item.reason || '-'}</div>
+                </section>
 
-                {/* 변경 필드 */}
-                <div style={{ marginBottom: '16px' }}>
-                  <div style={{ fontWeight: 700, marginBottom: '8px' }}>변경 내용</div>
+                <section style={{ marginBottom: '16px' }}>
+                  <div style={sectionTitleStyle}>변경 내용</div>
 
                   {changedFields.length === 0 ? (
                     <div style={infoInlineStyle}>비교 가능한 변경 필드가 없습니다.</div>
                   ) : (
                     <div style={{ display: 'grid', gap: '8px' }}>
                       {changedFields.map((field) => (
-                        <div
-                          key={field.key}
-                          style={{
-                            border: '1px solid #e5e7eb',
-                            borderRadius: '10px',
-                            padding: '12px',
-                            background: '#fff',
-                          }}
-                        >
-                          <div style={{ fontWeight: 700, marginBottom: '8px' }}>
-                            {field.key}
+                        <div key={field.key} style={changeCardStyle}>
+                          <div style={{ fontWeight: 800, marginBottom: '8px' }}>
+                            {formatFieldName(field.key)}
                           </div>
-                          <div
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: '1fr 1fr',
-                              gap: '12px',
-                            }}
-                          >
+
+                          <div style={compareGridStyle}>
                             <div>
-                              <div style={{ color: '#666', marginBottom: '4px' }}>이전</div>
+                              <div style={compareLabelStyle}>이전</div>
                               <div style={compareValueStyle}>
-                                {field.key === 'status'
-                                  ? getStatusLabel(field.before)
-                                  : String(field.before ?? '-')}
+                                {formatFieldValue(field.key, field.before)}
                               </div>
                             </div>
 
                             <div>
-                              <div style={{ color: '#666', marginBottom: '4px' }}>이후</div>
+                              <div style={compareLabelStyle}>이후</div>
                               <div style={compareValueStyle}>
-                                {field.key === 'status'
-                                  ? getStatusLabel(field.after)
-                                  : String(field.after ?? '-')}
+                                {formatFieldValue(field.key, field.after)}
                               </div>
                             </div>
                           </div>
@@ -476,29 +433,25 @@ export default function AdminAttendanceLogsPage() {
                       ))}
                     </div>
                   )}
-                </div>
+                </section>
 
-                {/* 원본 JSON */}
                 <details>
                   <summary style={{ cursor: 'pointer', fontWeight: 700 }}>
                     원본 데이터 보기
                   </summary>
 
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr',
-                      gap: '12px',
-                      marginTop: '12px',
-                    }}
-                  >
+                  <div style={rawJsonGridStyle}>
                     <div>
-                      <div style={{ fontWeight: 700, marginBottom: '6px' }}>before_value</div>
+                      <div style={{ fontWeight: 700, marginBottom: '6px' }}>
+                        before_value
+                      </div>
                       <pre style={preStyle}>{stringifySafe(item.before_value)}</pre>
                     </div>
 
                     <div>
-                      <div style={{ fontWeight: 700, marginBottom: '6px' }}>after_value</div>
+                      <div style={{ fontWeight: 700, marginBottom: '6px' }}>
+                        after_value
+                      </div>
                       <pre style={preStyle}>{stringifySafe(item.after_value)}</pre>
                     </div>
                   </div>
@@ -510,6 +463,145 @@ export default function AdminAttendanceLogsPage() {
       )}
     </main>
   )
+}
+
+function FilterInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = 'text',
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  type?: string
+}) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontWeight: 700, marginBottom: '6px' }}>
+        {label}
+      </label>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        style={inputStyle}
+      />
+    </div>
+  )
+}
+
+function MetaCard({
+  title,
+  value,
+  subTexts,
+}: {
+  title: string
+  value: string
+  subTexts: string[]
+}) {
+  return (
+    <div style={metaCardStyle}>
+      <div style={metaTitleStyle}>{title}</div>
+      <div style={metaValueStyle}>{value}</div>
+      {subTexts.map((text) => (
+        <div key={text} style={metaSubStyle}>
+          {text}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const filterPanelStyle: React.CSSProperties = {
+  border: '1px solid #e5e7eb',
+  borderRadius: '12px',
+  padding: '16px',
+  marginBottom: '20px',
+  background: '#fff',
+}
+
+const filterGridStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+  gap: '12px',
+  marginBottom: '12px',
+}
+
+const logCardStyle: React.CSSProperties = {
+  border: '1px solid #e5e7eb',
+  borderRadius: '14px',
+  padding: '18px',
+  background: '#fff',
+}
+
+const cardHeaderStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'flex-start',
+  gap: '12px',
+  flexWrap: 'wrap',
+  marginBottom: '14px',
+}
+
+const logTitleStyle: React.CSSProperties = {
+  fontSize: '18px',
+  fontWeight: 800,
+  lineHeight: 1.4,
+}
+
+const logSubTextStyle: React.CSSProperties = {
+  marginTop: '6px',
+  color: '#6b7280',
+  fontSize: '14px',
+}
+
+const metaGridStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+  gap: '12px',
+  marginBottom: '16px',
+}
+
+const sectionTitleStyle: React.CSSProperties = {
+  fontWeight: 800,
+  marginBottom: '8px',
+}
+
+const reasonBoxStyle: React.CSSProperties = {
+  border: '1px solid #e5e7eb',
+  borderRadius: '10px',
+  padding: '12px',
+  background: '#fafafa',
+  color: '#333',
+}
+
+const changeCardStyle: React.CSSProperties = {
+  border: '1px solid #e5e7eb',
+  borderRadius: '10px',
+  padding: '12px',
+  background: '#fff',
+}
+
+const compareGridStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr',
+  gap: '12px',
+}
+
+const compareLabelStyle: React.CSSProperties = {
+  color: '#666',
+  marginBottom: '4px',
+}
+
+const rawJsonGridStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr',
+  gap: '12px',
+  marginTop: '12px',
 }
 
 const inputStyle: React.CSSProperties = {
@@ -601,6 +693,7 @@ const compareValueStyle: React.CSSProperties = {
   border: '1px solid #e5e7eb',
   color: '#111827',
   wordBreak: 'break-word',
+  whiteSpace: 'pre-wrap',
 }
 
 const preStyle: React.CSSProperties = {

@@ -17,7 +17,7 @@ export default async function AdminPage() {
 
   return (
     <main style={{ padding: 24 }}>
-      <h1>월별 출석관리</h1>
+      <h1>관리자용 출석관리 페이지</h1>
 
       
     </main>

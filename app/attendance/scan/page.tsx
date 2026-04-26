@@ -1,8 +1,9 @@
 // app/attendance/scan/page.tsx
+
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 type CheckResult = {
   success?: boolean
@@ -17,6 +18,7 @@ type CheckResult = {
 
 export default function AttendanceScanPage() {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const token = searchParams.get('token') || ''
 
@@ -41,6 +43,17 @@ export default function AttendanceScanPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token }),
         })
+
+        /**
+         * 비로그인 상태 처리
+         * - 현재 QR URL을 next 파라미터로 보존
+         * - 로그인 성공 후 다시 QR 출석 페이지로 돌아오기 위함
+         */
+        if (response.status === 401 || response.status === 403) {
+          const currentUrl = `${pathname}?${searchParams.toString()}`
+          router.replace(`/login?next=${encodeURIComponent(currentUrl)}`)
+          return
+        }
 
         const data = response.headers
           .get('content-type')
@@ -75,7 +88,7 @@ export default function AttendanceScanPage() {
     }
 
     void checkAttendance()
-  }, [token])
+  }, [token, pathname, searchParams, router])
 
   return (
     <div
@@ -106,8 +119,19 @@ export default function AttendanceScanPage() {
           <p>출석을 처리하는 중입니다...</p>
         ) : result?.error ? (
           <>
-            <p style={{ color: 'crimson', fontWeight: 700 }}>⚠️ {result.error}</p>
-            <div style={{ marginTop: '16px', display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <p style={{ color: 'crimson', fontWeight: 700 }}>
+              ⚠️ {result.error}
+            </p>
+
+            <div
+              style={{
+                marginTop: '16px',
+                display: 'flex',
+                gap: '8px',
+                justifyContent: 'center',
+                flexWrap: 'wrap',
+              }}
+            >
               <button type="button" onClick={() => router.push('/')}>
                 메인으로
               </button>
@@ -140,24 +164,35 @@ export default function AttendanceScanPage() {
                 {result?.status === 'present'
                   ? '출석'
                   : result?.status === 'late'
-                  ? '지각'
-                  : result?.status === 'absent'
-                  ? '결석'
-                  : '-'}
+                    ? '지각'
+                    : result?.status === 'absent'
+                      ? '결석'
+                      : '-'}
               </div>
+
               <div style={{ marginBottom: '8px' }}>
-                <strong>출석 날짜(KST):</strong> {result?.attendance_date_kst || '-'}
+                <strong>출석 날짜(KST):</strong>{' '}
+                {result?.attendance_date_kst || '-'}
               </div>
+
               <div>
-                <strong>처리 시각(KST):</strong> {result?.check_time_kst || '-'}
+                <strong>처리 시각(KST):</strong>{' '}
+                {result?.check_time_kst || '-'}
               </div>
             </div>
 
-            <div style={{ marginTop: '16px', display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <div
+              style={{
+                marginTop: '16px',
+                display: 'flex',
+                gap: '8px',
+                justifyContent: 'center',
+                flexWrap: 'wrap',
+              }}
+            >
               <button type="button" onClick={() => router.push('/')}>
                 메인으로
               </button>
-              
             </div>
           </>
         )}

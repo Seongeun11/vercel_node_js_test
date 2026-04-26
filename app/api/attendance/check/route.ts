@@ -52,8 +52,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     const session = await getSessionProfile(['trainee'])
     if (!session.ok) {
       return jsonNoStore<AttendanceCheckResponse>(
-        { error: session.error },
-        { status: session.status }
+        { error: '인증이 필요합니다.' },
+      { status: 401 }
       )
     }
     /**

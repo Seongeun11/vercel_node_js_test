@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import QRCode from 'qrcode'
 
 type ExpireUnit = 'hours' | 'days' | 'unlimited'
-type WeekdayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
+type WeekdayCode = 'sun'|'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' 
 type AttendanceStatus = 'present' | 'late' | 'absent'
 
 type TodayOccurrenceItem = {
@@ -1193,21 +1193,33 @@ function formatRecurrenceDays(
   days: WeekdayCode[] | null | undefined,
   recurrenceType?: 'none' | 'daily'
 ) {
+  const weekdayOrder: WeekdayCode[] = [
+    'sun',
+    'mon',
+    'tue',
+    'wed',
+    'thu',
+    'fri',
+    'sat',
+  ]
+
   const labelMap: Record<WeekdayCode, string> = {
+    sun: '일',
     mon: '월',
     tue: '화',
     wed: '수',
     thu: '목',
     fri: '금',
     sat: '토',
-    sun: '일',
   }
 
-  const normalizedDays = Array.isArray(days)
-    ? Array.from(new Set(days)).filter((day): day is WeekdayCode =>
-        ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].includes(day)
-      )
-    : []
+  const selectedDays = new Set(
+    Array.isArray(days)
+      ? days.filter((day): day is WeekdayCode => weekdayOrder.includes(day))
+      : []
+  )
+
+  const normalizedDays = weekdayOrder.filter((day) => selectedDays.has(day))
 
   if (normalizedDays.length > 0) {
     return normalizedDays.map((day) => labelMap[day]).join(', ')
@@ -1219,7 +1231,6 @@ function formatRecurrenceDays(
 
   return '반복 없음'
 }
-
 const panelStyle: React.CSSProperties = {
   border: '1px solid #ddd',
   borderRadius: 12,

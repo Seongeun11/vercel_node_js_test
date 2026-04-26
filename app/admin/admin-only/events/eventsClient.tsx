@@ -29,13 +29,13 @@ type EventFormState = {
 }
 
 const WEEKDAY_OPTIONS: { label: string; value: WeekdayCode }[] = [
+  { label: '일', value: 'sun' },
   { label: '월', value: 'mon' },
   { label: '화', value: 'tue' },
   { label: '수', value: 'wed' },
   { label: '목', value: 'thu' },
   { label: '금', value: 'fri' },
   { label: '토', value: 'sat' },
-  { label: '일', value: 'sun' },
 ]
 
 const WEEKDAY_CODES = WEEKDAY_OPTIONS.map((option) => option.value)
@@ -76,13 +76,13 @@ function formatRecurrenceDays(days: WeekdayCode[] | null | undefined) {
   if (normalizedDays.length === 0) return '반복 없음'
 
   const labelMap: Record<WeekdayCode, string> = {
+    sun: '일',
     mon: '월',
     tue: '화',
     wed: '수',
     thu: '목',
     fri: '금',
     sat: '토',
-    sun: '일',
   }
 
   return normalizedDays.map((day) => labelMap[day]).join(', ')
