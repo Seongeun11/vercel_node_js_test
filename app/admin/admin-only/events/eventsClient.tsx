@@ -340,7 +340,7 @@ export default function EventsClient() {
             <input
               value={form.name}
               onChange={(e) => handleChange('name', e.target.value)}
-              placeholder="예: 새벽예배"
+              placeholder="예: 집중기도회"
               style={inputStyle}
               disabled={submitting}
             />

@@ -49,7 +49,14 @@ function getKstTodayDateString(date = new Date()): string {
     day: '2-digit',
   }).format(date)
 }
-
+function getKstDateString(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: SEOUL_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+}
 function getKstWeekdayCode(date = new Date()): WeekdayCode {
   const weekday = new Intl.DateTimeFormat('en-US', {
     timeZone: SEOUL_TIME_ZONE,
@@ -142,10 +149,26 @@ export async function GET(_request: NextRequest): Promise<Response> {
             const recurrenceDays = normalizeRecurrenceDays(event.recurrence_days)
             const isActive = Boolean(event.is_active)
 
-            // 이벤트가 비활성화되었거나 오늘 요일 대상이 아니면 목록에서 제외
+            // 이벤트가 비활성화되었으면 제외
             if (!isActive) return null
-            if (recurrenceType !== 'daily') return null
-            if (!recurrenceDays.includes(todayWeekday)) return null
+
+            // 반복 이벤트는 오늘 요일에 해당할 때만 표시
+            if (recurrenceType === 'daily' && !recurrenceDays.includes(todayWeekday)) {
+              return null
+            }
+
+            // 반복 없는 단발 이벤트는 이벤트 시작일이 오늘일 때만 표시
+            if (
+              recurrenceType === 'none' &&
+              getKstDateString(new Date(event.start_time)) !== todayKstDate
+            ) {
+              return null
+            }
+
+            // daily / none 외 값은 제외
+            if (recurrenceType !== 'daily' && recurrenceType !== 'none') {
+              return null
+            }
 
             return {
               id: row.id,

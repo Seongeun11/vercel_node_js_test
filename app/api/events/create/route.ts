@@ -69,6 +69,16 @@ function normalizeRecurrenceDays(input: unknown): WeekdayCode[] {
   return ALLOWED_WEEKDAYS.filter((day) => unique.includes(day))
 }
 
+const SEOUL_TIME_ZONE = 'Asia/Seoul'
+
+function getKstDateString(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: SEOUL_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+}
 export async function POST(request: NextRequest): Promise<Response> {
   try {
     assertSameOrigin(request)
@@ -165,7 +175,29 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 500 }
       )
     }
+    // 반복 없는 단발 이벤트는 이벤트 시작일에 해당하는 회차를 즉시 생성한다.
+    // 특히 시작일이 오늘이면 /admin/admin-only/attendance-today 에 바로 표시된다.
+    if (recurrenceType === 'none') {
+      const occurrenceDate = getKstDateString(startTime)
 
+      const { error: occurrenceError } = await supabaseAdmin
+        .from('event_occurrences')
+        .insert({
+          event_id: createdEvent.id,
+          occurrence_date: occurrenceDate,
+          start_time: startTime.toISOString(),
+          status: 'open',
+        })
+
+      if (occurrenceError) {
+        console.error('[events/create] occurrence insert error:', occurrenceError)
+
+        return jsonNoStore<CreateEventResponse>(
+          { error: '이벤트는 생성되었지만 출석 회차 생성에 실패했습니다.' },
+          { status: 500 }
+        )
+      }
+    }
     return jsonNoStore<CreateEventResponse>(
       {
         message: '이벤트가 생성되었습니다.',

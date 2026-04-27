@@ -13,6 +13,7 @@ type CheckResult = {
   check_time_kst?: string
   attendance_date?: string
   attendance_date_kst?: string
+  already_checked?: boolean
   error?: string
 }
 
@@ -68,15 +69,20 @@ export default function AttendanceScanPage() {
           return
         }
 
-        setResult({
-          success: data.success,
-          status: data.status,
-          message: data.message,
-          check_time: data.check_time,
-          check_time_kst: data.check_time_kst ?? data.recorded_at_kst,
-          attendance_date: data.attendance_date,
-          attendance_date_kst: data.attendance_date_kst ?? data.attendance_date,
-        })
+      const alreadyChecked = Boolean(data.already_checked)
+
+      setResult({
+        success: data.success,
+        status: data.status,
+        message: alreadyChecked
+          ? '이미 출석 처리되었습니다.'
+          : data.message || '출석이 완료되었습니다.',
+        check_time: data.check_time,
+        check_time_kst: data.check_time_kst ?? data.recorded_at_kst,
+        attendance_date: data.attendance_date,
+        attendance_date_kst: data.attendance_date_kst ?? data.attendance_date,
+        already_checked: alreadyChecked,
+      })
       } catch (error) {
         console.error(error)
         setResult({
@@ -146,6 +152,7 @@ export default function AttendanceScanPage() {
                 color: result?.status === 'late' ? '#b45309' : 'green',
               }}
             >
+              {result?.already_checked ? 'ℹ️ ' : '✅ '}
               {result?.message || '출석이 완료되었습니다.'}
             </p>
 

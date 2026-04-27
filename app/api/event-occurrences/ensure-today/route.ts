@@ -56,7 +56,10 @@ function getTodayInSeoul(): string {
   const { year, month, day } = getSeoulDateParts(new Date())
   return `${year}-${month}-${day}`
 }
-
+function getKstDateString(date: Date): string {
+  const { year, month, day } = getSeoulDateParts(date)
+  return `${year}-${month}-${day}`
+}
 function getTodayWeekdayInSeoul(): WeekdayCode {
   const weekday = new Intl.DateTimeFormat('en-US', {
     timeZone: SEOUL_TIME_ZONE,
@@ -131,7 +134,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         is_active
       `)
       .eq('is_active', true)
-      .eq('recurrence_type', 'daily')
+      
 
     if (eventsError) {
       return jsonNoStore(
@@ -141,9 +144,20 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const targetEvents = ((events ?? []) as DailyEventRow[]).filter((event) => {
-      const recurrenceDays = normalizeRecurrenceDays(event.recurrence_days)
-      return recurrenceDays.includes(todayWeekday)
-    })
+  const recurrenceDays = normalizeRecurrenceDays(event.recurrence_days)
+
+  // 반복 이벤트: 오늘 요일이 포함된 경우
+  if (event.recurrence_type === 'daily') {
+    return recurrenceDays.includes(todayWeekday)
+  }
+
+  // 반복 없는 단발 이벤트: 이벤트 시작일이 오늘인 경우
+  if (event.recurrence_type === 'none') {
+    return getTodayInSeoul() === getKstDateString(new Date(event.start_time))
+  }
+
+  return false
+})
 
     const targetEventIdSet = new Set(targetEvents.map((event) => event.id))
 

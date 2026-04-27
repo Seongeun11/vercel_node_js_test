@@ -50,18 +50,22 @@ export async function POST(request: NextRequest) {
     const parsed = adminUserCreateSchema.safeParse(rawBody)
 
     if (!parsed.success) {
+      const flattened = parsed.error.flatten()
+
       await writeAdminAuditLog({
         actorUserId: authResult.user.id,
         action: 'admin.user_create.blocked.validation_error',
         metadata: {
           client_ip: clientIp,
-          issues: parsed.error.flatten(),
+          issues: flattened,
         },
       })
 
       return jsonNoStore(
         {
           error: '입력값이 올바르지 않습니다.',
+          field_errors: flattened.fieldErrors,
+      form_errors: flattened.formErrors,
         },
         { status: 400 }
       )

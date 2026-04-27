@@ -71,7 +71,7 @@ export default function LoginClient() {
 
       // 로그인 후 새 쿠키 기준으로 서버 컴포넌트 재평가
       router.replace(redirectPath)
-      router.refresh()
+      //router.refresh()
     } catch (error: unknown) {
       console.error('로그인 실패:', error)
       setErrorMessage('로그인 중 오류가 발생했습니다.')

@@ -149,7 +149,24 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
       */
+    // 새 QR 생성 전에 같은 회차의 기존 활성 QR을 즉시 만료 처리
+    const { error: expirePreviousError } = await supabaseAdmin
+      .from('qr_tokens')
+      .update({
+        expires_at: nowIso,
+      })
+      .eq('occurrence_id', occurrenceId)
+      .is('deleted_at', null)
+      .or(`expires_at.gt.${nowIso},expires_at.is.null`)
 
+    if (expirePreviousError) {
+      console.error('[qr/create] expire previous qr error:', expirePreviousError)
+
+      return jsonNoStore<CreateQrResponse>(
+        { error: '기존 QR 만료 처리에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
     //const token = crypto.randomBytes(24).toString('hex')
     const rawToken = generateQrToken()
     const tokenHash = hashQrToken(rawToken)
@@ -180,7 +197,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     const qrUrl = `${request.nextUrl.origin}/attendance/scan?token=${rawToken}`
     return jsonNoStore<CreateQrResponse>(
       {
-        message: 'QR이 생성되었습니다.',
+        message: 'QR이 생성되었습니다. 기존 QR는 만료 처리되었습니다.',
     qr_token: {
       ...createdQr,
       token_preview: maskQrToken(rawToken),
