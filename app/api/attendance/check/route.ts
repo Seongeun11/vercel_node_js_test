@@ -7,7 +7,7 @@ import { jsonNoStore } from '@/lib/security/api-response'
 import { hashQrToken } from '@/lib/security/qr-token'
 import { checkRateLimit } from '@/lib/rate-limit'
 
-type AttendanceStatus = 'present' | 'late'
+type AttendanceStatus = 'present' | 'late' | 'absent'
 
 type AttendanceCheckResponse = {
   success?: boolean
@@ -36,7 +36,7 @@ type FastAttendanceResult = {
 }
 
 function isAttendanceStatus(status: string): status is AttendanceStatus {
-  return status === 'present' || status === 'late'
+  return status === 'present' || status === 'late' || status === 'absent'
 }
 
 function toKstDateTimeString(date: Date): string {
@@ -126,12 +126,25 @@ export async function POST(request: NextRequest): Promise<Response> {
           { status: 403 }
         )
       }
+      console.error('[attendance/check] fast rpc error:', error)
+      if (message.includes('attendance_not_open')) {
+        return jsonNoStore<AttendanceCheckResponse>(
+          { error: '아직 출석 가능한 시간이 아닙니다.' },
+          { status: 403 }
+        )
+      }
       if (message.includes('invalid_or_expired_qr')) {
         return jsonNoStore<AttendanceCheckResponse>(
           { error: '유효하지 않거나 만료된 QR입니다.' },
           { status: 410 }
         )
       }
+      if (message.includes('attendance_occurrence_not_found')) {
+  return jsonNoStore<AttendanceCheckResponse>(
+    { error: '오늘 출석 가능한 회차를 찾을 수 없습니다.' },
+    { status: 404 }
+  )
+}
 
       if (
         code === '23505' ||
@@ -144,8 +157,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         )
       }
 
-      console.error('[attendance/check] fast rpc error:', error)
-
+      
       return jsonNoStore<AttendanceCheckResponse>(
         { error: '출석 처리에 실패했습니다.' },
         { status: 500 }
