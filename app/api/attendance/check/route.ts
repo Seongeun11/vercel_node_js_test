@@ -126,13 +126,14 @@ export async function POST(request: NextRequest): Promise<Response> {
           { status: 403 }
         )
       }
-      console.error('[attendance/check] fast rpc error:', error)
+      
       if (message.includes('attendance_not_open')) {
         return jsonNoStore<AttendanceCheckResponse>(
           { error: '아직 출석 가능한 시간이 아닙니다.' },
           { status: 403 }
         )
       }
+      console.error('[attendance/check] fast rpc error:', error)
       if (message.includes('invalid_or_expired_qr')) {
         return jsonNoStore<AttendanceCheckResponse>(
           { error: '유효하지 않거나 만료된 QR입니다.' },

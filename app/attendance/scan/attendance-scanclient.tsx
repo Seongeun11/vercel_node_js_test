@@ -50,7 +50,9 @@ export default function AttendanceScanPage() {
          * - 현재 QR URL을 next 파라미터로 보존
          * - 로그인 성공 후 다시 QR 출석 페이지로 돌아오기 위함
          */
-        if (response.status === 401 || response.status === 403) {
+        // 401만 로그인으로 보낸다.
+        // 403은 권한/출석시간 제한 등 여러 의미가 있으므로 JSON 에러를 화면에 표시한다.
+        if (response.status === 401) {
           const currentUrl = `${pathname}?${searchParams.toString()}`
           router.replace(`/login?next=${encodeURIComponent(currentUrl)}`)
           return
