@@ -173,12 +173,15 @@ export async function POST(request: NextRequest): Promise<Response> {
     const tokenEncrypted = encryptQrToken(rawToken)
 
     const expiresAt = buildExpiresAt(occurrence.start_time, expireUnit, expireValue)
+    
+    const isUnlimited = expireUnit === 'unlimited'
 
     const { data: createdQr, error: createError } = await supabaseAdmin
   .from('qr_tokens')
   .insert({
     event_id: occurrence.event_id,
-    occurrence_id: occurrenceId,
+    // 무제한 QR은 회차가 아니라 이벤트에 묶는다.
+    occurrence_id: isUnlimited ? null : occurrenceId,
     token_hash: tokenHash,
     token_encrypted: tokenEncrypted,
     expires_at: expiresAt,

@@ -25,34 +25,50 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as ListQrBody
     const occurrenceId = String(body.occurrence_id || '').trim()
+    // occurrenceId가 있으면 먼저 해당 회차의 event_id를 찾는다.
+    let eventId: string | null = null
 
+    if (occurrenceId) {
+    const { data: occurrence } = await supabaseAdmin
+      .from('event_occurrences')
+      .select('event_id')
+      .eq('id', occurrenceId)
+      .single()
+
+    eventId = occurrence?.event_id ?? null
+    }
+
+    
     let query = supabaseAdmin
       .from('qr_tokens')
       .select(`
-      id,
-      event_id,
-      occurrence_id,
-      token_encrypted,
-      expires_at,
-      used_count,
-      created_at,
-      event_occurrences (
         id,
-        occurrence_date,
-        start_time,
-        status
-      ),
-      events (
-        id,
-        name,
-        start_time
-      )
-    `)
+        event_id,
+        occurrence_id,
+        token_encrypted,
+        expires_at,
+        used_count,
+        created_at
+      `)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
 
     if (occurrenceId) {
-      query = query.eq('occurrence_id', occurrenceId)
-    }
+  if (!eventId) {
+    return jsonNoStore(
+      { error: '회차를 찾을 수 없습니다.' },
+      { status: 404 }
+    )
+  }
+
+  query = query
+    // 같은 이벤트의 QR만 조회
+    .eq('event_id', eventId)
+    // 오늘 회차 QR + 이벤트 공용 무제한 QR
+    .or(`occurrence_id.eq.${occurrenceId},occurrence_id.is.null`)
+}
+    
+   
 
     const { data, error } = await query
 
