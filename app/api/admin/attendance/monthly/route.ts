@@ -14,6 +14,7 @@ type ProfileRow = {
   full_name: string
   role: string
   cohort_no: number | null
+  enrollment_status: 'active' | 'completed'
 }
 
 type OccurrenceRow = {
@@ -170,11 +171,12 @@ export async function GET(request: NextRequest): Promise<Response> {
      * - 출석 기록이 없어도 표시되어야 하므로 profiles를 먼저 조회
      */
     let profileQuery = supabaseAdmin
-      .from('profiles')
-      .select('id, student_id, full_name, role, cohort_no')
-      .eq('role', 'trainee')
-      .order('student_id', { ascending: true })
-      .limit(1000)
+    .from('profiles')
+    .select('id, student_id, full_name, role, cohort_no, enrollment_status')
+    .eq('role', 'trainee')
+    .eq('enrollment_status', 'active')
+    .order('student_id', { ascending: true })
+    .limit(1000)
 
     if (cohortNo !== null) {
       profileQuery = profileQuery.eq('cohort_no', cohortNo)

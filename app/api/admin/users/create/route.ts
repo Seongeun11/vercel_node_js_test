@@ -72,12 +72,13 @@ export async function POST(request: NextRequest) {
     }
 
     const {
-      student_id: studentId,
-      password,
-      full_name: fullName,
-      role,
-      cohort_no: cohortNo,
-    } = parsed.data
+  student_id: studentId,
+  password,
+  full_name: fullName,
+  role,
+  cohort_no: cohortNo,
+  enrollment_status: enrollmentStatus,
+} = parsed.data
 
     const email = studentIdToEmail(studentId)
 
@@ -193,11 +194,12 @@ export async function POST(request: NextRequest) {
         password,
         email_confirm: true,
         user_metadata: {
-          student_id: studentId,
-          full_name: fullName,
-          role,
-          cohort_no: cohortNo,
-        },
+        student_id: studentId,
+        full_name: fullName,
+        role,
+        cohort_no: cohortNo,
+        enrollment_status: enrollmentStatus,
+      },
       })
 
     if (createAuthError || !createdAuth.user) {
@@ -222,7 +224,7 @@ export async function POST(request: NextRequest) {
     const { data: createdProfile, error: createdProfileError } =
       await supabaseAdmin
         .from('profiles')
-        .select('id, student_id, full_name, role, cohort_no, created_at')
+        .select('id, student_id, full_name, role, cohort_no, enrollment_status, created_at')
         .eq('id', createdAuth.user.id)
         .maybeSingle()
 
@@ -256,24 +258,28 @@ export async function POST(request: NextRequest) {
       action: 'admin.user_create.success',
       targetUserId: createdProfile.id,
       metadata: {
-        client_ip: clientIp,
-        student_id: createdProfile.student_id,
-        full_name: createdProfile.full_name,
-        role: createdProfile.role,
-        email,
-      },
+  client_ip: clientIp,
+  student_id: createdProfile.student_id,
+  full_name: createdProfile.full_name,
+  role: createdProfile.role,
+  cohort_no: createdProfile.cohort_no,
+  enrollment_status: createdProfile.enrollment_status,
+  email,
+},
     })
 
     return jsonNoStore(
       {
         ok: true,
         user: {
-          id: createdProfile.id,
-          student_id: createdProfile.student_id,
-          full_name: createdProfile.full_name,
-          role: createdProfile.role,
-          created_at: createdProfile.created_at,
-        },
+  id: createdProfile.id,
+  student_id: createdProfile.student_id,
+  full_name: createdProfile.full_name,
+  role: createdProfile.role,
+  cohort_no: createdProfile.cohort_no,
+  enrollment_status: createdProfile.enrollment_status,
+  created_at: createdProfile.created_at,
+},
       },
       { status: 201 }
     )

@@ -727,7 +727,7 @@ async function handleOpenQrWindow(qrUrl: string) {
         <SummaryCard title="전체 QR 수" value={String(totalQrCount)} />
         <SummaryCard title="활성 QR 수" value={String(activeQrCount)} />
       </section>
-{/*
+
       <section style={panelStyle}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
@@ -747,7 +747,7 @@ async function handleOpenQrWindow(qrUrl: string) {
           </button>
         </div>
       </section>
-*/}
+
       {error && <div style={errorBoxStyle}>{error}</div>}
       {success && <div style={successBoxStyle}>{success}</div>}
 

@@ -6,4 +6,8 @@ Vercel + supabase + upstash 사용
 
 기능
 
+---
+추가할 기능
+
+1. 아카데미 포인트 연동
 

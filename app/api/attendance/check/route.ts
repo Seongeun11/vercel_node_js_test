@@ -120,7 +120,12 @@ export async function POST(request: NextRequest): Promise<Response> {
     if (error) {
       const message = error.message?.toLowerCase() ?? ''
       const code = error.code ?? ''
-
+      if (message.includes('attendance_target_not_allowed')) {
+        return jsonNoStore<AttendanceCheckResponse>(
+          { error: '재학 상태의 수련생만 출석할 수 있습니다.' },
+          { status: 403 }
+        )
+      }
       if (message.includes('invalid_or_expired_qr')) {
         return jsonNoStore<AttendanceCheckResponse>(
           { error: '유효하지 않거나 만료된 QR입니다.' },

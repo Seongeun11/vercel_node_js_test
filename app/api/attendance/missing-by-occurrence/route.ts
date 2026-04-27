@@ -13,7 +13,8 @@ type TraineeProfileRow = {
   id: string
   full_name: string
   student_id: string
-  role: 'admin' | 'captain' | 'trainee'
+  role: 'trainee'
+  enrollment_status: 'active' | 'completed'
 }
 
 type ExistingAttendanceRow = {
@@ -108,8 +109,9 @@ export async function POST(request: NextRequest): Promise<Response> {
     // 2) 전체 trainee 조회
     const { data: trainees, error: traineesError } = await supabaseAdmin
       .from('profiles')
-      .select('id, full_name, student_id, role')
+      .select('id, full_name, student_id, role,enrollment_status')
       .eq('role', 'trainee')
+      .eq('enrollment_status', 'active')
       .order('student_id', { ascending: true })
 
     if (traineesError) {

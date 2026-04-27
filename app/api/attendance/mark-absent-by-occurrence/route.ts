@@ -75,7 +75,12 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 400 }
       )
     }
-
+    if (message.includes('attendance_target_not_allowed')) {
+      return jsonNoStore(
+        { error: '재학 상태의 수련생만 결석 처리할 수 있습니다.' },
+        { status: 403 }
+      )
+    }
     if (message.includes('회차를 찾을 수 없습니다.')) {
       return jsonNoStore<MarkAbsentResponse>(
         { error: message },

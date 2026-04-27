@@ -70,11 +70,11 @@ export default function UserBulkUpload() {
           <div style={{ color: '#374151', fontSize: 14 }}>
             헤더 순서:
             <code style={codeStyle}>
-              student_id | full_name | password | role | cohort_no
+              student_id | full_name | password | role | cohort_no | enrollment_status
             </code>
           </div>
           <div style={{ color: '#6b7280', fontSize: 13, marginTop: 6 }}>
-            role 값은 admin, captain, trainee 중 하나여야 합니다.
+            role 값은 admin, captain, trainee 중 하나여야 합니다.+
           </div>
         </div>
 

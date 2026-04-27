@@ -2,6 +2,9 @@ import { z } from 'zod'
 
 const PASSWORD_MIN_LENGTH = 8
 const PASSWORD_MAX_LENGTH = 72
+const enrollmentStatusSchema = z
+  .enum(['active', 'completed'])
+  .default('active')
 
 function validateStrongPassword(params: {
   password: string
@@ -48,6 +51,7 @@ function validateStrongPassword(params: {
 }
 
 export const adminUserCreateSchema = z
+
   .object({
     student_id: z
       .string()
@@ -64,6 +68,20 @@ export const adminUserCreateSchema = z
 
     role: z.enum(['admin', 'captain', 'trainee']),
 
+    // 재학/수료 상태
+    enrollment_status: z
+      .string()
+  .trim()
+  .toLowerCase()
+  .refine(
+    (value) => value === 'active' || value === 'completed',
+    {
+      message: "enrollment_status 는 'active', 'completed' 중 하나이어야 합니다.",
+    }
+  )
+  .transform((value) => (value === 'completed' ? 'completed' : 'active'))
+  .default('active'),
+    
     // DB 제약조건: cohort_no is null or cohort_no > 0
     cohort_no: z
       .union([z.string(), z.number(), z.null(), z.undefined()])
@@ -79,6 +97,8 @@ export const adminUserCreateSchema = z
         (value) => value === null || (Number.isInteger(value) && value > 0),
         '기수는 1 이상 정수여야 합니다.'
       ),
+      
+      
   })
   .superRefine((data, ctx) => {
     const passwordError = validateStrongPassword({
