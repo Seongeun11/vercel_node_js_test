@@ -180,7 +180,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     const qrUrl = `${request.nextUrl.origin}/attendance/scan?token=${rawToken}`
     return jsonNoStore<CreateQrResponse>(
       {
-        message: 'QR이 생성되었습니다. 기존 활성 QR은 자동 만료 처리되었습니다.',
+        message: 'QR이 생성되었습니다.',
     qr_token: {
       ...createdQr,
       token_preview: maskQrToken(rawToken),

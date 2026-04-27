@@ -19,7 +19,6 @@ type UpdateQrResponse = {
     id: string
     event_id: string
     occurrence_id: string
-    token: string
     expires_at: string | null
     used_count: number
     created_at: string
@@ -110,7 +109,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     // ✅ 회차 기반 QR인지 확인
     const { data: existingQr, error: existingError } = await supabaseAdmin
       .from('qr_tokens')
-      .select('id, event_id, occurrence_id, token, expires_at, used_count, created_at')
+      .select('id, event_id, occurrence_id, expires_at, used_count, created_at')
       .eq('id', id)
       .single()
 
@@ -155,7 +154,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       .from('qr_tokens')
       .update({ expires_at: expiresAt })
       .eq('id', id)
-      .select('id, event_id, occurrence_id, token, expires_at, used_count, created_at')
+      .select('id, event_id, occurrence_id, expires_at, used_count, created_at')
       .single()
 
     if (updateError || !updatedQr) {
@@ -172,7 +171,6 @@ export async function POST(request: NextRequest): Promise<Response> {
           id: updatedQr.id,
           event_id: updatedQr.event_id,
           occurrence_id: updatedQr.occurrence_id,
-          token: updatedQr.token,
           expires_at: updatedQr.expires_at,
           used_count: updatedQr.used_count,
           created_at: updatedQr.created_at,

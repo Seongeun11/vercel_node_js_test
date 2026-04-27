@@ -244,7 +244,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 409 }
       )
     }
-
+/*
     // 6) 출석 insert: occurrence_id 기준
     const { error: insertError } = await session.supabase
       .from('attendance')
@@ -281,6 +281,53 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 500 }
       )
     }
+*/
+    const { data: insertedAttendance, error: insertError } =
+  await supabaseAdmin.rpc('check_attendance_with_log', {
+    p_user_id: session.profile.id,
+    p_event_id: occurrence.event_id,
+    p_occurrence_id: occurrence.id,
+    p_attendance_date: occurrence.occurrence_date,
+    p_status: attendanceStatus,
+    p_method: 'qr',
+    p_check_time: now.toISOString(),
+    p_changed_by: session.profile.id,
+    p_reason: 'QR 출석 체크',
+  })
+
+  if (insertError) {
+    const message = insertError.message?.toLowerCase() ?? ''
+    const code = insertError.code ?? ''
+
+    if (
+      code === '23505' ||
+      message.includes('duplicate') ||
+      message.includes('unique')
+    ) {
+      return jsonNoStore<AttendanceCheckResponse>(
+        { error: '이미 오늘 출석 처리되었습니다.' },
+        { status: 409 }
+      )
+    }
+
+    console.error('[attendance/check] rpc insert error:', insertError)
+
+    return jsonNoStore<AttendanceCheckResponse>(
+      { error: '출석 처리에 실패했습니다.' },
+      { status: 500 }
+    )
+  }
+
+  const attendance = Array.isArray(insertedAttendance)
+    ? insertedAttendance[0]
+    : insertedAttendance
+
+  if (!attendance) {
+    return jsonNoStore<AttendanceCheckResponse>(
+      { error: '출석 처리 결과를 찾을 수 없습니다.' },
+      { status: 500 }
+    )
+  }
 
     return jsonNoStore<AttendanceCheckResponse>({
       success: true,

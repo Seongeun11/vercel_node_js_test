@@ -19,8 +19,8 @@ export async function POST(request: NextRequest) {
 
     if (!authResult.ok) {
       return jsonNoStore(
-        { error: authResult.error },
-        { status: authResult.status }
+        { error: '인증이 필요합니다.' },
+      { status: 401 }
       )
     }
 
@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
       {
         p_request_id: parsed.data.request_id,
         p_review_comment: parsed.data.review_comment ?? null,
+        
       }
     )
 

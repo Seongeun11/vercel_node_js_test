@@ -432,17 +432,15 @@ export default function TodayOperationsClient() {
       is_expired: false,
     }
 
-    // 중요: 생성 직후에는 /api/qr/list로 덮어쓰지 말고
-    // create 응답의 qr_url을 가진 객체를 직접 state에 넣는다.
+    /**
+     * 새 QR을 목록 맨 위에 추가한다.
+     * 기존 QR의 만료 여부는 DB/API 응답의 is_expired를 신뢰한다.
+     */
     setQrMap((prev) => ({
       ...prev,
       [occurrenceId]: [
         nextQr,
-        ...(prev[occurrenceId] ?? []).map((qr) => ({
-          ...qr,
-          is_expired: true,
-          qr_url: null,
-        })),
+        ...(prev[occurrenceId] ?? []),
       ],
     }))
 
