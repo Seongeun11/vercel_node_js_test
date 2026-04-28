@@ -73,6 +73,9 @@ export default async function HomePage() {
               <Link href="/attendance/requests">
               <button type="button">내 출석 변경 요청</button>
               </Link>
+              <Link href="/account/password">
+              <button type="button">비밀번호 변경</button>
+              </Link>
               </>
               )}
 

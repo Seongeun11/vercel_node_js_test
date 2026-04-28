@@ -91,12 +91,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     console.error('[attendance/mark-absent-by-occurrence] rpc error:', error)
 
     return jsonNoStore<MarkAbsentResponse>(
-      {
-      error:
-        process.env.NODE_ENV === 'production'
-          ? '결석 처리에 실패했습니다.'
-          : error.message,
-    },
+      { error: '결석 처리에 실패했습니다.' },
       { status: 500 }
     )
   }

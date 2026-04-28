@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { KeyboardEvent } from 'react'
 
+
 type LoginResponse = {
   user?: {
     id?: string
@@ -21,6 +22,8 @@ export default function LoginClient() {
 
   const router = useRouter()
   const searchParams = useSearchParams()
+
+  const reason = searchParams.get('reason')
 
   // 오픈 리다이렉트 방지용 안전한 내부 경로만 허용
   function getSafeRedirectPath(next: string | null): string {
@@ -94,8 +97,13 @@ export default function LoginClient() {
       gap: '10px',             // 요소들 사이의 일정한 간격 (margin 대신 사용 권장)
       maxWidth: '300px'         // 로그인 폼이 너무 넓어지지 않도록 제한 (선택 사항)
     }}>
-      <h2 style={{ margin: '0 0 10px 0' }}>출석 로그인</h2>
 
+      <h2 style={{ margin: '0 0 10px 0' }}>출석 로그인</h2>
+      {reason === 'password_changed' && (
+        <div className="mb-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+          비밀번호가 변경되었습니다. 새 비밀번호로 다시 로그인해주세요.
+        </div>
+      )}
       <input
         style={{ 
           padding: '10px',
