@@ -717,11 +717,11 @@ async function handleOpenQrWindow(qrUrl: string) {
         <p style={{ color: '#666', margin: 0 }}>
           오늘 날짜 기준 회차 생성, QR 발급/시간 연장/삭제, 출석 현황을 관리하는 운영 화면입니다.
           <br />
-          출석: 시작시간 + 지각 분 이내,
+          출석: 시작 1시간전 + 시작시간 + 지각 분 이내,
           지각: 시작시간 + 지각 분 이후,
           결석: 수동 결석처리를 권장합니다.
           <br />
-          회차 종료가 되면 출석체크가 불가능합니다.
+          결석 처리가 되면 출석체크가 불가능합니다.
 
         </p>
       </div>
@@ -838,14 +838,14 @@ async function handleOpenQrWindow(qrUrl: string) {
                       >
                         결석 처리
                       </button>
-
+                      {/* 
                       <button
                         onClick={() => void handleCloseOccurrence(item.id)}
                         disabled={submitting || item.status === 'closed' || item.status === 'archived'}
                         style={dangerButtonStyle}
                       >
                         회차 종료
-                      </button>
+                      </button>*/}
                   </div>
                 </div>
 
