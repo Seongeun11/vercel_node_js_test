@@ -82,7 +82,7 @@ export default async function AdminLayout({ children }: Props) {
             {user.role === 'admin' && (
               <>
                 <Link href="/admin/admin-only/attendance/monthly" style={navLinkStyle}>
-                  월별 출석 현황
+                  월별 출석 조회
                 </Link>
                 <Link href="/admin/admin-only/attendance-today" style={navLinkStyle}>
         오늘 출석 운영
@@ -96,10 +96,10 @@ export default async function AdminLayout({ children }: Props) {
                 </Link>
                 */}
                 <Link href="/admin/admin-only/events" style={navLinkStyle}>
-                  이벤트 관리
+                  행사 관리
                 </Link>
                 <Link href="/admin/admin-only/users" style={navLinkStyle}>
-                  사용자 생성
+                  회원 관리
                 </Link>
                         
             <Link href="/admin/admin-only/export" style={navLinkStyle}>

@@ -18,7 +18,7 @@ type UpdateQrResponse = {
   qr_token?: {
     id: string
     event_id: string
-    occurrence_id: string
+    occurrence_id: string | null
     expires_at: string | null
     used_count: number
     created_at: string
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 404 }
       )
     }
-
+/*
     if (!existingQr.occurrence_id) {
       return jsonNoStore<UpdateQrResponse>(
         { error: '회차 기반 QR이 아닙니다. 마이그레이션이 필요합니다.' },
@@ -133,20 +133,46 @@ export async function POST(request: NextRequest): Promise<Response> {
       .select('id,start_time,status')
       .eq('id', existingQr.occurrence_id)
       .single()
+*/
+
+    let occurrenceQuery = supabaseAdmin
+  .from('event_occurrences')
+  .select('id, start_time, status')
+  .limit(1)
+
+    if (existingQr.occurrence_id) {
+      // 일반 QR: 기존 회차 기준
+      occurrenceQuery = occurrenceQuery.eq('id', existingQr.occurrence_id)
+    } else {
+      // 무제한 QR: event_id 기준 오늘 회차 사용
+      const todayKst = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Seoul',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date())
+
+      occurrenceQuery = occurrenceQuery
+        .eq('event_id', existingQr.event_id)
+        .eq('occurrence_date', todayKst)
+    }
+
+    const { data: occurrence, error: occurrenceError } = await occurrenceQuery.single()
 
     if (occurrenceError || !occurrence) {
       return jsonNoStore<UpdateQrResponse>(
-        { error: '연결된 회차를 찾을 수 없습니다.' },
+        { error: '오늘 출석 가능한 회차를 찾을 수 없습니다.' },
         { status: 404 }
       )
-      
     }
+
     if (occurrence.status === 'closed' || occurrence.status === 'archived') {
       return jsonNoStore<UpdateQrResponse>(
-        { error: '종료된 회차의 QR은 재발급할 수 없습니다.' },
+        { error: '종료된 회차의 QR은 연장할 수 없습니다.' },
         { status: 400 }
       )
     }
+    
         
     const expiresAt = buildExpiresAt(occurrence.start_time,expireUnit, expireValue)
 

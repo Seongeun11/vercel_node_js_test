@@ -201,7 +201,7 @@ export default function AdminUsersPage() {
   return (
   <div style={{ padding: '24px', maxWidth: '960px', margin: '0 auto' }}>
     <AdminHeader
-      title="사용자 생성"
+      title="회원 생성"
       description="관리자가 수련생, 캡틴, 관리자 계정을 생성할 수 있습니다."
     />
 
@@ -298,7 +298,7 @@ export default function AdminUsersPage() {
         </div>
 
         <button type="button" onClick={handleCreateUser} disabled={loading}>
-          {loading ? '생성 중...' : '사용자 생성'}
+          {loading ? '생성 중...' : '회원 생성'}
         </button>
       </div>
 
@@ -441,7 +441,7 @@ export default function AdminUsersPage() {
                             setErrorMessage('')
                           }}
                         >
-                          초기화
+                          변경
                         </button>
                       </td>
                     </tr>

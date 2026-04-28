@@ -503,13 +503,13 @@ export default function TodayOperationsClient() {
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.error || 'QR 재발급에 실패했습니다.')
+        throw new Error(data.error || 'QR 시간 연장에 실패했습니다.')
       }
 
       //await fetchQrByOccurrence(occurrenceId)
       setSuccess(data.message || 'QR 유효 시간이 수정되었습니다.')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'QR 재발급 중 오류가 발생했습니다.')
+      setError(err instanceof Error ? err.message : 'QR 시간 연장 중 오류가 발생했습니다.')
     } finally {
       setSubmitting(false)
     }
@@ -715,7 +715,14 @@ async function handleOpenQrWindow(qrUrl: string) {
       <div>
         <h2 style={{ marginBottom: 8 }}>오늘 출석 운영</h2>
         <p style={{ color: '#666', margin: 0 }}>
-          오늘 날짜 기준 회차 생성, QR 발급/재발급/삭제, 출석 현황을 관리하는 운영 화면입니다.
+          오늘 날짜 기준 회차 생성, QR 발급/시간 연장/삭제, 출석 현황을 관리하는 운영 화면입니다.
+          <br />
+          출석: 시작시간 + 지각 분 이내,
+          지각: 시작시간 + 지각 분 이후,
+          결석: 수동 결석처리를 권장합니다.
+          <br />
+          회차 종료가 되면 출석체크가 불가능합니다.
+
         </p>
       </div>
 
@@ -991,7 +998,7 @@ async function handleOpenQrWindow(qrUrl: string) {
                     >
                       {(item.status === 'closed' || item.status === 'archived') && (
                         <div style={{ color: '#b91c1c', marginTop: 6, fontSize: 13 }}>
-                          종료된 회차는 QR 발급/재발급이 제한됩니다.
+                          종료된 회차는 QR 발급/시간 연장이 제한됩니다.
                         </div>
                       )}
 
@@ -1101,7 +1108,7 @@ async function handleOpenQrWindow(qrUrl: string) {
                                     disabled={submitting || item.status === 'closed' || item.status === 'archived'}
                                     style={secondaryButtonStyle}
                                   >
-                                    QR 재발급
+                                    QR 시간 연장
                                   </button>
                                   <button
                                     onClick={() => void handleDeleteQr(qr.id, item.id)}

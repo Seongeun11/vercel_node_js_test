@@ -14,7 +14,7 @@ type DeleteQrResponse = {
   deleted_qr?: {
     id: string
     event_id: string
-    occurrence_id: string
+    occurrence_id: string | null
   }
   error?: string
 }
@@ -55,13 +55,14 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 404 }
       )
     }
-
+/*
     if (!existingQr.occurrence_id) {
       return jsonNoStore<DeleteQrResponse>(
         { error: '회차 기반 QR이 아닙니다. 마이그레이션이 필요합니다.' },
         { status: 400 }
       )
     }
+
 
     // ✅ 연결된 회차가 실제 존재하는지 검증
     const { data: occurrence, error: occurrenceError } = await supabaseAdmin
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         { error: '연결된 회차를 찾을 수 없습니다.' },
         { status: 404 }
       )
-    }
+    }*/
 
     const { error: deleteError } = await supabaseAdmin
       .from('qr_tokens')
