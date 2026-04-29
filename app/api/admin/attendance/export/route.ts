@@ -7,9 +7,11 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 type AttendanceStatus = 'present' | 'late' | 'absent'
 
 interface Profile {
-  student_id: string
-  full_name: string
+  id: string
+  student_id: string | null
+  full_name: string | null
   cohort_no: number | null
+  enrollment_status: 'active' | 'completed'
 }
 
 interface AttendanceRow {
@@ -66,12 +68,12 @@ export async function GET(request: NextRequest): Promise<Response> {
     return Response.json({ error: '이벤트를 찾을 수 없습니다.' }, { status: 404 })
   }
 
-  // 2. 모든 trainee 등급 유저 조회 (기준 데이터)
+  // 2. active 상태의 trainee 등급 유저만 조회
   const { data: trainees, error: userError } = await supabaseAdmin
     .from('profiles')
-    .select('id, student_id, full_name, cohort_no')
-    .eq('role', 'trainee') // 등급이 'trainee'인 유저만
-
+    .select('id, student_id, full_name, cohort_no, enrollment_status')
+    .eq('role', 'trainee')
+    .eq('enrollment_status', 'active')
   if (userError || !trainees) {
     return Response.json({ error: '교육생 정보를 불러오지 못했습니다.' }, { status: 500 })
   }
