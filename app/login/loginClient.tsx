@@ -26,12 +26,31 @@ export default function LoginClient() {
   const reason = searchParams.get('reason')
 
   // 오픈 리다이렉트 방지용 안전한 내부 경로만 허용
-  function getSafeRedirectPath(next: string | null): string {
-    if (!next) return '/'
-    if (!next.startsWith('/')) return '/'
-    if (next.startsWith('//')) return '/'
-    return next
+ function getSafeRedirectPath(next: string | null): string {
+  // 기본 이동 경로
+  const fallback = '/'
+
+  if (!next) return fallback
+
+  try {
+    // 디코딩된 next 값 처리
+    const decoded = decodeURIComponent(next)
+
+    // 외부 URL / 프로토콜 상대 URL 차단
+    if (!decoded.startsWith('/') || decoded.startsWith('//')) {
+      return fallback
+    }
+
+    // 로그인 페이지로 다시 보내는 루프 방지
+    if (decoded.startsWith('/login')) {
+      return fallback
+    }
+
+    return decoded
+  } catch {
+    return fallback
   }
+}
 
   async function handleLogin(): Promise<void> {
     setErrorMessage('')
@@ -68,12 +87,16 @@ export default function LoginClient() {
 
       const next = searchParams.get('next')
       const savedRedirect = sessionStorage.getItem('post_login_redirect')
+
+      // next 쿼리가 있으면 우선 사용하고, 없으면 sessionStorage 사용
       const redirectPath = getSafeRedirectPath(next || savedRedirect)
 
       sessionStorage.removeItem('post_login_redirect')
 
-      // 로그인 후 새 쿠키 기준으로 서버 컴포넌트 재평가
+      // reason=password_changed는 로그인 화면에서만 사용.
+      // 로그인 성공 후 목적지로 replace하면 /login?reason=... 이 히스토리에 남지 않음.
       router.replace(redirectPath)
+      router.refresh()
       //router.refresh()
     } catch (error: unknown) {
       console.error('로그인 실패:', error)
