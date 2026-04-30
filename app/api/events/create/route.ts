@@ -102,7 +102,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     if (!name) {
       return jsonNoStore<CreateEventResponse>(
-        { error: '이벤트명을 입력해주세요.' },
+        { error: '행사명을 입력해주세요.' },
         { status: 400 }
       )
     }
@@ -171,11 +171,11 @@ export async function POST(request: NextRequest): Promise<Response> {
       }
 
       return jsonNoStore<CreateEventResponse>(
-        { error: error?.message || '이벤트 생성에 실패했습니다.' },
+        { error: error?.message || '행사 생성에 실패했습니다.' },
         { status: 500 }
       )
     }
-    // 반복 없는 단발 이벤트는 이벤트 시작일에 해당하는 회차를 즉시 생성한다.
+    // 반복 없는 단발 행사는 행사 시작일에 해당하는 회차를 즉시 생성한다.
     // 특히 시작일이 오늘이면 /admin/admin-only/attendance-today 에 바로 표시된다.
     if (recurrenceType === 'none') {
       const occurrenceDate = getKstDateString(startTime)
@@ -193,14 +193,14 @@ export async function POST(request: NextRequest): Promise<Response> {
         console.error('[events/create] occurrence insert error:', occurrenceError)
 
         return jsonNoStore<CreateEventResponse>(
-          { error: '이벤트는 생성되었지만 출석 회차 생성에 실패했습니다.' },
+          { error: '행사는 생성되었지만 출석 회차 생성에 실패했습니다.' },
           { status: 500 }
         )
       }
     }
     return jsonNoStore<CreateEventResponse>(
       {
-        message: '이벤트가 생성되었습니다.',
+        message: '행사가 생성되었습니다.',
         event: {
           ...createdEvent,
           recurrence_days: createdEvent.recurrence_days ?? [],

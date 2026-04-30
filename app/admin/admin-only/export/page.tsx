@@ -50,7 +50,7 @@ export default function AttendanceExportPage() {
         const result: EventsListResponse = text ? JSON.parse(text) : {}
 
         if (!response.ok) {
-          setErrorMessage(result.error || '이벤트 목록을 불러오지 못했습니다.')
+          setErrorMessage(result.error || '행사 목록을 불러오지 못했습니다.')
           return
         }
 
@@ -62,7 +62,7 @@ export default function AttendanceExportPage() {
         }
       } catch (error) {
         console.error('[attendance/export] events fetch error:', error)
-        setErrorMessage('이벤트 목록 조회 중 오류가 발생했습니다.')
+        setErrorMessage('행사 목록 조회 중 오류가 발생했습니다.')
       } finally {
         setLoading(false)
       }
@@ -83,7 +83,7 @@ export default function AttendanceExportPage() {
     setErrorMessage('')
 
     if (!eventId) {
-      setErrorMessage('이벤트를 선택해주세요.')
+      setErrorMessage('행사를 선택해주세요.')
       return
     }
 
@@ -113,7 +113,7 @@ export default function AttendanceExportPage() {
     <div style={{ padding: '24px', maxWidth: '720px', margin: '0 auto' }}>
       <AdminHeader
         title="출석현황 엑셀 다운로드"
-        description="이벤트와 날짜 범위를 선택해 출석현황을 엑셀 파일로 다운로드합니다."
+        description="행사와 날짜 범위를 선택해 출석현황을 엑셀 파일로 다운로드합니다."
       />
 
       <div
@@ -127,7 +127,7 @@ export default function AttendanceExportPage() {
         <div style={{ display: 'grid', gap: '16px' }}>
           <div>
             <label style={{ display: 'block', marginBottom: '6px' }}>
-              이벤트
+              행사
             </label>
             <select
               value={eventId}
@@ -139,7 +139,7 @@ export default function AttendanceExportPage() {
               }}
             >
               {events.length === 0 ? (
-                <option value="">이벤트 없음</option>
+                <option value="">행사 없음</option>
               ) : (
                 events.map((event) => (
                   <option key={event.id} value={event.id}>
@@ -205,7 +205,7 @@ export default function AttendanceExportPage() {
         >
           엑셀 형식: 출석번호 / 이름 / 날짜별 출석 상태
           <br />
-          파일명과 시트명은 선택한 이벤트명으로 생성됩니다.
+          파일명과 시트명은 선택한 행사명으로 생성됩니다.
         </div>
       </div>
     </div>

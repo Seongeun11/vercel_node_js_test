@@ -218,7 +218,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       console.error('[api/logs] events query error:', eventsError)
 
       return jsonNoStore<LogsResponse>(
-        { error: '이벤트 정보를 불러오지 못했습니다.' },
+        { error: '행사 정보를 불러오지 못했습니다.' },
         { status: 500 }
       )
     }

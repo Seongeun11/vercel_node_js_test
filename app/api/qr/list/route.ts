@@ -62,9 +62,9 @@ export async function POST(request: NextRequest) {
   }
 
   query = query
-    // 같은 이벤트의 QR만 조회
+    // 같은 행사의 QR만 조회
     .eq('event_id', eventId)
-    // 오늘 회차 QR + 이벤트 공용 무제한 QR
+    // 오늘 회차 QR + 행사 공용 무제한 QR
     .or(`occurrence_id.eq.${occurrenceId},occurrence_id.is.null`)
 }
     

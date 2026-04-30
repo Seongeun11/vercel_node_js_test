@@ -146,12 +146,12 @@ export async function POST(request: NextRequest): Promise<Response> {
     const targetEvents = ((events ?? []) as DailyEventRow[]).filter((event) => {
   const recurrenceDays = normalizeRecurrenceDays(event.recurrence_days)
 
-  // 반복 이벤트: 오늘 요일이 포함된 경우
+  // 반복 행사: 오늘 요일이 포함된 경우
   if (event.recurrence_type === 'daily') {
     return recurrenceDays.includes(todayWeekday)
   }
 
-  // 반복 없는 단발 이벤트: 이벤트 시작일이 오늘인 경우
+  // 반복 없는 단발 행사: 행사 시작일이 오늘인 경우
   if (event.recurrence_type === 'none') {
     return getTodayInSeoul() === getKstDateString(new Date(event.start_time))
   }

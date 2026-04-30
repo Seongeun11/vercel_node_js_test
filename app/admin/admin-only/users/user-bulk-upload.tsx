@@ -74,7 +74,7 @@ export default function UserBulkUpload() {
             </code>
           </div>
           <div style={{ color: '#6b7280', fontSize: 13, marginTop: 6 }}>
-            role 값은 admin, captain, trainee 중 하나여야 합니다.+
+            role 값은 admin, captain, trainee 중 하나여야 합니다. enrollment_status는 'active' | 'completed' 중 하나여야 합니다.
           </div>
         </div>
 

@@ -180,7 +180,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   .from('qr_tokens')
   .insert({
     event_id: occurrence.event_id,
-    // 무제한 QR은 회차가 아니라 이벤트에 묶는다.
+    // 무제한 QR은 회차가 아니라 행사에 묶는다.
     occurrence_id: isUnlimited ? null : occurrenceId,
     token_hash: tokenHash,
     token_encrypted: tokenEncrypted,

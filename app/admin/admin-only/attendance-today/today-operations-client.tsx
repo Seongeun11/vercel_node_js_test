@@ -801,7 +801,7 @@ async function handleOpenQrWindow(qrUrl: string) {
                 >
                   <div>
                     <div style={{ fontSize: 18, fontWeight: 800 }}>
-                      {item.events?.name ?? '알 수 없는 이벤트'}
+                      {item.events?.name ?? '알 수 없는 행사'}
                     </div>
                     <div style={{ color: '#666', marginTop: 6 }}>
                       회차 날짜: {item.occurrence_date}

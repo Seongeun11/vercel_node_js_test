@@ -32,7 +32,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     if (!id) {
       return jsonNoStore<DeleteEventResponse>(
-        { error: '이벤트 ID가 필요합니다.' },
+        { error: '행사 ID가 필요합니다.' },
         { status: 400 }
       )
     }
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     if (existingError || !existingEvent) {
       return jsonNoStore<DeleteEventResponse>(
-        { error: '삭제할 이벤트를 찾을 수 없습니다.' },
+        { error: '삭제할 행사를 찾을 수 없습니다.' },
         { status: 404 }
       )
     }
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     if ((attendanceCount ?? 0) > 0 || (qrCount ?? 0) > 0) {
       return jsonNoStore<DeleteEventResponse>(
         {
-          error: '출석 기록 또는 QR 토큰이 연결된 이벤트는 삭제할 수 없습니다.',
+          error: '출석 기록 또는 QR 토큰이 연결된 행사는 삭제할 수 없습니다.',
         },
         { status: 400 }
       )
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     return jsonNoStore<DeleteEventResponse>(
-      { message: '이벤트가 삭제되었습니다.' },
+      { message: '행사가 삭제되었습니다.' },
       { status: 200 }
     )
   } catch (error) {

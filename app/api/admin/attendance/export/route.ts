@@ -54,10 +54,10 @@ export async function GET(request: NextRequest): Promise<Response> {
   const dateTo = searchParams.get('date_to')
 
   if (!eventId) {
-    return Response.json({ error: '이벤트를 선택해주세요.' }, { status: 400 })
+    return Response.json({ error: '행사를 선택해주세요.' }, { status: 400 })
   }
 
-  // 1. 이벤트 정보 가져오기
+  // 1. 행사 정보 가져오기
   const { data: event } = await supabaseAdmin
     .from('events')
     .select('name')
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     .maybeSingle()
 
   if (!event) {
-    return Response.json({ error: '이벤트를 찾을 수 없습니다.' }, { status: 404 })
+    return Response.json({ error: '행사를 찾을 수 없습니다.' }, { status: 404 })
   }
 
   // 2. active 상태의 trainee 등급 유저만 조회
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     return Response.json({ error: '교육생 정보를 불러오지 못했습니다.' }, { status: 500 })
   }
 
-  // 3. 해당 이벤트의 출석 데이터 조회
+  // 3. 해당 행사의 출석 데이터 조회
   let attendanceQuery = supabaseAdmin
     .from('attendance')
     .select('user_id, attendance_date, status')

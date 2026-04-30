@@ -110,7 +110,7 @@ export default function EventsClient() {
     const data = await res.json()
 
     if (!res.ok) {
-      throw new Error(data.error || '이벤트 조회 실패')
+      throw new Error(data.error || '행사 조회 실패')
     }
 
     return Array.isArray(data.items) ? (data.items as EventItem[]) : []
@@ -124,7 +124,7 @@ export default function EventsClient() {
       const eventItems = await fetchEvents()
       setEvents(eventItems)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '이벤트 조회 중 오류 발생')
+      setError(err instanceof Error ? err.message : '행사 조회 중 오류 발생')
     } finally {
       setLoading(false)
     }
@@ -176,7 +176,7 @@ export default function EventsClient() {
       (day) => !WEEKDAY_CODES.includes(day)
     )
 
-    if (!name) return '이벤트 이름을 입력해주세요.'
+    if (!name) return '행사 이름을 입력해주세요.'
     if (!startTime) return '시작 시간을 입력해주세요.'
     if (Number.isNaN(new Date(startTime).getTime())) return '시작 시간 형식이 올바르지 않습니다.'
 
@@ -244,11 +244,11 @@ export default function EventsClient() {
 
       if (!res.ok) {
         throw new Error(
-          data.error || (isEditing ? '이벤트 수정 실패' : '이벤트 생성 실패')
+          data.error || (isEditing ? '행사 수정 실패' : '행사 생성 실패')
         )
       }
 
-      setSuccess(isEditing ? '이벤트가 수정되었습니다.' : '이벤트가 생성되었습니다.')
+      setSuccess(isEditing ? '행사가 수정되었습니다.' : '행사가 생성되었습니다.')
       resetForm()
       await refreshEvents()
     } catch (err) {
@@ -256,8 +256,8 @@ export default function EventsClient() {
         err instanceof Error
           ? err.message
           : isEditing
-            ? '이벤트 수정 중 오류 발생'
-            : '이벤트 생성 중 오류 발생'
+            ? '행사 수정 중 오류 발생'
+            : '행사 생성 중 오류 발생'
       )
     } finally {
       setSubmitting(false)
@@ -284,7 +284,7 @@ export default function EventsClient() {
   }
 
   async function handleDeleteEvent(id: string) {
-    const confirmed = window.confirm('정말 이 이벤트를 삭제하시겠습니까?')
+    const confirmed = window.confirm('정말 이 행사를 삭제하시겠습니까?')
     if (!confirmed) return
 
     try {
@@ -304,15 +304,15 @@ export default function EventsClient() {
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.error || '이벤트 삭제 실패')
+        throw new Error(data.error || '행사 삭제 실패')
       }
 
       if (editingId === id) resetForm()
 
-      setSuccess('이벤트가 삭제되었습니다.')
+      setSuccess('행사가 삭제되었습니다.')
       await refreshEvents()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '이벤트 삭제 중 오류 발생')
+      setError(err instanceof Error ? err.message : '행사 삭제 중 오류 발생')
     } finally {
       setSubmitting(false)
     }
@@ -325,18 +325,18 @@ export default function EventsClient() {
   return (
     <div style={{ padding: 20, display: 'grid', gap: 24 }}>
       <div>
-        <h2 style={{ marginBottom: 8 }}>이벤트 관리</h2>
+        <h2 style={{ marginBottom: 8 }}>행사 관리</h2>
         <p style={{ color: '#666', margin: 0 }}>
-          관리자 전용 이벤트 설정 화면입니다. 반복 규칙과 기본 속성을 관리합니다.
+          관리자 전용 행사 설정 화면입니다. 반복 규칙과 기본 속성을 관리합니다.
         </p>
       </div>
 
       <section style={panelStyle}>
-        <h3 style={{ marginTop: 0 }}>{isEditing ? '이벤트 수정' : '이벤트 생성'}</h3>
+        <h3 style={{ marginTop: 0 }}>{isEditing ? '행사 수정' : '행사 생성'}</h3>
 
         <div style={{ display: 'grid', gap: 12, maxWidth: 560 }}>
           <label style={{ display: 'grid', gap: 6 }}>
-            <span>이벤트 이름</span>
+            <span>행사 이름</span>
             <input
               value={form.name}
               onChange={(e) => handleChange('name', e.target.value)}
@@ -443,7 +443,7 @@ export default function EventsClient() {
               disabled={submitting}
               style={primaryButtonStyle}
             >
-              {submitting ? '처리중...' : isEditing ? '이벤트 수정' : '이벤트 생성'}
+              {submitting ? '처리중...' : isEditing ? '행사 수정' : '행사 생성'}
             </button>
 
             {isEditing && (
@@ -467,10 +467,10 @@ export default function EventsClient() {
       {success && <div style={successBoxStyle}>{success}</div>}
 
       <section style={{ display: 'grid', gap: 16 }}>
-        <h3 style={{ margin: 0 }}>이벤트 목록</h3>
+        <h3 style={{ margin: 0 }}>행사 목록</h3>
 
         {events.length === 0 ? (
-          <div style={emptyBoxStyle}>등록된 이벤트가 없습니다.</div>
+          <div style={emptyBoxStyle}>등록된 행사가 없습니다.</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={tableStyle}>

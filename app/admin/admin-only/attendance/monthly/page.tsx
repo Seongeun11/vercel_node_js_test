@@ -338,7 +338,7 @@ export default function MonthlyAttendancePage() {
       const result = await response.json()
 
       if (!response.ok) {
-        console.error(result?.error || '이벤트 목록 조회 실패')
+        console.error(result?.error || '행사 목록 조회 실패')
         return
       }
 
@@ -347,13 +347,13 @@ export default function MonthlyAttendancePage() {
       const normalizedEvents: EventOption[] = rawEvents
         .map((event: { id?: string; name?: string }) => ({
           id: String(event.id ?? '').trim(),
-          name: String(event.name ?? '이름 없는 이벤트').trim(),
+          name: String(event.name ?? '이름 없는 행사').trim(),
         }))
         .filter((event: EventOption) => event.id)
 
       setEvents(normalizedEvents)
     } catch (error) {
-      console.error('이벤트 목록 조회 중 오류:', error)
+      console.error('행사 목록 조회 중 오류:', error)
     }
   }
 
@@ -421,7 +421,7 @@ export default function MonthlyAttendancePage() {
         </label>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 700 }}>이벤트</span>
+          <span style={{ fontSize: '13px', fontWeight: 700 }}>행사</span>
           <select
             value={eventId}
             onChange={(event) => setEventId(event.target.value)}
@@ -433,7 +433,7 @@ export default function MonthlyAttendancePage() {
               background: '#fff',
             }}
           >
-            <option value="">전체 이벤트</option>
+            <option value="">전체 행사</option>
 
             {events.map((event) => (
               <option key={event.id} value={event.id}>
@@ -620,7 +620,7 @@ export default function MonthlyAttendancePage() {
                   {selectedDate || '날짜 미선택'} 상세 출석
                 </h2>
                 <p style={{ margin: '6px 0 0', color: '#6b7280' }}>
-                  선택한 날짜의 이벤트별 출석 현황입니다.
+                  선택한 날짜의 행사별 출석 현황입니다.
                 </p>
               </div>
 

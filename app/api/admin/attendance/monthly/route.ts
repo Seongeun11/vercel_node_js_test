@@ -254,7 +254,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       return {
         id: occurrence.id,
         event_id: occurrence.event_id,
-        event_name: event?.name ?? '알 수 없는 이벤트',
+        event_name: event?.name ?? '알 수 없는 행사',
         occurrence_date: occurrence.occurrence_date,
         start_time: occurrence.start_time,
         end_time: occurrence.end_time,

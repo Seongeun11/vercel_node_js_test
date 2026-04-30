@@ -81,7 +81,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (error) {
     console.error('[events/list] query error:', error)
     return jsonNoStore<EventsListResponse>(
-      { error: '이벤트 목록 조회에 실패했습니다.' },
+      { error: '행사 목록 조회에 실패했습니다.' },
       { status: 500 }
     )
   }

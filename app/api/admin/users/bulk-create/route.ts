@@ -38,8 +38,8 @@ type BulkCreateResultItem = {
   message: string
 }
 
-const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024
-const MAX_ROWS = 1000
+const MAX_FILE_SIZE_BYTES = 100 * 1024 //100kb
+const MAX_ROWS = 400
 const MAX_SHEETS = 1
 
 const REQUIRED_COLUMNS = ['student_id', 'full_name', 'password', 'role'] as const

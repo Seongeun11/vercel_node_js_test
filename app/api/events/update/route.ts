@@ -85,14 +85,14 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     if (!id) {
       return jsonNoStore<UpdateEventResponse>(
-        { error: '이벤트 ID가 필요합니다.' },
+        { error: '행사 ID가 필요합니다.' },
         { status: 400 }
       )
     }
 
     if (!name) {
       return jsonNoStore<UpdateEventResponse>(
-        { error: '이벤트명을 입력해주세요.' },
+        { error: '행사명을 입력해주세요.' },
         { status: 400 }
       )
     }
@@ -164,7 +164,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     if (existingError || !existingEvent) {
       return jsonNoStore<UpdateEventResponse>(
-        { error: '수정할 이벤트를 찾을 수 없습니다.' },
+        { error: '수정할 행사를 찾을 수 없습니다.' },
         { status: 404 }
       )
     }
@@ -232,14 +232,14 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     if (updateError || !updatedEvent) {
       return jsonNoStore<UpdateEventResponse>(
-        { error: updateError?.message || '이벤트 수정에 실패했습니다.' },
+        { error: updateError?.message || '행사 수정에 실패했습니다.' },
         { status: 500 }
       )
     }
 
     return jsonNoStore<UpdateEventResponse>(
       {
-        message: '이벤트가 수정되었습니다.',
+        message: '행사가 수정되었습니다.',
         event: updatedEvent as UpdateEventResponse['event'],
       },
       { status: 200 }

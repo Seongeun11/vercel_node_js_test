@@ -65,7 +65,7 @@ export default function AdminQrPage() {
         const result: EventsListResponse = text ? JSON.parse(text) : {}
 
         if (!response.ok) {
-          setErrorMessage(result?.error || '이벤트 목록을 불러오지 못했습니다.')
+          setErrorMessage(result?.error || '행사 목록을 불러오지 못했습니다.')
           return
         }
 
@@ -76,8 +76,8 @@ export default function AdminQrPage() {
           setEventId(fetchedEvents[0].id)
         }
       } catch (error) {
-        console.error('[admin/qr] 이벤트 조회 실패:', error)
-        setErrorMessage('이벤트 목록 조회 중 오류가 발생했습니다.')
+        console.error('[admin/qr] 행사 조회 실패:', error)
+        setErrorMessage('행사 목록 조회 중 오류가 발생했습니다.')
       } finally {
         setLoading(false)
       }
@@ -129,7 +129,7 @@ export default function AdminQrPage() {
     setIsQrModalOpen(false)
 
     if (!eventId) {
-      setErrorMessage('이벤트를 선택해주세요.')
+      setErrorMessage('행사를 선택해주세요.')
       return
     }
 
@@ -203,7 +203,7 @@ export default function AdminQrPage() {
           padding: '20px',
         }}
       >
-        <label style={{ display: 'block', marginBottom: '6px' }}>이벤트 선택</label>
+        <label style={{ display: 'block', marginBottom: '6px' }}>행사 선택</label>
         <select
           value={eventId}
           onChange={(e) => setEventId(e.target.value)}
@@ -223,7 +223,7 @@ export default function AdminQrPage() {
 
         {selectedEvent && (
           <p style={{ marginBottom: '12px', color: '#666' }}>
-            선택된 이벤트: {selectedEvent.name}
+            선택된 행사: {selectedEvent.name}
           </p>
         )}
 

@@ -105,7 +105,7 @@ function formatFieldName(key: string): string {
     date: '날짜',
     method: '출석 방식',
     reason: '사유',
-    event_id: '이벤트',
+    event_id: '행사',
     user_id: '사용자',
     target_user_id: '대상 사용자',
     changed_by: '변경자',
@@ -134,7 +134,7 @@ function formatFieldValue(key: string, value: unknown): string {
 
 function buildLogTitle(item: AttendanceLogItem): string {
   const targetName = item.target_user_profile?.full_name ?? '알 수 없는 사용자'
-  const eventName = item.event_meta?.name ?? '알 수 없는 이벤트'
+  const eventName = item.event_meta?.name ?? '알 수 없는 행사'
 
   switch (item.action) {
     case 'create':
@@ -266,7 +266,7 @@ export default function AdminAttendanceLogsPage() {
       <section style={filterPanelStyle}>
         <div style={filterGridStyle}>
           <FilterInput
-            label="이벤트 ID"
+            label="행사 ID"
             value={eventId}
             onChange={setEventId}
             placeholder="event_id"
@@ -360,7 +360,7 @@ export default function AdminAttendanceLogsPage() {
 
                 <div style={metaGridStyle}>
                   <MetaCard
-                    title="이벤트"
+                    title="행사"
                     value={item.event_meta?.name ?? '알 수 없음'}
                     subTexts={[
                       `날짜: ${item.date || '-'}`,
