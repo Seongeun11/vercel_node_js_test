@@ -8,6 +8,8 @@ import { jsonNoStore } from '@/lib/security/api-response'
 type EnrollmentStatus = 'active' | 'completed'
 type UserRole = 'admin' | 'captain' | 'trainee'
 
+
+
 type ProfileRow = {
   id: string
   full_name: string
@@ -15,6 +17,7 @@ type ProfileRow = {
   role: UserRole
   cohort_no: number | null
   enrollment_status: EnrollmentStatus | null
+  affiliation: string 
   created_at: string
   updated_at: string
 }
@@ -47,6 +50,7 @@ export async function POST(request: NextRequest) {
         role,
         cohort_no,
         enrollment_status,
+        affiliation,  
         created_at,
         updated_at
       `)

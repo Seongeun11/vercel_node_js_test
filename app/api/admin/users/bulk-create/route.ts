@@ -12,15 +12,15 @@ import { jsonNoStore } from '@/lib/security/api-response'
 
 type UserRole = 'admin' | 'captain' | 'trainee'
 type EnrollmentStatus = 'active' | 'completed'
+type Affiliation = (typeof AFFILIATION_VALUES)[number]
 
-type BulkUserRow = {
-  student_id?: string
-  full_name?: string
-  password?: string
-  role?: UserRole | string
-  cohort_no?: number | string
-  enrollment_status?: string
-}
+const AFFILIATION_VALUES = [
+  '아카데미',
+  '영성',
+  '모심',
+  '효진정',
+  '성화영성',
+] as const
 
 type NormalizedBulkUserRow = {
   student_id: string
@@ -29,7 +29,20 @@ type NormalizedBulkUserRow = {
   role: UserRole
   cohort_no: number | null
   enrollment_status: EnrollmentStatus
+  affiliation: Affiliation | '__INVALID__' | '__EMPTY__'
 }
+
+type BulkUserRow = {
+  student_id?: string
+  full_name?: string
+  password?: string
+  role?: UserRole | string
+  cohort_no?: number | string
+  enrollment_status?: string
+  affiliation?: Affiliation | string
+}
+
+
 
 type BulkCreateResultItem = {
   row: number
@@ -43,7 +56,7 @@ const MAX_ROWS = 400
 const MAX_SHEETS = 1
 
 const REQUIRED_COLUMNS = ['student_id', 'full_name', 'password', 'role'] as const
-const OPTIONAL_COLUMNS = ['cohort_no', 'enrollment_status'] as const
+const OPTIONAL_COLUMNS = ['cohort_no', 'enrollment_status', 'affiliation'] as const
 
 const ALLOWED_EXTENSIONS = ['.xlsx', '.xls']
 const ALLOWED_MIME_TYPES = [
@@ -94,6 +107,19 @@ function validateUploadFile(file: File): string {
   }
 
   return ''
+}
+
+function normalizeAffiliation(value: unknown): Affiliation | '__INVALID__' | '__EMPTY__' {
+  const text = normalizeText(value)
+
+  // affiliation NOT NULL 이므로 빈 값 금지
+  if (text === '') return '__EMPTY__'
+
+  if ((AFFILIATION_VALUES as readonly string[]).includes(text)) {
+    return text as Affiliation
+  }
+
+  return '__INVALID__'
 }
 
 function validateColumns(headers: string[]): string {
@@ -159,6 +185,7 @@ function normalizeRow(row: BulkUserRow): NormalizedBulkUserRow {
     role: normalizeText(row.role) as UserRole,
     cohort_no: normalizeCohortNo(row.cohort_no),
     enrollment_status: normalizeEnrollmentStatus(row.enrollment_status),
+    affiliation: normalizeAffiliation(row.affiliation),
   }
 }
 
@@ -201,6 +228,15 @@ if (row.password.length < 8 || row.password.length > 72) {
   ) {
     return '기수(cohort_no)는 1 이상의 정수여야 합니다.'
   }
+  
+  if (row.affiliation === '__EMPTY__') {
+      return '소속(affiliation)은 필수입니다.'
+    }
+
+  if (row.affiliation === '__INVALID__') {
+    return '소속(affiliation)은 아카데미, 영성, 모심, 효진정, 성화영성 중 하나여야 합니다.'
+  }
+
 
   return ''
 }
@@ -405,6 +441,7 @@ export async function POST(request: NextRequest) {
           role: normalized.role,
           cohort_no: normalized.cohort_no,
           enrollment_status: normalized.enrollment_status,
+          affiliation: normalized.affiliation,
         },
         })
 

@@ -18,7 +18,8 @@ export default async function AdminPage() {
   return (
     <main style={{ padding: 24 }}>
       <h1>관리자용 출석관리 페이지</h1>
-
+      26.05.06 업데이트<br />
+      사용자 계정에 소속을 추가했습니다. ('아카데미', '영성', '모심', '효진정', '성화영성')
       
     </main>
   )

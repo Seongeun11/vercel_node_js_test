@@ -72,13 +72,14 @@ export async function POST(request: NextRequest) {
     }
 
     const {
-  student_id: studentId,
-  password,
-  full_name: fullName,
-  role,
-  cohort_no: cohortNo,
-  enrollment_status: enrollmentStatus,
-} = parsed.data
+      student_id: studentId,
+      password,
+      full_name: fullName,
+      role,
+      cohort_no: cohortNo,
+      enrollment_status: enrollmentStatus,
+      affiliation,
+    } = parsed.data
 
     const email = studentIdToEmail(studentId)
 
@@ -199,6 +200,7 @@ export async function POST(request: NextRequest) {
         role,
         cohort_no: cohortNo,
         enrollment_status: enrollmentStatus,
+        affiliation,
       },
       })
 
@@ -224,7 +226,16 @@ export async function POST(request: NextRequest) {
     const { data: createdProfile, error: createdProfileError } =
       await supabaseAdmin
         .from('profiles')
-        .select('id, student_id, full_name, role, cohort_no, enrollment_status, created_at')
+        .select(`
+          id,
+          student_id,
+          full_name,
+          role,
+          cohort_no,
+          enrollment_status,
+          affiliation,
+          created_at
+        `)
         .eq('id', createdAuth.user.id)
         .maybeSingle()
 
@@ -264,6 +275,7 @@ export async function POST(request: NextRequest) {
   role: createdProfile.role,
   cohort_no: createdProfile.cohort_no,
   enrollment_status: createdProfile.enrollment_status,
+  affiliation: createdProfile.affiliation,
   email,
 },
     })
@@ -278,6 +290,7 @@ export async function POST(request: NextRequest) {
   role: createdProfile.role,
   cohort_no: createdProfile.cohort_no,
   enrollment_status: createdProfile.enrollment_status,
+  affiliation: createdProfile.affiliation,
   created_at: createdProfile.created_at,
 },
       },

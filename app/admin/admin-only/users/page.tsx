@@ -8,6 +8,7 @@ import EnrollmentStatusToggle from './enrollment-status'
 
 type UserRole = 'admin' | 'captain' | 'trainee'
 type EnrollmentStatus = 'active' | 'completed'
+type Affiliation = '아카데미' | '영성' | '모심' | '효진정' | '성화영성'
 
 type AdminUser = {
   id: string
@@ -16,6 +17,8 @@ type AdminUser = {
   role: UserRole
   cohort_no: number | null
   enrollment_status: EnrollmentStatus
+  affiliation: Affiliation
+  password?: string
   created_at?: string
   updated_at?: string
 }
@@ -32,12 +35,12 @@ type UserListResponse = {
   users?: AdminUser[]
   error?: string
 }
-
-
-const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
-  { value: 'trainee', label: '수련생' },
-  { value: 'captain', label: '캡틴' },
-  { value: 'admin', label: '관리자' },
+const AFFILIATION_OPTIONS: Array<{ value: Affiliation; label: string }> = [
+  { value: '아카데미', label: '아카데미' },
+  { value: '영성', label: '영성' },
+  { value: '모심', label: '모심' },
+  { value: '효진정', label: '효진정' },
+  { value: '성화영성', label: '성화영성' },
 ]
 
 const ENROLLMENT_STATUS_OPTIONS: Array<{
@@ -48,6 +51,11 @@ const ENROLLMENT_STATUS_OPTIONS: Array<{
   { value: 'completed', label: '수료' },
 ]
 
+const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
+  { value: 'trainee', label: '수련생' },
+  { value: 'captain', label: '캡틴' },
+  { value: 'admin', label: '관리자' },
+]
 function getRoleLabel(role: UserRole): string {
   return ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role
 }
@@ -77,7 +85,8 @@ export default function AdminUsersPage() {
   const [cohortNo, setCohortNo] = useState('')
   const [enrollmentStatus, setEnrollmentStatus] =
     useState<EnrollmentStatus>('active')
-  const [isUserListOpen, setIsUserListOpen] = useState(true)
+  const [affiliation, setAffiliation] = useState<Affiliation | ''>('')
+  const [isUserListOpen, setIsUserListOpen] = useState(false)
   const [users, setUsers] = useState<AdminUser[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
   const [selectedPasswordUser, setSelectedPasswordUser] =
@@ -115,7 +124,8 @@ export default function AdminUsersPage() {
   }
 
   useEffect(() => {
-    void fetchUsers()
+    // 초기 로드 시에는 아무것도 하지 않음
+    //void fetchUsers()
   }, [])
 
   async function handleCreateUser() {
@@ -165,6 +175,7 @@ export default function AdminUsersPage() {
           cohort_no:
             normalizedCohortNo === '' ? null : Number(normalizedCohortNo),
           enrollment_status: enrollmentStatus,
+          affiliation: affiliation === '' ? null : affiliation,
         }),
       })
 
@@ -181,13 +192,14 @@ export default function AdminUsersPage() {
       }
 
       setMessage(result.message || '사용자가 생성되었습니다.')
-
+      //성공후 초기화
       setStudentId('')
       setFullName('')
       setRole('trainee')
       setPassword('')
       setCohortNo('')
       setEnrollmentStatus('active')
+      setAffiliation('')
 
       await fetchUsers()
     } catch (error) {
@@ -248,6 +260,24 @@ export default function AdminUsersPage() {
             ))}
           </select>
         </div>
+        
+        <div>
+            <label style={{ display: 'block', marginBottom: '6px' }}>
+              소속
+            </label>
+            <select
+              value={affiliation}
+              onChange={(event) => setAffiliation(event.target.value as Affiliation | '')}
+              style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
+            >
+              
+              {AFFILIATION_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
         <div>
           <label style={{ display: 'block', marginBottom: '6px' }}>
@@ -267,7 +297,7 @@ export default function AdminUsersPage() {
             ))}
           </select>
         </div>
-
+        
         <div>
           <label style={{ display: 'block', marginBottom: '6px' }}>
             초기 비밀번호
@@ -332,11 +362,17 @@ export default function AdminUsersPage() {
         <h3 style={{ margin: 0 }}>계정 목록</h3>
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          펼치기를 누르면 계정 목록이 표시됩니다.
           <button
             type="button"
             onClick={() => {
               setIsUserListOpen((prev) => {
                 const next = !prev
+                
+                // 목록을 열 때 데이터가 없는 경우에만 fetch (또는 열 때마다 fetch)
+                if (next && users.length === 0) {
+                  void fetchUsers()
+                }
 
                 if (!next) {
                   setSelectedPasswordUser(null)
@@ -383,6 +419,9 @@ export default function AdminUsersPage() {
                     재학/수료
                   </th>
                   <th style={{ borderBottom: '1px solid #ddd', padding: '8px' }}>
+                    소속
+                  </th>
+                  <th style={{ borderBottom: '1px solid #ddd', padding: '8px' }}>
                     비밀번호
                   </th>
                 </tr>
@@ -392,7 +431,7 @@ export default function AdminUsersPage() {
                 {users.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       style={{ padding: '16px', textAlign: 'center' }}
                     >
                       표시할 계정이 없습니다.
@@ -426,12 +465,17 @@ export default function AdminUsersPage() {
                                 prevUser.id === updatedUser.id
                                   ? { ...prevUser, ...updatedUser }
                                   : prevUser
+                                
                               )
                             )
                           }}
                         />
+                      
                       </td>
-
+                      <td style={{ borderBottom: '1px solid #eee', padding: '8px' }}>
+  {/* 매칭되는 라벨을 찾고, 없으면 DB 값 그대로 표시 */}
+  {AFFILIATION_OPTIONS.find(opt => opt.value === user.affiliation)?.label || user.affiliation}
+</td>
                       <td style={{ borderBottom: '1px solid #eee', padding: '8px' }}>
                         <button
                           type="button"
