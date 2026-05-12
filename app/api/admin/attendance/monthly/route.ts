@@ -12,10 +12,12 @@ type ProfileRow = {
   id: string
   student_id: string
   full_name: string
-  role: string
   cohort_no: number | null
   enrollment_status: 'active' | 'completed'
+  roles: { name: string } | null      // roles 테이블의 name 컬럼 참조
+  affiliations: { name: string } | null // affiliations 테이블의 name 컬럼 참조
 }
+
 
 type OccurrenceRow = {
   id: string
@@ -172,8 +174,8 @@ export async function GET(request: NextRequest): Promise<Response> {
      */
     let profileQuery = supabaseAdmin
     .from('profiles')
-    .select('id, student_id, full_name, role, cohort_no, enrollment_status')
-    .eq('role', 'trainee')
+    .select('id, student_id, full_name,cohort_no, enrollment_status,roles!inner(name),affiliations!inner(name)')
+    .eq('roles.name', 'trainee') // 관계 테이블의 role 필터링
     .eq('enrollment_status', 'active')
     .order('student_id', { ascending: true })
     .limit(1000)
@@ -192,15 +194,23 @@ export async function GET(request: NextRequest): Promise<Response> {
         { status: 500 }
       )
     }
-
-    const profiles = ((profileData ?? []) as ProfileRow[]).filter((profile) => {
-      if (!keyword) return true
-
-      return (
-        profile.student_id.toLowerCase().includes(keyword) ||
-        profile.full_name.toLowerCase().includes(keyword)
-      )
-    })
+    // 데이터 가공: 중첩된 객체를 평탄화(Flatten)하여 기존 로직과의 호환성 유지
+    const profiles = ((profileData ?? []) as any[]).map(p => ({
+          id: p.id,
+          student_id: p.student_id,
+          full_name: p.full_name,
+          enrollment_status: p.enrollment_status,
+          // 관계 데이터가 배열로 올 경우를 대비한 안전한 접근
+          cohort_no: p.cohort_no,
+      role: p.roles?.name,
+      affiliation: p.affiliations?.name
+        })).filter((profile) => {
+          if (!keyword) return true
+          return (
+            profile.student_id.toLowerCase().includes(keyword) ||
+            profile.full_name.toLowerCase().includes(keyword)
+          )
+        })
 
     /**
      * 2. 월별 회차 목록 조회
@@ -387,9 +397,9 @@ export async function GET(request: NextRequest): Promise<Response> {
           keyword,
           event_id: eventId || null,
         },
-        summary,
-        occurrences,
-        rows,
+        summary: summary, // 기존 summary 계산 로직 결과
+        occurrences: occurrences, // 기존 occurrences 결과
+        rows: rows, // 가공된 rows 결과
       },
       { status: 200 }
     )
