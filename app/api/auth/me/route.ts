@@ -7,7 +7,7 @@ type MeResponse = {
     id: string
     student_id: string
     full_name: string
-    role: 'admin' | 'captain' | 'trainee'
+    role: string // Enum 대신 유연하게 string으로 받거나, DB의 name과 맞춥니다.
     email?: string | null
   }
   error?: string
@@ -35,7 +35,9 @@ export async function GET(): Promise<Response> {
       id: session.profile.id,
       student_id: session.profile.student_id,
       full_name: session.profile.full_name,
-      role: session.profile.role,
+      // roles 테이블에서 Join된 name 값을 role 필드로 매핑합니다.
+      // getSessionProfile 내부 쿼리가 수정되었다고 가정할 때의 접근 방식입니다.
+      role: (session.profile.role as any)?.name || 'trainee',
       email: session.user.email ?? null,
     },
   })

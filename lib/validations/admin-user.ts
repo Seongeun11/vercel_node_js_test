@@ -3,24 +3,6 @@ import { z } from 'zod'
 const PASSWORD_MIN_LENGTH = 8
 const PASSWORD_MAX_LENGTH = 72
 
-export const AFFILIATION_VALUES = [
-  '아카데미',
-  '영성',
-  '모심',
-  '효진정',
-  '성화영성',
-] as const
-
-const affiliationSchema = z
-  .union([z.string(), z.null(), z.undefined()])
-  .transform((value) => {
-    const text = String(value ?? '').trim()
-    return text === '' ? null : text
-  })
-  .refine(
-    (value) => value === null || AFFILIATION_VALUES.includes(value as any),
-    '소속 값이 올바르지 않습니다.'
-  )
 
 function validateStrongPassword(params: {
   password: string
@@ -48,11 +30,13 @@ export const adminUserCreateSchema = z
     student_id: z.string().trim().regex(/^\d{10}$/, '학번은 10자리 숫자여야 합니다.'),
     password: z.string(),
     full_name: z.string().trim().min(2).max(20),
-    role: z.enum(['admin', 'captain', 'trainee']),
+   // [핵심 수정] z.coerce를 사용하여 문자열 "1"을 숫자 1로 자동 변환합니다.
+    role_id: z.coerce.number().int().default(1),
+    affiliation_id: z.coerce.number().int().default(1),
     enrollment_status: z.enum(['active', 'completed']).default('active'),
     // 2. default(null) 제거 및 필수값으로 설정
     // 만약 기본값이 필요하다면 .default('아카데미') 처럼 지정하세요.
-    affiliation: affiliationSchema,
+    
 
     cohort_no: z
       .union([z.string(), z.number(), z.null(), z.undefined()])

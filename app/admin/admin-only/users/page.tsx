@@ -6,18 +6,24 @@ import UserBulkUpload from './user-bulk-upload'
 import ResetPasswordPanel from './reset-password-panel'
 import EnrollmentStatusToggle from './enrollment-status'
 
+// --- 타입 정의 (정규화 반영) ---
 type UserRole = 'admin' | 'captain' | 'trainee'
 type EnrollmentStatus = 'active' | 'completed'
 type Affiliation = '아카데미' | '영성' | '모심' | '효진정' | '성화영성'
-
+// 1. 타입을 ID 기반으로 확장합니다.
+type AffiliationOption = {
+  value: string; // 텍스트 (UI 표시용)
+  label: string; // 라벨
+  id: number;    // DB의 affiliation_id와 매칭될 값
+};
 type AdminUser = {
   id: string
   student_id: string
   full_name: string
-  role: UserRole
   cohort_no: number | null
   enrollment_status: EnrollmentStatus
-  affiliation: Affiliation
+  role: UserRole; 
+  affiliation: Affiliation;// DB Join 결과로 넘어오는 텍스트 명칭
   password?: string
   created_at?: string
   updated_at?: string
@@ -35,12 +41,20 @@ type UserListResponse = {
   users?: AdminUser[]
   error?: string
 }
-const AFFILIATION_OPTIONS: Array<{ value: Affiliation; label: string }> = [
-  { value: '아카데미', label: '아카데미' },
-  { value: '영성', label: '영성' },
-  { value: '모심', label: '모심' },
-  { value: '효진정', label: '효진정' },
-  { value: '성화영성', label: '성화영성' },
+
+// 1. 옵션에 DB와 일치하는 실제 ID 값을 추가합니다.
+const ROLE_OPTIONS = [
+  { value: 'trainee', label: '수련생', id: 1 },
+  { value: 'captain', label: '캡틴', id: 2 },
+  { value: 'admin', label: '관리자', id: 3 },
+] as const;
+
+const AFFILIATION_OPTIONS: AffiliationOption[] = [
+  { value: '아카데미', label: '아카데미' ,id: 1 },
+  { value: '영성', label: '영성' ,id: 2},
+  { value: '모심', label: '모심' ,id: 3},
+  { value: '효진정', label: '효진정' ,id: 4},
+  { value: '성화영성', label: '성화영성' ,id: 5},
 ]
 
 const ENROLLMENT_STATUS_OPTIONS: Array<{
@@ -51,11 +65,8 @@ const ENROLLMENT_STATUS_OPTIONS: Array<{
   { value: 'completed', label: '수료' },
 ]
 
-const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
-  { value: 'trainee', label: '수련생' },
-  { value: 'captain', label: '캡틴' },
-  { value: 'admin', label: '관리자' },
-]
+
+
 function getRoleLabel(role: UserRole): string {
   return ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role
 }
@@ -80,12 +91,13 @@ export default function AdminUsersPage() {
   
   const [studentId, setStudentId] = useState('')
   const [fullName, setFullName] = useState('')
-  const [role, setRole] = useState<UserRole>('trainee')
+  const [roleId, setRoleId] = useState<number>(1) // 초기값: 수련생 ID
   const [password, setPassword] = useState('')
   const [cohortNo, setCohortNo] = useState('')
   const [enrollmentStatus, setEnrollmentStatus] =
     useState<EnrollmentStatus>('active')
-  const [affiliation, setAffiliation] = useState<Affiliation | ''>('')
+  // 3. 상태 변수를 텍스트가 아닌 ID(number)를 저장하도록 변경하는 것이 관리하기 편합니다.
+  const [affiliationId, setAffiliationId] = useState<number | ''>('');
   const [isUserListOpen, setIsUserListOpen] = useState(false)
   const [users, setUsers] = useState<AdminUser[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
@@ -128,6 +140,7 @@ export default function AdminUsersPage() {
     //void fetchUsers()
   }, [])
 
+  // 사용자 생성 핸들러
   async function handleCreateUser() {
     setMessage('')
     setErrorMessage('')
@@ -170,12 +183,13 @@ export default function AdminUsersPage() {
         body: JSON.stringify({
           student_id: normalizedStudentId,
           full_name: normalizedFullName,
-          role,
+          role_id: roleId,             // 수정: ID 전송
+          affiliation_id: affiliationId, // 수정: ID 전송
           password,
           cohort_no:
             normalizedCohortNo === '' ? null : Number(normalizedCohortNo),
           enrollment_status: enrollmentStatus,
-          affiliation: affiliation === '' ? null : affiliation,
+          
         }),
       })
 
@@ -195,11 +209,11 @@ export default function AdminUsersPage() {
       //성공후 초기화
       setStudentId('')
       setFullName('')
-      setRole('trainee')
+      setRoleId(1)
       setPassword('')
       setCohortNo('')
       setEnrollmentStatus('active')
-      setAffiliation('')
+      setAffiliationId('')
 
       await fetchUsers()
     } catch (error) {
@@ -248,16 +262,10 @@ export default function AdminUsersPage() {
 
         <div>
           <label style={{ display: 'block', marginBottom: '6px' }}>권한</label>
-          <select
-            value={role}
-            onChange={(event) => setRole(event.target.value as UserRole)}
-            style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
-          >
-            {ROLE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
+          <select value={roleId} onChange={(e) => setRoleId(Number(e.target.value))} style={{ width: '100%', padding: '10px' }}>
+              {ROLE_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
           </select>
         </div>
         
@@ -265,16 +273,10 @@ export default function AdminUsersPage() {
             <label style={{ display: 'block', marginBottom: '6px' }}>
               소속
             </label>
-            <select
-              value={affiliation}
-              onChange={(event) => setAffiliation(event.target.value as Affiliation | '')}
-              style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
-            >
-              
-              {AFFILIATION_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
+            <select value={affiliationId} onChange={(e) => setAffiliationId(Number(e.target.value))} style={{ width: '100%', padding: '10px' }}>
+              <option value="">소속 선택</option>
+              {AFFILIATION_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
               ))}
             </select>
           </div>
@@ -473,9 +475,8 @@ export default function AdminUsersPage() {
                       
                       </td>
                       <td style={{ borderBottom: '1px solid #eee', padding: '8px' }}>
-  {/* 매칭되는 라벨을 찾고, 없으면 DB 값 그대로 표시 */}
-  {AFFILIATION_OPTIONS.find(opt => opt.value === user.affiliation)?.label || user.affiliation}
-</td>
+                        {user.affiliation}{/* 서버에서 Join된 명칭 표시 */}
+                      </td>
                       <td style={{ borderBottom: '1px solid #eee', padding: '8px' }}>
                         <button
                           type="button"

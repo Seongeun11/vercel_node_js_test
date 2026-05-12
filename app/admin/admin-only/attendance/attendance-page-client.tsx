@@ -27,7 +27,9 @@ type AttendanceManageItem = {
     id: string
     student_id: string
     full_name: string
-    role: 'admin' | 'captain' | 'trainee'
+    // 서버 API가 평탄화를 해준다면 string, 아니라면 중첩 객체로 정의해야 합니다.
+    // 여기서는 안전하게 가공된 role 문자열을 받는다고 가정하거나 옵셔널하게 처리합니다.
+    role?: string
   } | null
 }
 

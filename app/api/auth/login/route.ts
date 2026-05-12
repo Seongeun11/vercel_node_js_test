@@ -112,10 +112,11 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
-
+// 3) [수정 핵심] 정규화된 프로필 정보 조회
+// 기존의 'role' 대신 'roles!inner(name)'를 사용하여 관계형 데이터를 가져옵니다.
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('id, full_name, student_id, role')
+      .select('id, full_name, student_id, roles!inner ( name )')
       .eq('id', signInData.user.id)
       .maybeSingle()
 

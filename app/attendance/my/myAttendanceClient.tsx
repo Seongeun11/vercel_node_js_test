@@ -96,11 +96,16 @@ export default function MyAttendanceClient() {
 
       const response = await fetch('/api/attendance/list', {
         method: 'GET',
+        // credentials: 'include'는 중요합니다! 쿠키를 같이 보냅니다.
         credentials: 'include',
         cache: 'no-store',
       })
-
+// 디버깅을 위한 로그 추가
+    console.log('API 응답 상태 코드:', response.status);
       if (response.status === 401) {
+        console.error('인증 실패: 세션이 만료되었거나 로그인이 필요합니다.');
+      // 바로 튕기지 않고 메시지를 보여준 뒤 이동시키려면 알림창을 띄울 수 있습니다.
+      alert('세션이 만료되었습니다. 다시 로그인해주세요.');
         window.location.href = '/login'
         return
       }

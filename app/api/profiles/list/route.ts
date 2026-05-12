@@ -14,7 +14,8 @@ type ProfileRow = {
   id: string
   full_name: string
   student_id: string
-  role: UserRole
+  // 조인된 데이터 (Supabase 쿼리 결과 형태)
+  roles: { name: string }
   cohort_no: number | null
   enrollment_status: EnrollmentStatus | null
   affiliation: string 
@@ -31,7 +32,7 @@ function normalizeEnrollmentStatus(
 export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request)
-
+// 관리자 권한 확인
     const authResult = await requireRole(['admin'])
 
     if (!authResult.ok) {
@@ -40,19 +41,20 @@ export async function POST(request: NextRequest) {
         { status: authResult.status }
       )
     }
-
+// 2. [수정 핵심] 조인 쿼리 실행
+    // role_id, affiliation_id 대신 각 테이블의 name을 가져옵니다.
     const { data, error } = await supabaseAdmin
       .from('profiles')
       .select(`
         id,
         full_name,
-        student_id,
-        role,
+        student_id,    
         cohort_no,
         enrollment_status,
-        affiliation,  
         created_at,
-        updated_at
+        updated_at,
+        roles ( name ),
+        affiliations ( name )
       `)
       .order('student_id', { ascending: true })
 
@@ -62,9 +64,18 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       )
     }
-
-    const users = ((data ?? []) as ProfileRow[]).map((user) => ({
-      ...user,
+// 3. [수정 핵심] 클라이언트용 데이터 평탄화 매핑
+    // 중첩된 roles.name과 affiliations.name을 최상위 필드로 끌어올립니다.
+    const users = ((data ?? []) as any[]).map((user) => ({
+      id: user.id,
+      full_name: user.full_name,
+      student_id: user.student_id,
+      cohort_no: user.cohort_no,
+      created_at: user.created_at,
+      updated_at: user.updated_at,
+      // 가공 필드
+      role: (user.roles?.name || 'trainee') as UserRole,
+      affiliation: user.affiliations?.name || '미지정',
       enrollment_status: normalizeEnrollmentStatus(user.enrollment_status),
     }))
 
