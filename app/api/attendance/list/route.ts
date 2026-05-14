@@ -7,7 +7,7 @@ type AttendanceItem = {
   id: string
   user_id: string
   event_id: string
-  date: string
+  attendance_date: string
   status: 'present' | 'late' | 'absent'
   method: 'manual' | 'qr' | 'nfc'
   check_time: string
@@ -27,7 +27,7 @@ type AttendanceRow = {
   id: string
   user_id: string
   event_id: string
-  date: string
+  attendance_date: string
   status: 'present' | 'late' | 'absent'
   method: 'manual' | 'qr' | 'nfc'
   check_time: string
@@ -101,7 +101,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       id,
       user_id,
       event_id,
-      date,
+      attendance_date,
       status,
       method,
       check_time,
@@ -176,7 +176,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       id: row.id,
       user_id: row.user_id,
       event_id: row.event_id,
-      date: row.date,
+      attendance_date: row.attendance_date,
       status: row.status,
       method: row.method,
       check_time: row.check_time,

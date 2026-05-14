@@ -11,7 +11,7 @@ type AttendanceManageItem = {
   id: string
   user_id: string
   event_id: string
-  date: string
+  attendance_date: string
   status: AttendanceStatus
   method: AttendanceMethod
   check_time: string
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       id,
       user_id,
       event_id,
-      date,
+      attendance_date,
       status,
       method,
       check_time,
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         )
       )
     `)
-    .order('date', { ascending: false })
+    .order('attendance_date', { ascending: false })
     .order('check_time', { ascending: false })
     .limit(limit)
 
@@ -120,11 +120,11 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   if (dateFrom) {
-    query = query.gte('date', dateFrom)
+    query = query.gte('attendance_date', dateFrom)
   }
 
   if (dateTo) {
-    query = query.lte('date', dateTo)
+    query = query.lte('attendance_date', dateTo)
   }
 
   const { data, error } = await query
@@ -149,7 +149,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       id: row.id,
       user_id: row.user_id,
       event_id: row.event_id,
-      date: row.date,
+      attendance_date: row.date,
       status: row.status,
       method: row.method,
       check_time: row.check_time,

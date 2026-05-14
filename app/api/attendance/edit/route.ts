@@ -20,7 +20,7 @@ type AttendanceRow = {
   id: string
   user_id: string
   event_id: string
-  date: string
+  attendance_date: string
   status: AttendanceStatus
   method: AttendanceMethod
   check_time: string

@@ -11,7 +11,7 @@ type AttendanceManageItem = {
   id: string
   user_id: string
   event_id: string
-  date: string
+  attendance_date: string
   status: AttendanceStatus
   method: AttendanceMethod
   check_time: string
@@ -388,7 +388,7 @@ export default function AdminAttendancePage({ initialDate }: AttendanceClientPro
                       {item.user?.full_name || '-'} ({item.user?.student_id || '-'})
                     </div>
                     <div style={{ marginTop: '6px', color: '#555' }}>
-                      {item.event?.name || '-'} / {item.date}
+                      {item.event?.name || '-'} / {item.attendance_date}
                     </div>
                     <div style={{ marginTop: '6px', color: '#666', fontSize: '14px' }}>
                       상태: {item.status} / 방식: {item.method}
