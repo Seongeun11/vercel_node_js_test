@@ -17,7 +17,7 @@ type AttendanceRow = {
   event_id: string
   occurrence_id: string
   attendance_date: string | null
-  date: string | null
+  //date: string | null
   status: AttendanceStatus
   method: string | null
   check_time: string | null
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         event_id,
         occurrence_id,
         attendance_date,
-        date,
+        
         status,
         method,
         check_time,
@@ -201,7 +201,7 @@ export async function POST(request: NextRequest): Promise<Response> {
             status: row.status,
             method: row.method,
             check_time: row.check_time,
-            attendance_date: row.attendance_date ?? row.date,
+            attendance_date: row.attendance_date,
           }
         }),
       },
