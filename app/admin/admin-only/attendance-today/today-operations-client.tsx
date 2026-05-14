@@ -7,6 +7,11 @@ import QRCode from 'qrcode'
 type ExpireUnit = 'hours' | 'days' | 'unlimited'
 type WeekdayCode = 'sun'|'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' 
 type AttendanceStatus = 'present' | 'late' | 'absent'
+// 1. 역할 타입 정의 (제2정규화 반영)
+type UserRole = {
+  id: number
+  name: 'admin' | 'captain' | 'trainee'
+}
 
 type TodayOccurrenceItem = {
   id: string
@@ -69,7 +74,10 @@ type AttendanceItem = {
   user_id: string
   full_name: string
   student_id: string
-  role: 'admin' | 'captain' | 'trainee'
+  // role: 'admin' | 'captain' | 'trainee'  <-- 기존 방식 삭제
+  profiles: {
+    roles: UserRole 
+  }
   status: AttendanceStatus
   method: string | null
   check_time: string | null
@@ -101,7 +109,9 @@ type MissingItem = {
   id: string
   full_name: string
   student_id: string
-  role: 'trainee'
+  profiles: {
+    roles: UserRole 
+  }
 }
 
 type MissingByOccurrenceResponse = {
@@ -929,7 +939,7 @@ async function handleOpenQrWindow(qrUrl: string) {
                                 <tr key={attendance.id}>
                                   <td style={tdStyle}>{attendance.full_name}</td>
                                   <td style={tdStyle}>{attendance.student_id}</td>
-                                  <td style={tdStyle}>{formatRole(attendance.role)}</td>
+                                  <td style={tdStyle}>{formatRole(attendance.profiles?.roles?.name)}</td>
                                   <td style={tdStyle}>{formatAttendanceStatus(attendance.status)}</td>
                                   <td style={tdStyle}>{attendance.method ?? '-'}</td>
                                   <td style={tdStyle}>
@@ -965,7 +975,7 @@ async function handleOpenQrWindow(qrUrl: string) {
                                 <tr key={missing.id}>
                                   <td style={tdStyle}>{missing.full_name}</td>
                                   <td style={tdStyle}>{missing.student_id}</td>
-                                  <td style={tdStyle}>{formatRole(missing.role)}</td>
+                                  <td style={tdStyle}>{formatRole(missing.profiles?.roles?.name)}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1181,8 +1191,8 @@ function formatAttendanceStatus(status: AttendanceStatus) {
   }
 }
 
-function formatRole(role: 'admin' | 'captain' | 'trainee') {
-  switch (role) {
+function formatRole(roleName?: string){
+  switch (roleName) {
     case 'admin':
       return '관리자'
     case 'captain':
@@ -1190,7 +1200,7 @@ function formatRole(role: 'admin' | 'captain' | 'trainee') {
     case 'trainee':
       return '수련생'
     default:
-      return role
+      return '수련생'
   }
 }
 

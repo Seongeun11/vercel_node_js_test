@@ -27,7 +27,10 @@ type AttendanceRow = {
     id: string
     full_name: string
     student_id: string
-    role: 'admin' | 'captain' | 'trainee'
+    // role: string 대신 조인된 객체 구조 사용
+    roles: {
+      name: 'admin' | 'captain' | 'trainee'
+    }
   }> | null
 }
 
@@ -143,7 +146,9 @@ export async function POST(request: NextRequest): Promise<Response> {
           id,
           full_name,
           student_id,
-          role
+          roles (
+            name
+          )
         )
       `)
       .eq('occurrence_id', occurrenceId)
@@ -155,7 +160,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 500 }
       )
     }
-
+// Supabase의 단일 관계 조인 결과는 배열이 아닌 객체로 옵니다.
     const rows = (attendanceRows ?? []) as unknown as AttendanceRow[]
 
     const presentCount = rows.filter((row) => row.status === 'present').length
@@ -185,13 +190,14 @@ export async function POST(request: NextRequest): Promise<Response> {
           const profile = Array.isArray(row.profiles)
             ? row.profiles[0] ?? null
             : row.profiles ?? null
-
+          const roleName = profile?.roles?.name ?? 'trainee'
+          
           return {
             id: row.id,
             user_id: row.user_id,
             full_name: profile?.full_name ?? '알 수 없음',
             student_id: profile?.student_id ?? '-',
-            role: profile?.role ?? 'trainee',
+            role: roleName as 'admin' | 'captain' | 'trainee',
             status: row.status,
             method: row.method,
             check_time: row.check_time,

@@ -27,7 +27,7 @@ type AttendanceManageItem = {
     id: string
     student_id: string
     full_name: string
-    role: 'admin' | 'captain' | 'trainee'
+    role: 'admin' | 'captain' | 'trainee' // 기존 UI 호환성을 위해 문자열 유지
   } | null
 }
 
@@ -101,7 +101,10 @@ export async function GET(request: NextRequest): Promise<Response> {
         id,
         student_id,
         full_name,
-        role
+        roles (
+          id,
+          name
+        )
       )
     `)
     .order('date', { ascending: false })
@@ -134,20 +137,33 @@ export async function GET(request: NextRequest): Promise<Response> {
     )
   }
 
-  let items = (data ?? []).map((row) => ({
-    id: row.id,
-    user_id: row.user_id,
-    event_id: row.event_id,
-    date: row.date,
-    status: row.status,
-    method: row.method,
-    check_time: row.check_time,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-    event: Array.isArray(row.event) ? row.event[0] ?? null : row.event ?? null,
-    user: Array.isArray(row.user) ? row.user[0] ?? null : row.user ?? null,
-  }))
+// 2) 데이터 가공 및 역할(role) 추출 로직 수정
+  let items: AttendanceManageItem[] = (data ?? []).map((row: any) => {
+    const eventData = Array.isArray(row.event) ? row.event[0] : row.event
+    const userData = Array.isArray(row.user) ? row.user[0] : row.user
+    
+    // roles 테이블에서 name 추출 (중첩 구조 해제)
+    const roleName = userData?.roles?.name || 'trainee'
 
+    return {
+      id: row.id,
+      user_id: row.user_id,
+      event_id: row.event_id,
+      date: row.date,
+      status: row.status,
+      method: row.method,
+      check_time: row.check_time,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      event: eventData ?? null,
+      user: userData ? {
+        id: userData.id,
+        student_id: userData.student_id,
+        full_name: userData.full_name,
+        role: roleName as 'admin' | 'captain' | 'trainee'
+      } : null,
+    }
+  })
   if (userKeyword) {
     const keyword = userKeyword.toLowerCase()
     items = items.filter((item) => {

@@ -8,12 +8,27 @@ import { jsonNoStore } from '@/lib/security/api-response'
 type MissingByOccurrenceBody = {
   occurrence_id?: string
 }
-
+type MissingItemResponse = {
+  id: string
+  full_name: string
+  student_id: string
+  profiles: {
+    roles: {
+      id: number
+      name: string
+    }
+  }
+}
+// 1. 제2 정규화 구조를 반영한 타입 수정
 type TraineeProfileRow = {
   id: string
   full_name: string
   student_id: string
-  role: 'trainee'
+  // 정규화된 roles 테이블 조인 구조
+  roles: {
+    id: number
+    name: string
+  }
   enrollment_status: 'active' | 'completed'
 }
 
@@ -39,12 +54,7 @@ type MissingByOccurrenceResponse = {
     } | null
   }
   count?: number
-  items?: Array<{
-    id: string
-    full_name: string
-    student_id: string
-    role: 'trainee'
-  }>
+  items?: MissingItemResponse[] // 수정된 아이템 타입 적용
   error?: string
 }
 
@@ -107,10 +117,11 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     // 2) 전체 trainee 조회
+    // profiles 테이블의 role_id(외래키)를 통해 roles 테이블의 name을 가져옵니다.
     const { data: trainees, error: traineesError } = await supabaseAdmin
       .from('profiles')
-      .select('id, full_name, student_id, role,enrollment_status')
-      .eq('role', 'trainee')
+      .select('id, full_name, student_id, roles!inner (id, name),enrollment_status')
+      .eq('roles.name', 'trainee')// rpc가 아닌 쿼리 빌더에서도 정규화된 이름으로 필터링
       .eq('enrollment_status', 'active')
       .order('student_id', { ascending: true })
 
@@ -121,7 +132,8 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
-    const traineeRows = (trainees ?? []) as TraineeProfileRow[]
+    const traineeRows = (trainees ?? []) as unknown as TraineeProfileRow[]
+
 
     // 3) 해당 회차에 attendance가 있는 사용자 조회
     const { data: existingAttendance, error: existingAttendanceError } =
@@ -148,7 +160,12 @@ export async function POST(request: NextRequest): Promise<Response> {
         id: row.id,
         full_name: row.full_name,
         student_id: row.student_id,
-        role: 'trainee' as const,
+        profiles: {
+          roles: {
+            id: Number((row.roles as any).id),
+            name: (row.roles as any).name as 'admin' | 'captain' | 'trainee'
+          }
+        }
       }))
 
     const event = Array.isArray(occurrence.events)
