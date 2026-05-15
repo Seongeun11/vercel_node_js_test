@@ -48,7 +48,7 @@ type AttendanceRow = {
   event_id: string
   occurrence_id: string | null
   attendance_date: string | null
-  date: string | null
+  
   status: AttendanceStatus
   method: string | null
   check_time: string | null
@@ -202,8 +202,14 @@ export async function GET(request: NextRequest): Promise<Response> {
           enrollment_status: p.enrollment_status,
           // 관계 데이터가 배열로 올 경우를 대비한 안전한 접근
           cohort_no: p.cohort_no,
-      role: p.roles?.name,
-      affiliation: p.affiliations?.name
+     role:
+   Array.isArray(p.roles)
+   ? p.roles[0]?.name
+   : p.roles?.name,
+      affiliation:
+   Array.isArray(p.affiliations)
+   ? p.affiliations[0]?.name
+   : p.affiliations?.name
         })).filter((profile) => {
           if (!keyword) return true
           return (
@@ -291,7 +297,7 @@ export async function GET(request: NextRequest): Promise<Response> {
             event_id,
             occurrence_id,
             attendance_date,
-            date,
+            
             status,
             method,
             check_time

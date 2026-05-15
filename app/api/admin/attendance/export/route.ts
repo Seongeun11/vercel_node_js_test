@@ -15,7 +15,7 @@ interface Profile {
 }
 
 interface AttendanceRow {
-  attendance_date: string
+  attendance_date: string | null
   status: AttendanceStatus
   user_id: string
 }
@@ -71,8 +71,8 @@ export async function GET(request: NextRequest): Promise<Response> {
   // 2. active 상태의 trainee 등급 유저만 조회
   const { data: trainees, error: userError } = await supabaseAdmin
     .from('profiles')
-    .select('id, student_id, full_name, cohort_no, enrollment_status')
-    .eq('role', 'trainee')
+    .select('id, student_id, full_name, cohort_no, enrollment_status, roles!inner(name)')
+    .eq('roles.name','trainee')
     .eq('enrollment_status', 'active')
   if (userError || !trainees) {
     return Response.json({ error: '교육생 정보를 불러오지 못했습니다.' }, { status: 500 })
@@ -110,7 +110,8 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   // 출석 데이터 매핑
   if (attendanceData) {
-    for (const row of attendanceData) {
+    for (const row of attendanceData ?? []) {
+      if(!row.attendance_date) continue
       if (userMap.has(row.user_id)) {
         dateSet.add(row.attendance_date)
         userMap.get(row.user_id)!.statuses[row.attendance_date] = formatStatus(row.status as AttendanceStatus)

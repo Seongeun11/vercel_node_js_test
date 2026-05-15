@@ -327,7 +327,20 @@ export default function MonthlyAttendancePage() {
       setLoading(false)
     }
   }
+  function toKstTime(value:string){
 
+ return new Intl.DateTimeFormat(
+ 'ko-KR',
+ {
+   timeZone:'Asia/Seoul',
+   hour:'2-digit',
+   minute:'2-digit',
+   hour12:false
+ }
+ ).format(
+    new Date(value)
+ )
+}
   async function loadEvents(): Promise<void> {
     try {
       const response = await fetch('/api/events/list', {
@@ -653,7 +666,7 @@ export default function MonthlyAttendancePage() {
                         <Th key={occurrence.id} width={140}>
                           <div>{occurrence.event_name}</div>
                           <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                            {occurrence.start_time?.slice(11, 16) ?? '-'}
+                            {toKstTime(occurrence.start_time)}
                           </div>
                         </Th>
                       ))}
