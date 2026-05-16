@@ -66,6 +66,8 @@ const ALLOWED_MIME_TYPES = [
   '',
 ]
 
+
+
 function normalizeSupabaseAuthError(message?: string): string {
   if (!message) return '사용자 생성 실패'
 
@@ -103,7 +105,7 @@ function validateUploadFile(file: File): string {
   }
 
   if (file.size > MAX_FILE_SIZE_BYTES) {
-    return '파일 크기는 최대 2MB까지 허용됩니다.'
+    return '파일 크기는 최대 100kB까지 허용됩니다.'
   }
 
   return ''
@@ -369,7 +371,34 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+// 역할/소속 사전 로드 (1회 조회)
+const [{ data: roles, error: roleError }, { data: affiliations, error: affiliationError }] =
+  await Promise.all([
+    supabaseAdmin
+      .from('roles')
+      .select('id,name'),
 
+    supabaseAdmin
+      .from('affiliations')
+      .select('id,name'),
+  ])
+
+  if (roleError || affiliationError || !roles || !affiliations) {
+    return jsonNoStore(
+      {
+        error: '역할/소속 정보를 불러오지 못했습니다.',
+      },
+      { status: 500 }
+    )
+  }
+
+  const roleMap = new Map<string, number>(
+    roles.map(item => [item.name, item.id])
+  )
+
+  const affiliationMap = new Map<string, number>(
+    affiliations.map(item => [item.name, item.id])
+  )
     const results: BulkCreateResultItem[] = []
     const seenStudentIds = new Set<string>()
 
@@ -402,7 +431,33 @@ export async function POST(request: NextRequest) {
       seenStudentIds.add(normalized.student_id)
 
       const email = studentIdToEmail(normalized.student_id)
+      const roleId = roleMap.get(normalized.role)
 
+      const affiliationId = affiliationMap.get(
+        normalized.affiliation as string
+      )
+
+      if (!roleId) {
+        results.push({
+          row: rowNumber,
+          student_id: normalized.student_id,
+          success: false,
+          message: '존재하지 않는 역할입니다.',
+        })
+
+        continue
+      }
+
+      if (!affiliationId) {
+        results.push({
+          row: rowNumber,
+          student_id: normalized.student_id,
+          success: false,
+          message: '존재하지 않는 소속입니다.',
+        })
+
+        continue
+      }
       const { data: existingProfile, error: existingProfileError } =
         await supabaseAdmin
           .from('profiles')
@@ -431,19 +486,23 @@ export async function POST(request: NextRequest) {
       }
 
       const { data: createdAuth, error: createAuthError } =
-        await supabaseAdmin.auth.admin.createUser({
-          email,
-          password: normalized.password,
-          email_confirm: true,
-          user_metadata: {
+      await supabaseAdmin.auth.admin.createUser({
+        email,
+        password: normalized.password,
+        email_confirm: true,
+
+        user_metadata: {
           student_id: normalized.student_id,
           full_name: normalized.full_name,
-          role: normalized.role,
+
+          // 트리거가 요구하는 필드
+          role_id: roleId,
+          affiliation_id: affiliationId,
+
           cohort_no: normalized.cohort_no,
           enrollment_status: normalized.enrollment_status,
-          affiliation: normalized.affiliation,
         },
-        })
+      })
 
       if (createAuthError || !createdAuth.user) {
         results.push({
@@ -455,12 +514,38 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      const { data: createdProfile, error: createdProfileError } =
-        await supabaseAdmin
-          .from('profiles')
-          .select('id, student_id, full_name, role, cohort_no, enrollment_status, created_at')
-          .eq('id', createdAuth.user.id)
-          .maybeSingle()
+      let createdProfile = null
+      let createdProfileError = null
+
+      for (let i = 0; i < 5; i++) {
+        const response =
+          await supabaseAdmin
+            .from('profiles')
+            .select(`
+              id,
+              student_id,
+              full_name,
+              role_id,
+              affiliation_id,
+              cohort_no,
+              enrollment_status,
+              created_at
+            `)
+            .eq(
+              'id',
+              createdAuth.user.id
+            )
+            .maybeSingle()
+
+        createdProfile = response.data
+        createdProfileError = response.error
+
+        if (createdProfile) break
+
+        await new Promise(resolve =>
+          setTimeout(resolve, 300)
+        )
+      }
 
       if (createdProfileError || !createdProfile) {
         await supabaseAdmin.auth.admin.deleteUser(createdAuth.user.id)

@@ -44,9 +44,10 @@ type UserListResponse = {
 
 // 1. 옵션에 DB와 일치하는 실제 ID 값을 추가합니다.
 const ROLE_OPTIONS = [
-  { value: 'trainee', label: '수련생', id: 1 },
+
+  { value: 'admin', label: '관리자', id: 1 },
   { value: 'captain', label: '캡틴', id: 2 },
-  { value: 'admin', label: '관리자', id: 3 },
+  { value: 'trainee', label: '수련생', id: 3 },
 ] as const;
 
 const AFFILIATION_OPTIONS: AffiliationOption[] = [
@@ -91,7 +92,7 @@ export default function AdminUsersPage() {
   
   const [studentId, setStudentId] = useState('')
   const [fullName, setFullName] = useState('')
-  const [roleId, setRoleId] = useState<number>(1) // 초기값: 수련생 ID
+  const [roleId, setRoleId] = useState<number>(3) // 초기값: 수련생 ID
   const [password, setPassword] = useState('')
   const [cohortNo, setCohortNo] = useState('')
   const [enrollmentStatus, setEnrollmentStatus] =
@@ -209,7 +210,7 @@ export default function AdminUsersPage() {
       //성공후 초기화
       setStudentId('')
       setFullName('')
-      setRoleId(1)
+      setRoleId(3)
       setPassword('')
       setCohortNo('')
       setEnrollmentStatus('active')

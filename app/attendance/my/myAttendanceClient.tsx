@@ -12,7 +12,7 @@ type AttendanceItem = {
   id: string
   user_id: string
   event_id: string
-  date: string
+  attendance_date: string
   status: AttendanceStatus
   method: AttendanceMethod
   check_time: string
@@ -229,7 +229,7 @@ export default function MyAttendanceClient() {
                   <strong>행사:</strong> {item.event?.name || '-'}
                 </div>
                 <div>
-                  <strong>날짜:</strong> {item.date}
+                  <strong>날짜:</strong> {item.attendance_date}
                 </div>
                 <div>
                   <strong>출석 상태:</strong> {getStatusLabel(item.status)}
