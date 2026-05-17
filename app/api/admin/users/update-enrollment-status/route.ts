@@ -15,7 +15,19 @@ const updateEnrollmentStatusSchema = z.object({
     message: "enrollment_status 는 'active', 'completed' 중 하나이어야 합니다.",
   }),
 })
-
+const profileQuery = `
+id,
+student_id,
+full_name,
+cohort_no,
+enrollment_status,
+created_at,
+updated_at,
+role:roles(
+  id,
+  name
+)
+`
 export async function POST(request: NextRequest) {
   const clientIp = getClientIp(request)
 
@@ -71,7 +83,7 @@ export async function POST(request: NextRequest) {
     const { data: targetProfile, error: targetProfileError } =
       await supabaseAdmin
         .from('profiles')
-        .select('id, student_id, full_name, role, enrollment_status')
+        .select(profileQuery)
         .eq('id', userId)
         .maybeSingle()
 
@@ -107,7 +119,7 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', userId)
-      .select('id, student_id, full_name, role, cohort_no, enrollment_status, created_at, updated_at')
+      .select(profileQuery)
       .single()
 
     if (updateError) {

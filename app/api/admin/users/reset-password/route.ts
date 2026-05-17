@@ -16,7 +16,19 @@ const resetPasswordSchema = z.object({
   user_id: z.string().uuid('사용자 ID가 올바르지 않습니다.'),
   password: z.string(),
 })
-
+const profileQuery = `
+id,
+student_id,
+full_name,
+cohort_no,
+enrollment_status,
+created_at,
+updated_at,
+role:roles(
+  id,
+  name
+)
+`
 function validateStrongPassword(params: {
   password: string
   studentId?: string
@@ -123,7 +135,7 @@ export async function POST(request: NextRequest) {
     const { data: targetProfile, error: targetProfileError } =
       await supabaseAdmin
         .from('profiles')
-        .select('id, student_id, full_name, role')
+        .select(profileQuery)
         .eq('id', userId)
         .maybeSingle()
 
