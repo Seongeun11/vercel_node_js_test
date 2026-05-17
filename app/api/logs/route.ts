@@ -13,7 +13,7 @@ type AttendanceLogRow = {
   changed_by: string | null
   target_user_id: string | null
   event_id: string | null
-  date: string
+  attendance_date: string
   action: LogAction
   reason: string | null
   before_value: Record<string, unknown> | null
@@ -25,7 +25,9 @@ type ProfileRow = {
   id: string
   full_name: string
   student_id: string
-  role: 'admin' | 'captain' | 'trainee'
+  roles?: {
+    name:string
+  } | null
 }
 
 type EventRow = {
@@ -113,7 +115,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         changed_by,
         target_user_id,
         event_id,
-        date,
+        attendance_date,
         action,
         reason,
         before_value,
@@ -144,11 +146,11 @@ export async function GET(request: NextRequest): Promise<Response> {
     }
 
     if (dateFrom) {
-      query = query.gte('date', dateFrom)
+      query = query.gte('attendance_date', dateFrom)
     }
 
     if (dateTo) {
-      query = query.lte('date', dateTo)
+      query = query.lte('attendance_date', dateTo)
     }
 
     const { data: rawLogs, error: logsError } = await query
@@ -193,7 +195,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       allProfileIds.length > 0
         ? supabaseAdmin
             .from('profiles')
-            .select('id, full_name, student_id, role')
+            .select('id, full_name, student_id, roles(name)')
             .in('id', allProfileIds)
         : Promise.resolve({ data: [], error: null }),
 
@@ -241,7 +243,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       changed_by: log.changed_by,
       target_user_id: log.target_user_id ?? '',
       event_id: log.event_id ?? '',
-      date: log.date,
+      attendance_date: log.attendance_date,
       action: log.action,
       reason: log.reason,
       before_value: log.before_value ?? {},
@@ -253,7 +255,7 @@ export async function GET(request: NextRequest): Promise<Response> {
             id: log.changed_by,
             full_name: profileMap.get(log.changed_by)?.full_name ?? '알 수 없음',
             student_id: profileMap.get(log.changed_by)?.student_id ?? '-',
-            role: profileMap.get(log.changed_by)?.role ?? 'trainee',
+            role: profileMap.get(log.changed_by)?.roles?.name ?? 'trainee' as 'admin'|'captain' | 'trainee',
           }
         : null,
 
@@ -264,7 +266,7 @@ export async function GET(request: NextRequest): Promise<Response> {
               profileMap.get(log.target_user_id)?.full_name ?? '알 수 없음',
             student_id:
               profileMap.get(log.target_user_id)?.student_id ?? '-',
-            role: profileMap.get(log.target_user_id)?.role ?? 'trainee',
+            role: profileMap.get(log.target_user_id)?.roles?.name ?? 'trainee' as 'admin'|'captain' | 'trainee',
           }
         : null,
 

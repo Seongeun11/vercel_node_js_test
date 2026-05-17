@@ -24,7 +24,7 @@ type AttendanceLogItem = {
   changed_by: string | null
   target_user_id: string
   event_id: string
-  date: string
+  attendance_date: string
   action: LogAction
   reason: string | null
   before_value: Record<string, unknown>
@@ -102,7 +102,7 @@ function formatFieldName(key: string): string {
     status: '출석 상태',
     check_time: '체크 시각',
     attendance_date: '출석 날짜',
-    date: '날짜',
+    
     method: '출석 방식',
     reason: '사유',
     event_id: '행사',
@@ -363,7 +363,7 @@ export default function AdminAttendanceLogsPage() {
                     title="행사"
                     value={item.event_meta?.name ?? '알 수 없음'}
                     subTexts={[
-                      `날짜: ${item.date || '-'}`,
+                      `날짜: ${item.attendance_date || '-'}`,
                       `시작: ${formatDateTime(item.event_meta?.start_time)}`,
                     ]}
                   />

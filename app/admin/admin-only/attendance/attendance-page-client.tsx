@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import AdminHeader from '@/components/admin/AdminHeader'
 
 type AttendanceStatus = 'present' | 'late' | 'absent'
-type AttendanceMethod = 'manual'
+type AttendanceMethod = 'manual' | 'qr' | 'nfc'
 
 type AttendanceManageItem = {
   id: string
@@ -49,7 +49,7 @@ type AttendanceClientProps = {
 }
 
 const STATUS_OPTIONS: AttendanceStatus[] = ['present', 'late', 'absent']
-const METHOD_OPTIONS: AttendanceMethod[] = ['manual']
+const METHOD_OPTIONS: AttendanceMethod[] = ['manual', 'qr', 'nfc']
 
 function formatDateTimeKst(value: string): string {
   try {
@@ -449,7 +449,12 @@ export default function AdminAttendancePage({ initialDate }: AttendanceClientPro
                   >
                     {METHOD_OPTIONS.map((value) => (
                       <option key={value} value={value}>
-                        {value}
+                        {value==='manual'
+                          ? '수동'
+                          : value==='qr'
+                          ? 'QR'
+                          : 'NFC'
+                          }
                       </option>
                     ))}
                   </select>

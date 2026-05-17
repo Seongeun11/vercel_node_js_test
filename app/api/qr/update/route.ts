@@ -145,7 +145,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       occurrenceQuery = occurrenceQuery.eq('id', existingQr.occurrence_id)
     } else {
       // 무제한 QR: event_id 기준 오늘 회차 사용
-      const todayKst = new Intl.DateTimeFormat('en-CA', {
+      const todayKst = new IntlTimeFormat('en-CA', {
         timeZone: 'Asia/Seoul',
         year: 'numeric',
         month: '2-digit',
