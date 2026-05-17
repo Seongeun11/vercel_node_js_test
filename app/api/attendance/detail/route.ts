@@ -8,7 +8,7 @@ type AttendanceDetailResponse = {
     id: string
     user_id: string
     event_id: string
-    date: string
+    attendance_date: string
     status: 'present' | 'late' | 'absent'
     method: 'manual' | 'qr' | 'nfc'
     check_time: string
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       id,
       user_id,
       event_id,
-      date,
+      attendance_date,
       status,
       method,
       check_time,
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       id: data.id,
       user_id: data.user_id,
       event_id: data.event_id,
-      date: data.date,
+      attendance_date: data.attendance_date,
       status: data.status,
       method: data.method,
       check_time: data.check_time,

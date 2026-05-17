@@ -101,9 +101,8 @@ export async function GET(request: NextRequest): Promise<Response> {
         id,
         student_id,
         full_name,
-        roles (
-          id,
-          name
+        role:roles(
+            name
         )
       )
     `)
@@ -142,14 +141,17 @@ export async function GET(request: NextRequest): Promise<Response> {
     const eventData = Array.isArray(row.event) ? row.event[0] : row.event
     const userData = Array.isArray(row.user) ? row.user[0] : row.user
     
+    
     // roles 테이블에서 name 추출 (중첩 구조 해제)
-    const roleName = userData?.roles?.name || 'trainee'
+    const roleName =
+    userData?.role?.name ??
+    'trainee'
 
     return {
       id: row.id,
       user_id: row.user_id,
       event_id: row.event_id,
-      attendance_date: row.date,
+      attendance_date: row.attendance_date,
       status: row.status,
       method: row.method,
       check_time: row.check_time,

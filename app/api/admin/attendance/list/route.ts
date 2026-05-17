@@ -12,7 +12,7 @@ type AttendanceRow = {
   status: 'present' | 'late' | 'absent'
   method: 'manual' | 'qr' | 'nfc'
   check_time: string | null
-  date: string
+  attendance_date: string
 }
 
 type AttendanceListResponse = {
@@ -58,13 +58,13 @@ export async function GET(request: NextRequest): Promise<Response> {
       status,
       method,
       check_time,
-      date,
+      attendance_date,
       profile:profiles (
         full_name,
         student_id
       )
     `)
-    .eq('date', date)
+    .eq('attendance_date', date)
     .order('check_time', { ascending: true, nullsFirst: false })
 
   if (error) {
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       status: row.status,
       method: row.method,
       check_time: row.check_time,
-      date: row.date,
+      attendance_date: row.attendance_date,
     })),
   })
 }
