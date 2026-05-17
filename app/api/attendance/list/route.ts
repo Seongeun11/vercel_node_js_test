@@ -95,36 +95,53 @@ export async function GET(request: NextRequest): Promise<Response> {
     )
   }
 
-  let attendanceQuery = session.supabase
-    .from('attendance')
-    .select(`
-      id,
-      user_id,
-      event_id,
-      attendance_date,
-      status,
-      method,
-      check_time,
-      created_at,
-      updated_at,
-      event:events (
-        id,
-        name,
-        start_time,
-        late_threshold_min
-      )
-    `)
-    .eq('user_id', session.profile.id)
-    .order('date', { ascending: false })
-    .order('check_time', { ascending: false })
+let attendanceQuery = session.supabase
+.from('attendance')
+.select(`
+ id,
+ user_id,
+ event_id,
+ attendance_date,
+ status,
+ method,
+ check_time,
+ created_at,
+ updated_at,
+ event:events(
+   id,
+   name,
+   start_time,
+   late_threshold_min
+ )
+`)
+.eq(
+ 'user_id',
+ session.profile.id
+)
+.order(
+ 'attendance_date',
+ {ascending:false}
+)
+.order(
+ 'check_time',
+ {ascending:false}
+)
 
-  if (dateFrom) {
-    attendanceQuery = attendanceQuery.gte('date', dateFrom)
-  }
+if(dateFrom){
+ attendanceQuery=
+ attendanceQuery.gte(
+   'attendance_date',
+   dateFrom
+ )
+}
 
-  if (dateTo) {
-    attendanceQuery = attendanceQuery.lte('date', dateTo)
-  }
+if(dateTo){
+ attendanceQuery=
+ attendanceQuery.lte(
+   'attendance_date',
+   dateTo
+ )
+}
 
   const { data, error } = await attendanceQuery
 
