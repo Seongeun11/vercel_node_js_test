@@ -26,7 +26,7 @@ function formatDateTimeKst(value: string | null): string {
   if (!value) return '-'
 
   try {
-    return new IntlTimeFormat('ko-KR', {
+    return new Intl.DateTimeFormat('ko-KR', {
       timeZone: 'Asia/Seoul',
       year: 'numeric',
       month: '2-digit',
