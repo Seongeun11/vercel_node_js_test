@@ -1,5 +1,5 @@
 'use client'
-
+//app\admin\admin-only\users\page.tsx
 import { useEffect, useState } from 'react'
 import AdminHeader from '@/components/admin/AdminHeader'
 import UserBulkUpload from './user-bulk-upload'
@@ -7,7 +7,10 @@ import ResetPasswordPanel from './reset-password-panel'
 import EnrollmentStatusToggle from './enrollment-status'
 
 // --- 타입 정의 (정규화 반영) ---
-type UserRole = 'admin' | 'captain' | 'trainee'
+type UserRole = {
+  id: number    // serial -> number (정수형)
+  name: string  // text -> string
+}
 type EnrollmentStatus = 'active' | 'completed'
 type Affiliation = '아카데미' | '영성' | '모심' | '효진정' | '성화영성'
 // 1. 타입을 ID 기반으로 확장합니다.
@@ -22,7 +25,7 @@ type AdminUser = {
   full_name: string
   cohort_no: number | null
   enrollment_status: EnrollmentStatus
-  role: UserRole; 
+  role?: UserRole  | null // 💡 백엔드 Supabase Join 결과물에 맞춘 객체 타입 지정
   affiliation: Affiliation;// DB Join 결과로 넘어오는 텍스트 명칭
   password?: string
   created_at?: string
@@ -68,8 +71,21 @@ const ENROLLMENT_STATUS_OPTIONS: Array<{
 
 
 
-function getRoleLabel(role: UserRole): string {
-  return ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role
+// 💡 ROLE_OPTIONS의 value가 'admin' 같은 문자열이라고 가정하고 작성한 안전한 버전이야.
+function getRoleLabel(role: string | UserRole | null | undefined): string {
+  if (!role) return '권한 없음'
+
+  // 💡 DB 스펙에 맞게 객체(UserRole)로 들어오면 .name 문자열을 추출하고, 
+  // 기존 코드 호환성을 위해 문자열로 들어오면 그대로 사용해.
+  const roleName = typeof role === 'object' && 'name' in role 
+    ? role.name 
+    : role
+
+  // ROLE_OPTIONS에서 백엔드 DB의 name 값(예: 'admin', 'user' 등)과 일치하는 항목을 검색
+  const matchedOption = ROLE_OPTIONS.find((option) => option.value === roleName)
+
+  // 매칭되는 한글 라벨이 있으면 리턴, 없으면 DB의 알파벳 name 값을 그대로 노출해줘.
+  return matchedOption?.label ?? String(roleName)
 }
 
 function getEnrollmentStatusLabel(status?: EnrollmentStatus): string {
