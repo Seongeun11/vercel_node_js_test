@@ -23,7 +23,7 @@ export default async function AdminPage() {
       2026.05.12 업데이트<br />
       데이터베이스에 제2 정규화를 적용했습니다.
       2026.05.21 업데이트<br />
-      페이지 최적화 및 오류 수정, supabase 자동 실행 함수등록(create_manual_attendance)
+      페이지 최적화 및 오류 수정, supabase 자동 실행 함수등록(fn_create_today_occurrences)
     </main>
   )
 }
