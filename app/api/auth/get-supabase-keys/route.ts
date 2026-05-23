@@ -50,8 +50,8 @@ export async function GET(): Promise<Response> {
   // Vercel 환경 변수의 Supabase 키를 안전하게 반환합니다.
   return jsonNoStore<SupabaseKeysResponse>({
     supabase: {
-      url: process.env.SUPABASE_URL,
-      anonKey: process.env.SUPABASE_ANON_KEY,
+      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     }
   })
 }
