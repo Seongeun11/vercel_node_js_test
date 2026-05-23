@@ -32,6 +32,8 @@ export async function GET(): Promise<Response> {
   }
 
   const userRole = (session.profile.role as any)?.name || 'trainee'
+  // 로깅 콘솔 기록 (서버 모니터링용)
+  console.log(`[인증 시도] User ID: ${session.user?.id} | Role: ${userRole}`)
 
   // 3. [핵심 보안 방어선] 로그인한 유저의 권한이 'admin'(관리자)인지 검증합니다.
   // 일반 수련생(trainee) 등 권한이 없는 계정이 요청하면 키를 주지 않고 차단합니다.
