@@ -3,14 +3,20 @@ import { getSessionProfile } from '@/lib/server-session'
 import { jsonNoStore } from '@/lib/security/api-response'
 
 // 유저 정보와 Supabase 키를 모두 포함할 수 있도록 통합 응답 타입을 정의합니다.
-type SupabaseKeysResponse = {
+type SuccessResponse = {
   // 보안을 유지한 채 내려줄 Supabase 접속 키 정의
   supabase?: {
     url: string | undefined
     anonKey: string | undefined
-  }
-  error?: string
+  },
+  accessToken: string| undefined
+  refreshToken: string| undefined
 }
+type ErrorResponse = {
+  error: string
+}
+// 2. 두 타입을 합칩니다 (Discriminated Union)
+type SupabaseKeysResponse = SuccessResponse | ErrorResponse
 
 export async function GET(): Promise<Response> {
   // 1. Next.js 웹 서버 세션으로부터 로그인 상태를 받아옵니다.
@@ -31,7 +37,7 @@ export async function GET(): Promise<Response> {
     )
   }
 
-  // 🚀 [수정 핵심] session.profile.role 자체가 이미 정제된 문자열('admin' | 'captain' | 'trainee')입니다.
+  // [수정 핵심] session.profile.role 자체가 이미 정제된 문자열('admin' | 'captain' | 'trainee')입니다.
   // 불필요했던 하위 객체 탐색(.name)을 제거하여 올바른 값을 추출하도록 바인딩합니다.
   const userRole = session.profile.role || 'trainee'
   
@@ -52,6 +58,8 @@ export async function GET(): Promise<Response> {
     supabase: {
       url: process.env.NEXT_PUBLIC_SUPABASE_URL,
       anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    }
+    },
+    accessToken: session.accessToken, 
+    refreshToken: session.refreshToken
   })
 }

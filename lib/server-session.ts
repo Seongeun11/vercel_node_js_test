@@ -18,6 +18,9 @@ export type SessionSuccess = {
     email?: string | null
   }
   profile: SessionProfile
+  //[추가] 토큰 정보 필드 명시
+  accessToken: string
+  refreshToken: string
 }
 
 export type SessionFailure = {
@@ -50,19 +53,17 @@ export async function getSessionProfile(
   try {
     const supabase = await createSupabaseServerClient()
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
+    // 🚀 [변경] getUser() 대신 getSession()을 사용하여 토큰에 접근
+    const { data: sessionData, error: authError } = await supabase.auth.getSession()
 
-    if (authError || !user) {
+    if (authError || !sessionData.session) {
       return {
         ok: false,
         status: 401,
         error: '인증이 필요합니다.',
       }
     }
-
+    const user = sessionData.session.user; // 세션에서 유저 정보 추출
     // 토큰 role은 fallback 용도
     const tokenRole =
       user.user_metadata?.role as UserRole | undefined
@@ -140,6 +141,9 @@ export async function getSessionProfile(
         email: user.email,
       },
       profile,
+      //[추가] 세션에서 토큰 주입
+      accessToken: sessionData.session.access_token,
+      refreshToken: sessionData.session.refresh_token,
     }
   } catch (err) {
     console.error(
