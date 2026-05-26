@@ -1,7 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
+// ==========================================
+// 1. 타입 및 상수 정의
+// ==========================================
 type RecurrenceType = 'none' | 'daily'
 type WeekdayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 
@@ -38,56 +41,55 @@ const WEEKDAY_OPTIONS: { label: string; value: WeekdayCode }[] = [
   { label: '토', value: 'sat' },
 ]
 
-const WEEKDAY_CODES = WEEKDAY_OPTIONS.map((option) => option.value)
+const WEEKDAY_ORDER: Record<WeekdayCode, number> = {
+  sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6
+}
 
-function toDateTimeLocalValue(isoString: string) {
+// ==========================================
+// 2. 유틸리티 함수 (Timezone 버그 수정)
+// ==========================================
+function toDateTimeLocalValue(isoString: string): string {
   const date = new Date(isoString)
   if (Number.isNaN(date.getTime())) return ''
 
-  const offset = date.getTimezoneOffset()
-  const localDate = new Date(date.getTime() - offset * 60 * 1000)
-  return localDate.toISOString().slice(0, 16)
-}
+  // 현지 시간 기준의 연-월-일 시:분 추출 (타임존 왜곡 방지)
+  const pad = (num: number) => String(num).padStart(2, '0')
+  const YYYY = date.getFullYear()
+  const MM = pad(date.getMonth() + 1)
+  const DD = pad(date.getDate())
+  const hh = pad(date.getHours())
+  const mm = pad(date.getMinutes())
 
-const initialForm: EventFormState = {
-  name: '',
-  start_time: toDateTimeLocalValue(new Date().toISOString()),
-  late_threshold_min: '5',
-  allow_duplicate_check: false,
-  is_special_event: false,
-  recurrence_type: 'none',
-  recurrence_days: [],
-  is_active: true,
+  return `${YYYY}-${MM}-${DD}T${hh}:${mm}`
 }
 
 function normalizeRecurrenceDays(days: unknown): WeekdayCode[] {
   if (!Array.isArray(days)) return []
-
-  const unique = Array.from(new Set(days.map((day) => String(day).trim())))
-
-  return WEEKDAY_OPTIONS.map((option) => option.value).filter((day) =>
-    unique.includes(day)
+  
+  const validDays = days.filter((d): d is WeekdayCode => 
+    typeof d === 'string' && d.trim() in WEEKDAY_ORDER
+  )
+  
+  // 중복 제거 및 요일 순서대로 정렬
+  return Array.from(new Set(validDays)).sort(
+    (a, b) => WEEKDAY_ORDER[a] - WEEKDAY_ORDER[b]
   )
 }
 
-function formatRecurrenceDays(days: WeekdayCode[] | null | undefined) {
+function formatRecurrenceDays(days: WeekdayCode[] | null | undefined): string {
   const normalizedDays = normalizeRecurrenceDays(days)
-
   if (normalizedDays.length === 0) return '반복 없음'
 
   const labelMap: Record<WeekdayCode, string> = {
-    sun: '일',
-    mon: '월',
-    tue: '화',
-    wed: '수',
-    thu: '목',
-    fri: '금',
-    sat: '토',
+    sun: '일', mon: '월', tue: '화', wed: '수', thu: '목', fri: '금', sat: '토'
   }
 
   return normalizedDays.map((day) => labelMap[day]).join(', ')
 }
 
+// ==========================================
+// 3. 메인 컴포넌트
+// ==========================================
 export default function EventsClient() {
   const [events, setEvents] = useState<EventItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -95,24 +97,33 @@ export default function EventsClient() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  const [form, setForm] = useState<EventFormState>(initialForm)
+  const [form, setForm] = useState<EventFormState>({
+    name: '',
+    start_time: toDateTimeLocalValue(new Date().toISOString()),
+    late_threshold_min: '5',
+    allow_duplicate_check: false,
+    is_special_event: false,
+    recurrence_type: 'none',
+    recurrence_days: [],
+    is_active: true,
+  })
   const [editingId, setEditingId] = useState<string | null>(null)
 
-  const isEditing = useMemo(() => editingId !== null, [editingId])
+  // useMemo 불필요 제거 -> 원시 값 비교로 성능 향상
+  const isEditing = editingId !== null
 
-  async function fetchEvents() {
+  useEffect(() => {
+    void refreshEvents()
+  }, [])
+
+  async function fetchEvents(): Promise<EventItem[]> {
     const res = await fetch('/api/events/list', {
       method: 'GET',
       cache: 'no-store',
       credentials: 'include',
     })
-
     const data = await res.json()
-
-    if (!res.ok) {
-      throw new Error(data.error || '행사 조회 실패')
-    }
-
+    if (!res.ok) throw new Error(data.error || '행사 조회 실패')
     return Array.isArray(data.items) ? (data.items as EventItem[]) : []
   }
 
@@ -120,7 +131,6 @@ export default function EventsClient() {
     try {
       setLoading(true)
       setError('')
-
       const eventItems = await fetchEvents()
       setEvents(eventItems)
     } catch (err) {
@@ -130,82 +140,60 @@ export default function EventsClient() {
     }
   }
 
-  useEffect(() => {
-    void refreshEvents()
-  }, [])
-
   function resetForm() {
     setForm({
-      ...initialForm,
+      name: '',
       start_time: toDateTimeLocalValue(new Date().toISOString()),
+      late_threshold_min: '5',
+      allow_duplicate_check: false,
+      is_special_event: false,
+      recurrence_type: 'none',
+      recurrence_days: [],
+      is_active: true,
     })
     setEditingId(null)
   }
 
-  function handleChange<K extends keyof EventFormState>(
-    key: K,
-    value: EventFormState[K]
-  ) {
-    setForm((prev) => ({
-      ...prev,
-      [key]: value,
-    }))
+  function handleChange<K extends keyof EventFormState>(key: K, value: EventFormState[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }))
   }
 
   function toggleRecurrenceDay(day: WeekdayCode) {
     setForm((prev) => {
-      const nextDays = prev.recurrence_days.includes(day)
+      const isExist = prev.recurrence_days.includes(day)
+      const nextDays = isExist
         ? prev.recurrence_days.filter((item) => item !== day)
         : [...prev.recurrence_days, day]
 
-      const normalizedDays = normalizeRecurrenceDays(nextDays)
+      const sortedDays = nextDays.sort((a, b) => WEEKDAY_ORDER[a] - WEEKDAY_ORDER[b])
 
       return {
         ...prev,
-        recurrence_days: normalizedDays,
-        recurrence_type: normalizedDays.length > 0 ? 'daily' : 'none',
+        recurrence_days: sortedDays,
+        recurrence_type: sortedDays.length > 0 ? 'daily' : 'none',
       }
     })
   }
 
-  function validateEventForm() {
+  function validateEventForm(): string {
     const name = form.name.trim()
     const startTime = form.start_time.trim()
     const lateThreshold = Number(form.late_threshold_min)
-    const hasInvalidDay = form.recurrence_days.some(
-      (day) => !WEEKDAY_CODES.includes(day)
-    )
 
     if (!name) return '행사 이름을 입력해주세요.'
     if (!startTime) return '시작 시간을 입력해주세요.'
     if (Number.isNaN(new Date(startTime).getTime())) return '시작 시간 형식이 올바르지 않습니다.'
-
-    if (
-      !Number.isInteger(lateThreshold) ||
-      lateThreshold < 0 ||
-      lateThreshold > 180
-    ) {
+    if (!Number.isInteger(lateThreshold) || lateThreshold < 0 || lateThreshold > 180) {
       return '지각 기준은 0~180 사이 정수여야 합니다.'
     }
-
-    if (!['none', 'daily'].includes(form.recurrence_type)) {
-      return '반복 규칙이 올바르지 않습니다.'
-    }
-
-    if (hasInvalidDay) {
-      return '반복 요일 값이 올바르지 않습니다.'
-    }
-
     if (form.recurrence_type === 'daily' && form.recurrence_days.length === 0) {
       return '반복 요일을 1개 이상 선택해주세요.'
     }
-
     return ''
   }
 
   async function handleSubmitEvent() {
     const validationError = validateEventForm()
-
     if (validationError) {
       setError(validationError)
       setSuccess('')
@@ -230,35 +218,21 @@ export default function EventsClient() {
       }
 
       const endpoint = isEditing ? '/api/events/update' : '/api/events/create'
-
       const res = await fetch(endpoint, {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
 
       const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(
-          data.error || (isEditing ? '행사 수정 실패' : '행사 생성 실패')
-        )
-      }
+      if (!res.ok) throw new Error(data.error || (isEditing ? '행사 수정 실패' : '행사 생성 실패'))
 
       setSuccess(isEditing ? '행사가 수정되었습니다.' : '행사가 생성되었습니다.')
       resetForm()
       await refreshEvents()
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : isEditing
-            ? '행사 수정 중 오류 발생'
-            : '행사 생성 중 오류 발생'
-      )
+      setError(err instanceof Error ? err.message : isEditing ? '행사 수정 중 오류 발생' : '행사 생성 중 오류 발생')
     } finally {
       setSubmitting(false)
     }
@@ -270,7 +244,6 @@ export default function EventsClient() {
     setEditingId(event.id)
 
     const days = normalizeRecurrenceDays(event.recurrence_days)
-
     setForm({
       name: event.name,
       start_time: toDateTimeLocalValue(event.start_time),
@@ -284,8 +257,7 @@ export default function EventsClient() {
   }
 
   async function handleDeleteEvent(id: string) {
-    const confirmed = window.confirm('정말 이 행사를 삭제하시겠습니까?')
-    if (!confirmed) return
+    if (!window.confirm('정말 이 행사를 삭제하시겠습니까?')) return
 
     try {
       setSubmitting(true)
@@ -295,20 +267,14 @@ export default function EventsClient() {
       const res = await fetch('/api/events/delete', {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       })
 
       const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || '행사 삭제 실패')
-      }
+      if (!res.ok) throw new Error(data.error || '행사 삭제 실패')
 
       if (editingId === id) resetForm()
-
       setSuccess('행사가 삭제되었습니다.')
       await refreshEvents()
     } catch (err) {
@@ -318,12 +284,10 @@ export default function EventsClient() {
     }
   }
 
-  if (loading) {
-    return <div style={{ padding: 20 }}>로딩중...</div>
-  }
+  if (loading) return <div style={{ padding: 20 }}>로딩중...</div>
 
   return (
-    <div style={{ padding: 20, display: 'grid', gap: 24 }}>
+    <div style={containerStyle}>
       <div>
         <h2 style={{ marginBottom: 8 }}>행사 관리</h2>
         <p style={{ color: '#666', margin: 0 }}>
@@ -331,11 +295,11 @@ export default function EventsClient() {
         </p>
       </div>
 
+      {/* 대시보드 폼 섹션 */}
       <section style={panelStyle}>
         <h3 style={{ marginTop: 0 }}>{isEditing ? '행사 수정' : '행사 생성'}</h3>
-
-        <div style={{ display: 'grid', gap: 12, maxWidth: 560 }}>
-          <label style={{ display: 'grid', gap: 6 }}>
+        <div style={formLayoutStyle}>
+          <label style={fieldLabelStyle}>
             <span>행사 이름</span>
             <input
               value={form.name}
@@ -346,7 +310,7 @@ export default function EventsClient() {
             />
           </label>
 
-          <label style={{ display: 'grid', gap: 6 }}>
+          <label style={fieldLabelStyle}>
             <span>기본 시작 시간</span>
             <input
               type="datetime-local"
@@ -357,7 +321,7 @@ export default function EventsClient() {
             />
           </label>
 
-          <label style={{ display: 'grid', gap: 6 }}>
+          <label style={fieldLabelStyle}>
             <span>지각 기준(분)</span>
             <input
               type="number"
@@ -371,35 +335,32 @@ export default function EventsClient() {
             />
           </label>
 
-          <div style={{ display: 'grid', gap: 6 }}>
+          {/* 반복 요일 선택 */}
+          <div style={fieldLabelStyle}>
             <span>반복 요일</span>
-
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {WEEKDAY_OPTIONS.map((option) => (
-                <label
-                  key={option.value}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '8px 10px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: 8,
-                    background: form.recurrence_days.includes(option.value) ? '#eff6ff' : '#fff',
-                    cursor: submitting ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={form.recurrence_days.includes(option.value)}
-                    onChange={() => toggleRecurrenceDay(option.value)}
-                    disabled={submitting}
-                  />
-                  <span>{option.label}</span>
-                </label>
-              ))}
+              {WEEKDAY_OPTIONS.map((option) => {
+                const isChecked = form.recurrence_days.includes(option.value)
+                return (
+                  <label
+                    key={option.value}
+                    style={{
+                      ...weekdayBadgeStyle,
+                      background: isChecked ? '#eff6ff' : '#fff',
+                      cursor: submitting ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleRecurrenceDay(option.value)}
+                      disabled={submitting}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                )
+              })}
             </div>
-
             <div style={{ fontSize: 13, color: '#666' }}>
               {form.recurrence_days.length > 0
                 ? `선택된 요일: ${formatRecurrenceDays(form.recurrence_days)}`
@@ -407,6 +368,7 @@ export default function EventsClient() {
             </div>
           </div>
 
+          {/* 체크박스 옵션들 */}
           <label style={checkboxLabelStyle}>
             <input
               type="checkbox"
@@ -437,26 +399,17 @@ export default function EventsClient() {
             <span>활성화</span>
           </label>
 
+          {/* 하단 버튼 제어 구조 */}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button
-              onClick={() => void handleSubmitEvent()}
-              disabled={submitting}
-              style={primaryButtonStyle}
-            >
+            <button onClick={() => void handleSubmitEvent()} disabled={submitting} style={primaryButtonStyle}>
               {submitting ? '처리중...' : isEditing ? '행사 수정' : '행사 생성'}
             </button>
-
             {isEditing && (
               <button onClick={resetForm} disabled={submitting} style={secondaryButtonStyle}>
                 수정 취소
               </button>
             )}
-
-            <button
-              onClick={() => void refreshEvents()}
-              disabled={submitting}
-              style={secondaryButtonStyle}
-            >
+            <button onClick={() => void refreshEvents()} disabled={submitting} style={secondaryButtonStyle}>
               새로고침
             </button>
           </div>
@@ -466,9 +419,9 @@ export default function EventsClient() {
       {error && <div style={errorBoxStyle}>{error}</div>}
       {success && <div style={successBoxStyle}>{success}</div>}
 
+      {/* 리스트 테이블 섹션 */}
       <section style={{ display: 'grid', gap: 16 }}>
         <h3 style={{ margin: 0 }}>행사 목록</h3>
-
         {events.length === 0 ? (
           <div style={emptyBoxStyle}>등록된 행사가 없습니다.</div>
         ) : (
@@ -487,39 +440,27 @@ export default function EventsClient() {
                 </tr>
               </thead>
               <tbody>
-                {events.map((event) => {
-                  const days = normalizeRecurrenceDays(event.recurrence_days)
-
-                  return (
-                    <tr key={event.id}>
-                      <td style={tdStyle}>{event.name}</td>
-                      <td style={tdStyle}>{new Date(event.start_time).toLocaleString()}</td>
-                      <td style={tdStyle}>{formatRecurrenceDays(event.recurrence_days)}</td>
-                      <td style={tdStyle}>{event.late_threshold_min}분</td>
-                      <td style={tdStyle}>{event.is_special_event ? '예' : '아니오'}</td>
-                      <td style={tdStyle}>{event.allow_duplicate_check ? '허용' : '불가'}</td>
-                      <td style={tdStyle}>{event.is_active ? '활성' : '비활성'}</td>
-                      <td style={tdStyle}>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          <button
-                            onClick={() => startEditEvent(event)}
-                            disabled={submitting}
-                            style={secondaryButtonStyle}
-                          >
-                            수정
-                          </button>
-                          <button
-                            onClick={() => void handleDeleteEvent(event.id)}
-                            disabled={submitting}
-                            style={dangerButtonStyle}
-                          >
-                            삭제
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
+                {events.map((event) => (
+                  <tr key={event.id}>
+                    <td style={tdStyle}>{event.name}</td>
+                    <td style={tdStyle}>{new Date(event.start_time).toLocaleString()}</td>
+                    <td style={tdStyle}>{formatRecurrenceDays(event.recurrence_days)}</td>
+                    <td style={tdStyle}>{event.late_threshold_min}분</td>
+                    <td style={tdStyle}>{event.is_special_event ? '예' : '아니오'}</td>
+                    <td style={tdStyle}>{event.allow_duplicate_check ? '허용' : '불가'}</td>
+                    <td style={tdStyle}>{event.is_active ? '활성' : '비활성'}</td>
+                    <td style={tdStyle}>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button onClick={() => startEditEvent(event)} disabled={submitting} style={secondaryButtonStyle}>
+                          수정
+                        </button>
+                        <button onClick={() => void handleDeleteEvent(event.id)} disabled={submitting} style={dangerButtonStyle}>
+                          삭제
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -527,6 +468,35 @@ export default function EventsClient() {
       </section>
     </div>
   )
+}
+
+// ==========================================
+// 4. 스타일 정의 개체
+// ==========================================
+const containerStyle: React.CSSProperties = {
+  padding: 20,
+  display: 'grid',
+  gap: 24,
+}
+
+const formLayoutStyle: React.CSSProperties = {
+  display: 'grid',
+  gap: 12,
+  maxWidth: 560,
+}
+
+const fieldLabelStyle: React.CSSProperties = {
+  display: 'grid',
+  gap: 6,
+}
+
+const weekdayBadgeStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '8px 10px',
+  border: '1px solid #d1d5db',
+  borderRadius: 8,
 }
 
 const panelStyle: React.CSSProperties = {

@@ -18,7 +18,6 @@ export type SessionSuccess = {
     email?: string | null
   }
   profile: SessionProfile
-  //[추가] 토큰 정보 필드 명시
   accessToken: string
   refreshToken: string
 }
@@ -32,12 +31,8 @@ export type SessionFailure = {
 export type SessionResult = SessionSuccess | SessionFailure
 
 type RoleJoin =
-  | {
-      name: UserRole
-    }
-  | {
-      name: UserRole
-    }[]
+  | { name: UserRole }
+  | { name: UserRole }[]
   | null
 
 type ProfileRow = {
@@ -53,22 +48,38 @@ export async function getSessionProfile(
   try {
     const supabase = await createSupabaseServerClient()
 
-    // 🚀 [변경] getUser() 대신 getSession()을 사용하여 토큰에 접근
-    const { data: sessionData, error: authError } = await supabase.auth.getSession()
+    //  [보안 개선 핵심]: getSession()을 단독 신뢰하지 않고, 
+    // getUser()를 통해 Supabase Auth 서버에 위조 여부를 먼저 강력하게 검증받습니다.
+    const { data: userData, error: userError } = await supabase.auth.getUser()
 
-    if (authError || !sessionData.session) {
+    if (userError || !userData.user) {
       return {
         ok: false,
         status: 401,
-        error: '인증이 필요합니다.',
+        error: '인증이 만료되었거나 올바르지 않습니다.',
       }
     }
-    const user = sessionData.session.user; // 세션에서 유저 정보 추출
-    // 토큰 role은 fallback 용도
-    const tokenRole =
-      user.user_metadata?.role as UserRole | undefined
 
-    const { data, error } = await supabase
+    const verifiedUser = userData.user
+
+    // [논리 보완]: 검증이 완료된 시점에 한하여, 
+    // 하위 비즈니스 로직에 필요한 토큰 데이터를 세션 스토리지에서 안전하게 읽어옵니다.
+    const { data: sessionData } = await supabase.auth.getSession()
+    const currentSession = sessionData?.session
+
+    if (!currentSession) {
+      return {
+        ok: false,
+        status: 401,
+        error: '유효한 세션 토큰을 찾을 수 없습니다.',
+      }
+    }
+
+    // 토큰 역할을 백백용 Fallback으로 설정
+    const tokenRole = verifiedUser.user_metadata?.role as UserRole | undefined
+
+    // DB 프로필 조회 및 권한 검사 진행
+    const { data, error: dbError } = await supabase
       .from('profiles')
       .select(`
         id,
@@ -76,36 +87,26 @@ export async function getSessionProfile(
         full_name,
         roles(name)
       `)
-      .eq('id', user.id)
+      .eq('id', verifiedUser.id)
       .single()
 
-    if (error || !data) {
-      console.error(
-        '[GET_SESSION_PROFILE_ERROR]',
-        error
-      )
-
+    if (dbError || !data) {
+      console.error('[GET_SESSION_PROFILE_DB_ERROR]', dbError)
       return {
         ok: false,
         status: 403,
-        error: '프로필 조회 실패',
+        error: '사용자 프로필을 조회할 수 없습니다.',
       }
     }
 
     const profileData = data as ProfileRow
 
-    let roleName: UserRole | undefined
+    // 관계형 데이터 단일/배열 예외 처리의 가독성 단순화
+    const dbRoleName = Array.isArray(profileData.roles)
+      ? profileData.roles[0]?.name
+      : profileData.roles?.name
 
-    if (Array.isArray(profileData.roles)) {
-      roleName = profileData.roles[0]?.name
-    } else {
-      roleName = profileData.roles?.name
-    }
-
-    const finalRole =
-      roleName ??
-      tokenRole ??
-      'trainee'
+    const finalRole = dbRoleName ?? tokenRole ?? 'trainee'
 
     const profile: SessionProfile = {
       id: profileData.id,
@@ -114,47 +115,37 @@ export async function getSessionProfile(
       role: finalRole,
     }
 
-    if (
-      process.env.NODE_ENV !== 'production'
-    ) {
-      console.log(
-        `[AUTH] ${profile.full_name} (${profile.role})`
-      )
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[AUTH VERIFIED] ${profile.full_name} (${profile.role})`)
     }
 
-    if (
-      allowedRoles?.length &&
-      !allowedRoles.includes(profile.role)
-    ) {
+    // 인가(Authorization) 제어 확인
+    if (allowedRoles?.length && !allowedRoles.includes(profile.role)) {
       return {
         ok: false,
         status: 403,
-        error: '권한이 없습니다.',
+        error: '해당 페이지/API에 접근할 권한이 없습니다.',
       }
     }
 
+    // 완전히 검증된 개체만 주입하여 신뢰성 보장
     return {
       ok: true,
       supabase,
       user: {
-        id: user.id,
-        email: user.email,
+        id: verifiedUser.id,
+        email: verifiedUser.email,
       },
       profile,
-      //[추가] 세션에서 토큰 주입
-      accessToken: sessionData.session.access_token,
-      refreshToken: sessionData.session.refresh_token,
+      accessToken: currentSession.access_token,
+      refreshToken: currentSession.refresh_token,
     }
   } catch (err) {
-    console.error(
-      '[GET_SESSION_PROFILE_UNEXPECTED]',
-      err
-    )
-
+    console.error('[GET_SESSION_PROFILE_UNEXPECTED]', err)
     return {
       ok: false,
       status: 401,
-      error: '인증 처리 중 오류가 발생했습니다',
+      error: '인증 처리 과정 중 예상치 못한 내부 에러가 발생했습니다.',
     }
   }
 }
