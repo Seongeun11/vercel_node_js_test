@@ -1,7 +1,7 @@
 // app/admin/admin-only/events/page.tsx
 import { redirect } from 'next/navigation'
 import { requireRole } from '@/lib/serverAuth'
-import EventsClient from './eventsClient'
+import EventsClient from './events-client'
 
 export const dynamic = 'force-dynamic'
 

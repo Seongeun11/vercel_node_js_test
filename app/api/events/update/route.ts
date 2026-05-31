@@ -36,7 +36,7 @@ type UpdateEventResponse = {
   error?: string
 }
 
-const WEEKDAY_CODES: WeekdayCode[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+const WEEKDAY_CODES: WeekdayCode[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
 function normalizeRecurrenceDays(value: unknown): WeekdayCode[] {
   if (!Array.isArray(value)) return []

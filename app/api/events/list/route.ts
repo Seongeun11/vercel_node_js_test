@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server'
 import { getSessionProfile } from '@/lib/server-session' // 내부적으로 getUser()를 쓰도록 수정되었음을 전제, 혹은 아래 직렬 검증
 import { jsonNoStore } from '@/lib/security/api-response'
 
-type WeekdayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
+type WeekdayCode = 'sun'|'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'
 
 type EventItem = {
   id: string

@@ -16,6 +16,7 @@ type ExpireUnit = 'hours' | 'days' | 'unlimited'
 
 type CreateQrBody = {
   occurrence_id?: string
+  event_id?: string
   expire_unit?: ExpireUnit
   expire_value?: number
   
@@ -97,11 +98,11 @@ export async function POST(request: NextRequest): Promise<Response> {
     const expireUnit = (body.expire_unit ?? 'hours') as ExpireUnit
     const expireValue = Number(body.expire_value ?? 10)
 
-    if (!occurrenceId) {
-      return jsonNoStore<CreateQrResponse>(
-        { error: '회차 ID가 필요합니다.' },
-        { status: 400 }
-      )
+    //const occurrenceId = String(body.occurrence_id ?? '').trim()
+    const eventId = String(body.event_id ?? '').trim() // 프론트에서 event_id도 같이 줄 수 있게 확장
+
+    if (!occurrenceId && expireUnit !== 'unlimited') {
+      return jsonNoStore({ error: '유효기간이 존재하는 QR은 회차 ID가 필수입니다.' }, { status: 400 })
     }
 
     const validationError = validateExpireSetting(expireUnit, expireValue)

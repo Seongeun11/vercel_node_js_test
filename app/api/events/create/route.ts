@@ -6,7 +6,7 @@ import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
 
 type RecurrenceType = 'none' | 'daily'
-type WeekdayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
+type WeekdayCode = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'
 
 type CreateEventBody = {
   name?: string
@@ -36,14 +36,15 @@ type CreateEventResponse = {
   error?: string
 }
 
+// 프론트엔드(eventsClient.tsx) 시퀀스와 동일하게 일요일(sun)부터 시작하도록 순서 동기화
 const ALLOWED_WEEKDAYS: WeekdayCode[] = [
+  'sun',
   'mon',
   'tue',
   'wed',
   'thu',
   'fri',
   'sat',
-  'sun',
 ]
 
 function hasOnlyAllowedWeekdays(input: unknown): boolean {
@@ -65,20 +66,32 @@ function normalizeRecurrenceDays(input: unknown): WeekdayCode[] {
 
   const unique = Array.from(new Set(normalized))
 
-  // 항상 월~일 순서로 저장
+  // 항상 일~토 순서로 정렬하여 프론트엔드 데이터 바인딩과 통일성 유지
   return ALLOWED_WEEKDAYS.filter((day) => unique.includes(day))
 }
 
 const SEOUL_TIME_ZONE = 'Asia/Seoul'
 
+/**
+ * 런타임 환경에 독립적이며, 하이픈 형식을 엄격하게 보장하는 KST Date 변환 함수
+ */
 function getKstDateString(date: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
+  const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: SEOUL_TIME_ZONE,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(date)
+  })
+
+  // 각 날짜 파트를 안전하게 토큰으로 분할하여 런타임 별 포맷 파편화 방지
+  const parts = formatter.formatToParts(date)
+  const year = parts.find((p) => p.type === 'year')?.value || '1970'
+  const month = parts.find((p) => p.type === 'month')?.value || '01'
+  const day = parts.find((p) => p.type === 'day')?.value || '01'
+
+  return `${year}-${month}-${day}`
 }
+
 export async function POST(request: NextRequest): Promise<Response> {
   try {
     assertSameOrigin(request)
@@ -148,6 +161,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     const recurrenceType: RecurrenceType =
       recurrenceDays.length > 0 ? 'daily' : 'none'
 
+    // 1. 이벤트 마스터 레코드 삽입
     const { data: createdEvent, error } = await supabaseAdmin
       .from('events')
       .insert({
@@ -156,8 +170,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         late_threshold_min: lateThresholdMin,
         allow_duplicate_check: allowDuplicateCheck,
         is_special_event: isSpecialEvent,
-        recurrence_type: recurrenceType, // 기존 호환 유지
-        recurrence_days: recurrenceDays, // 새 컬럼 저장
+        recurrence_type: recurrenceType,
+        recurrence_days: recurrenceDays, // PostgreSQL의 _text 타입으로 안전하게 삽입됨
         is_active: Boolean(isActive),
       })
       .select(
@@ -175,16 +189,16 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 500 }
       )
     }
-    // 반복 없는 단발 행사는 행사 시작일에 해당하는 회차를 즉시 생성한다.
-    // 특히 시작일이 오늘이면 /admin/admin-only/attendance-today 에 바로 표시된다.
+
+    // 2. 단발성 행사인 경우 당일 실시간 출석판 노출을 위한 회차(occurrence) 즉시 생성
     if (recurrenceType === 'none') {
-      const occurrenceDate = getKstDateString(startTime)
+      const occurrenceDate = getKstDateString(startTime) // 'YYYY-MM-DD' 형식 절대 보장
 
       const { error: occurrenceError } = await supabaseAdmin
         .from('event_occurrences')
         .insert({
           event_id: createdEvent.id,
-          occurrence_date: occurrenceDate,
+          occurrence_date: occurrenceDate, // date 타입 컬럼에 정상 바인딩
           start_time: startTime.toISOString(),
           status: 'open',
         })
@@ -198,6 +212,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         )
       }
     }
+
     return jsonNoStore<CreateEventResponse>(
       {
         message: '행사가 생성되었습니다.',

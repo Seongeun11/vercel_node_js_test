@@ -85,16 +85,16 @@ export default async function AdminLayout({ children }: Props) {
                   월별 출석 조회
                 </Link>
                 <Link href="/admin/admin-only/attendance-today" style={navLinkStyle}>
-        오늘 출석 운영
-        </Link>
+                  오늘 출석 운영
+                </Link>
                 <Link href="/admin/admin-only/attendance" style={navLinkStyle}>
                   출석 조회 및 수정
                 </Link>
-                {/* 
+                
                 <Link href="/admin/admin-only/qr" style={navLinkStyle}>
                   QR 관리
                 </Link>
-                */}
+                
                 <Link href="/admin/admin-only/events" style={navLinkStyle}>
                   행사 관리
                 </Link>
