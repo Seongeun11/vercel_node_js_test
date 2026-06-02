@@ -10,7 +10,7 @@ import {
 import EventForm from './components/event-form'
 import EventList from './components/event-list'
 
-import { useevent } from './hooks/use-event'
+import { useevent } from './hooks/use-events'
 
 import type {
   EventItem,
