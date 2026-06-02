@@ -10,7 +10,7 @@ import {
 import EventForm from './components/event-form'
 import EventList from './components/event-list'
 
-import { useEvents } from './hooks/use-events'
+import { useevent } from './hooks/use-event'
 
 import type {
   EventItem,
@@ -43,12 +43,12 @@ const DEFAULT_FORM: EventFormState = {
   is_active: true,
 }
 
-export default function EventsClient() {
+export default function eventClient() {
   const {
-    events,
+    event,
     loading,
     refresh,
-  } = useEvents()
+  } = useevent()
 
   const [form, setForm] =
     useState<EventFormState>(
@@ -294,8 +294,8 @@ export default function EventsClient() {
 
         const endpoint =
           editingId
-            ? '/api/events/update'
-            : '/api/events/create'
+            ? '/api/event/update'
+            : '/api/event/create'
 
         const res = await fetch(
           endpoint,
@@ -371,7 +371,7 @@ export default function EventsClient() {
 
           const res =
             await fetch(
-              '/api/events/delete',
+              '/api/event/delete',
               {
                 method: 'POST',
                 credentials:
@@ -506,7 +506,7 @@ export default function EventsClient() {
         </h3>
 
         <EventList
-          events={events}
+          event={event}
           submitting={
             submitting
           }

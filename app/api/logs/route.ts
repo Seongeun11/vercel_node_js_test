@@ -96,7 +96,7 @@ export async function GET(request: NextRequest): Promise<Response> {
           student_id,
           roles(name)
         ),
-        event_meta:events(
+        event_meta:event(
           id,
           name,
           start_time

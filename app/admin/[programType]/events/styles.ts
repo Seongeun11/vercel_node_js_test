@@ -1,4 +1,4 @@
-// app/admin/admin-only/events/styles.ts
+// app/admin/admin-only/event/styles.ts
 
 import React from 'react'
 

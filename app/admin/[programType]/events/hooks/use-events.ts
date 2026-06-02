@@ -4,8 +4,8 @@ import { useCallback, useState } from 'react'
 
 import { EventItem } from '../types'
 
-export function useEvents() {
-  const [events, setEvents] =
+export function useevent() {
+  const [event, setevent] =
     useState<EventItem[]>([])
 
   const [loading, setLoading] =
@@ -14,12 +14,12 @@ export function useEvents() {
   const [error, setError] =
     useState('')
 
-  const fetchEvents =
+  const fetchevent =
     useCallback(async (): Promise<
       EventItem[]
     > => {
       const res = await fetch(
-        '/api/events/list',
+        '/api/event/list',
         {
           method: 'GET',
           cache: 'no-store',
@@ -51,9 +51,9 @@ export function useEvents() {
         setError('')
 
         const items =
-          await fetchEvents()
+          await fetchevent()
 
-        setEvents(items)
+        setevent(items)
       } catch (err) {
         setError(
           err instanceof Error
@@ -63,11 +63,11 @@ export function useEvents() {
       } finally {
         setLoading(false)
       }
-    }, [fetchEvents])
+    }, [fetchevent])
 
   return {
-    events,
-    setEvents,
+    event,
+    setevent,
     loading,
     error,
     setError,

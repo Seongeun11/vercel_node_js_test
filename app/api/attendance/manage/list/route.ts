@@ -91,7 +91,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       check_time,
       created_at,
       updated_at,
-      event:events (
+      event:event (
         id,
         name,
         start_time,

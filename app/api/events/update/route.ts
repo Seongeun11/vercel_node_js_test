@@ -146,7 +146,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const { data: existingEvent, error: existingError } = await supabaseAdmin
-      .from('events')
+      .from('event')
       .select(`
         id,
         name,
@@ -213,7 +213,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const { data: updatedEvent, error: updateError } = await supabaseAdmin
-      .from('events')
+      .from('event')
       .update(updatePayload)
       .eq('id', id)
       .select(`
@@ -253,7 +253,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     if (process.env.NODE_ENV !== 'production') {
-      console.error('[events/update] unexpected error:', error)
+      console.error('[event/update] unexpected error:', error)
     }
 
     return jsonNoStore<UpdateEventResponse>(

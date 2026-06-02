@@ -1,4 +1,4 @@
-//app\admin\admin-only\events\types.ts
+//app\admin\admin-only\event\types.ts
 export type RecurrenceType = 'none' | 'daily'
 
 export type WeekdayCode =

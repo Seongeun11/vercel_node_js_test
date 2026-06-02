@@ -1,4 +1,4 @@
-// app/api/events/delete/route.ts
+// app/api/event/delete/route.ts
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { NextRequest } from 'next/server'
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const { data: existingEvent, error: existingError } = await supabaseAdmin
-      .from('events')
+      .from('event')
       .select('id')
       .eq('id', id)
       .single()
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const { error: deleteError } = await supabaseAdmin
-      .from('events')
+      .from('event')
       .delete()
       .eq('id', id)
 
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     if (process.env.NODE_ENV !== 'production') {
-      console.error('[events/delete] unexpected error:', error)
+      console.error('[event/delete] unexpected error:', error)
     }
 
     return jsonNoStore<DeleteEventResponse>(

@@ -102,7 +102,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         start_time,
         end_time,
         status,
-        events (
+        event (
           id,
           name,
           late_threshold_min,
@@ -176,9 +176,9 @@ export async function POST(request: NextRequest): Promise<Response> {
           start_time: occurrence.start_time,
           end_time: occurrence.end_time,
           status: occurrence.status,
-          event: Array.isArray(occurrence.events)
-            ? occurrence.events[0] ?? null
-            : occurrence.events ?? null,
+          event: Array.isArray(occurrence.event)
+            ? occurrence.event[0] ?? null
+            : occurrence.event ?? null,
         },
         summary: {
           total_checked_count: rows.length,

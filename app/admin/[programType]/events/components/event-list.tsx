@@ -20,7 +20,7 @@ import {
 } from '../utils'
 
 interface Props {
-  events: EventItem[]
+  event: EventItem[]
 
   submitting: boolean
 
@@ -34,12 +34,12 @@ interface Props {
 }
 
 function EventList({
-  events,
+  event,
   submitting,
   onEdit,
   onDelete,
 }: Props) {
-  if (events.length === 0) {
+  if (event.length === 0) {
     return (
       <div style={emptyBoxStyle}>
         등록된 행사가 없습니다.
@@ -96,7 +96,7 @@ function EventList({
         </thead>
 
         <tbody>
-          {events.map(
+          {event.map(
             (event) => (
               <tr
                 key={event.id}

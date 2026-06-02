@@ -24,7 +24,7 @@ type TodayOccurrenceItem = {
   status: 'scheduled' | 'open' | 'closed' | 'archived'
   created_at: string
   updated_at: string
-  events: {
+  event: {
     id: string
     name: string
     start_time: string
@@ -588,15 +588,15 @@ function OccurrenceCard({ item, setGlobalError, setGlobalSuccess, onQrCountChang
     <article style={panelStyle}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 800 }}>{item.events?.name ?? '알 수 없는 행사'}</div>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>{item.event?.name ?? '알 수 없는 행사'}</div>
           <div style={{ color: '#666', marginTop: 6 }}>회차 날짜: {item.occurrence_date}</div>
           <div style={{ color: '#666', marginTop: 4 }}>시작 시간: {new Date(item.start_time).toLocaleString()}</div>
           <div style={{ color: '#666', marginTop: 4 }}>상태: {formatOccurrenceStatus(item.status)}</div>
           <div style={{ color: '#666', marginTop: 4 }}>
-            반복 요일: {formatRecurrenceDays(item.events?.recurrence_days, item.events?.recurrence_type)}
+            반복 요일: {formatRecurrenceDays(item.event?.recurrence_days, item.event?.recurrence_type)}
           </div>
           <div style={{ color: '#666', marginTop: 4 }}>
-            특별 행사: {item.events?.is_special_event ? '예' : '아니오'} / 지각 기준: {item.events?.late_threshold_min ?? 5}분
+            특별 행사: {item.event?.is_special_event ? '예' : '아니오'} / 지각 기준: {item.event?.late_threshold_min ?? 5}분
           </div>
         </div>
 

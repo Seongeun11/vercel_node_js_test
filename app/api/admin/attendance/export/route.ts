@@ -59,7 +59,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   // 1. 행사 정보 가져오기
   const { data: event } = await supabaseAdmin
-    .from('events')
+    .from('event')
     .select('name')
     .eq('id', eventId)
     .maybeSingle()

@@ -1,4 +1,4 @@
-// app/api/events/create/route.ts
+// app/api/event/create/route.ts
 import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
@@ -36,7 +36,7 @@ type CreateEventResponse = {
   error?: string
 }
 
-// 프론트엔드(eventsClient.tsx) 시퀀스와 동일하게 일요일(sun)부터 시작하도록 순서 동기화
+// 프론트엔드(eventClient.tsx) 시퀀스와 동일하게 일요일(sun)부터 시작하도록 순서 동기화
 const ALLOWED_WEEKDAYS: WeekdayCode[] = [
   'sun',
   'mon',
@@ -163,7 +163,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     // 1. 이벤트 마스터 레코드 삽입
     const { data: createdEvent, error } = await supabaseAdmin
-      .from('events')
+      .from('event')
       .insert({
         name,
         start_time: startTime.toISOString(),
@@ -181,7 +181,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     if (error || !createdEvent) {
       if (process.env.NODE_ENV !== 'production') {
-        console.error('[events/create] insert error:', error)
+        console.error('[event/create] insert error:', error)
       }
 
       return jsonNoStore<CreateEventResponse>(
@@ -204,7 +204,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         })
 
       if (occurrenceError) {
-        console.error('[events/create] occurrence insert error:', occurrenceError)
+        console.error('[event/create] occurrence insert error:', occurrenceError)
 
         return jsonNoStore<CreateEventResponse>(
           { error: '행사는 생성되었지만 출석 회차 생성에 실패했습니다.' },
@@ -232,7 +232,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     if (process.env.NODE_ENV !== 'production') {
-      console.error('[events/create] unexpected error:', error)
+      console.error('[event/create] unexpected error:', error)
     }
 
     return jsonNoStore<CreateEventResponse>(

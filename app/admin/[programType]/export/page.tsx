@@ -9,7 +9,7 @@ type EventItem = {
   start_time: string
 }
 
-type EventsListResponse = {
+type eventListResponse = {
   items?: EventItem[]
   error?: string
 }
@@ -27,7 +27,7 @@ function getTodayDate(): string {
 export default function AttendanceExportPage() {
   const today = getTodayDate()
 
-  const [events, setEvents] = useState<EventItem[]>([])
+  const [event, setevent] = useState<EventItem[]>([])
   const [eventId, setEventId] = useState('')
   const [dateFrom, setDateFrom] = useState(getFirstDayOfMonth(today))
   const [dateTo, setDateTo] = useState(today)
@@ -35,40 +35,40 @@ export default function AttendanceExportPage() {
   const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
-    async function fetchEvents() {
+    async function fetchevent() {
       try {
         setLoading(true)
         setErrorMessage('')
 
-        const response = await fetch('/api/events/list', {
+        const response = await fetch('/api/event/list', {
           method: 'GET',
           credentials: 'include',
           cache: 'no-store',
         })
 
         const text = await response.text()
-        const result: EventsListResponse = text ? JSON.parse(text) : {}
+        const result: eventListResponse = text ? JSON.parse(text) : {}
 
         if (!response.ok) {
           setErrorMessage(result.error || '행사 목록을 불러오지 못했습니다.')
           return
         }
 
-        const nextEvents = result.items ?? []
-        setEvents(nextEvents)
+        const nextevent = result.items ?? []
+        setevent(nextevent)
 
-        if (nextEvents.length > 0) {
-          setEventId(nextEvents[0].id)
+        if (nextevent.length > 0) {
+          setEventId(nextevent[0].id)
         }
       } catch (error) {
-        console.error('[attendance/export] events fetch error:', error)
+        console.error('[attendance/export] event fetch error:', error)
         setErrorMessage('행사 목록 조회 중 오류가 발생했습니다.')
       } finally {
         setLoading(false)
       }
     }
 
-    void fetchEvents()
+    void fetchevent()
   }, [])
   // 매월 한국표준시 1일 반환 (YYYY-MM-DD)
   function getFirstDayOfMonth(date?: string): string {
@@ -138,10 +138,10 @@ export default function AttendanceExportPage() {
                 boxSizing: 'border-box',
               }}
             >
-              {events.length === 0 ? (
+              {event.length === 0 ? (
                 <option value="">행사 없음</option>
               ) : (
-                events.map((event) => (
+                event.map((event) => (
                   <option key={event.id} value={event.id}>
                     {event.name}
                   </option>

@@ -1,11 +1,11 @@
-// app/admin/admin-only/events/page.tsx
+// app/admin/admin-only/event/page.tsx
 import { redirect } from 'next/navigation'
 import { requireRole } from '@/lib/serverAuth'
-import EventsClient from './events-client'
+import eventClient from './event-client'
 
 export const dynamic = 'force-dynamic'
 
-export default async function EventsPage() {
+export default async function eventPage() {
   const auth = await requireRole(['admin'])
 
   if (!auth.ok) {
@@ -13,5 +13,5 @@ export default async function EventsPage() {
     redirect('/forbidden')
   }
 
-  return <EventsClient />
+  return <eventClient />
 }

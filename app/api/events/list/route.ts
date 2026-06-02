@@ -1,4 +1,4 @@
-// app/api/events/list/route.ts
+// app/api/event/list/route.ts
 import { NextRequest } from 'next/server'
 import { getSessionProfile } from '@/lib/server-session'
 import { jsonNoStore } from '@/lib/security/api-response'
@@ -19,7 +19,7 @@ type EventItem = {
   updated_at: string
 }
 
-type EventsListResponse = {
+type eventListResponse = {
   items?: EventItem[]
   error?: string
 }
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   const session = await getSessionProfile(['admin'])
 
   if (!session.ok) {
-    return jsonNoStore<EventsListResponse>(
+    return jsonNoStore<eventListResponse>(
       { error: '인증이 필요합니다.' },
       { status: 401 }
     )
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   // 성능 최적화: 불필요한 조인이나 부재하는 program_type 필드 접근을 원천 차단
   let query = session.supabase
-    .from('events')
+    .from('event')
     .select(`
       id,
       name,
@@ -72,13 +72,13 @@ export async function GET(request: NextRequest): Promise<Response> {
   })
 
   if (error) {
-    console.error('[events/list] query error:', error)
-    return jsonNoStore<EventsListResponse>(
+    console.error('[event/list] query error:', error)
+    return jsonNoStore<eventListResponse>(
       { error: '행사 목록 조회에 실패했습니다.' },
       { status: 500 }
     )
   }
 
   const items = (data ?? []) as EventItem[]
-  return jsonNoStore<EventsListResponse>({ items })
+  return jsonNoStore<eventListResponse>({ items })
 }

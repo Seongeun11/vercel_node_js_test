@@ -1,4 +1,4 @@
-// app/admin/admin-only/events/utils.ts
+// app/admin/admin-only/event/utils.ts
 
 import { WeekdayCode } from './types'
 

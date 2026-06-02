@@ -90,7 +90,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         start_time,
         end_time,
         status,
-        events (
+        event (
           id,
           name,
           late_threshold_min,
@@ -168,9 +168,9 @@ export async function POST(request: NextRequest): Promise<Response> {
         }
       }))
 
-    const event = Array.isArray(occurrence.events)
-      ? occurrence.events[0] ?? null
-      : occurrence.events ?? null
+    const event = Array.isArray(occurrence.event)
+      ? occurrence.event[0] ?? null
+      : occurrence.event ?? null
 
     return jsonNoStore<MissingByOccurrenceResponse>(
       {

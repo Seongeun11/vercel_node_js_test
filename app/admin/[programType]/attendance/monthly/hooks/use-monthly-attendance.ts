@@ -56,7 +56,7 @@ export function useMonthlyAttendance(currentProgramType: string) {
   const [tempCohortNo, setTempCohortNo] = useState<string>('')
   const [tempKeyword, setTempKeyword] = useState<string>('')
   const [tempEventId, setTempEventId] = useState<string>('')
-  const [events, setEvents] = useState<EventOption[]>([])
+  const [event, setevent] = useState<EventOption[]>([])
 
   const [searchParams, setSearchParams] = useState({
     month: getCurrentMonth(),
@@ -162,17 +162,17 @@ export function useMonthlyAttendance(currentProgramType: string) {
     }
   }
 
-  const loadEvents = async () => {
+  const loadevent = async () => {
     try {
       // 필요에 따라 이벤트 목록 호출 시에도 특정 프로그램의 이벤트군만 필터링하도록 주입 가능
-      const response = await fetch(`/api/events/list?program_type=${currentProgramType}`, { method: 'GET', cache: 'no-store' })
+      const response = await fetch(`/api/event/list?program_type=${currentProgramType}`, { method: 'GET', cache: 'no-store' })
       const result = await response.json()
       if (!response.ok) return
-      const rawEvents = Array.isArray(result?.items) ? result.items : []
-      const normalizedEvents: EventOption[] = rawEvents
+      const rawevent = Array.isArray(result?.items) ? result.items : []
+      const normalizedevent: EventOption[] = rawevent
         .map((event: any) => ({ id: String(event.id ?? '').trim(), name: String(event.name ?? '이름 없는 행사').trim() }))
         .filter((event: EventOption) => event.id)
-      setEvents(normalizedEvents)
+      setevent(normalizedevent)
     } catch (e) {
       console.error(e)
     }
@@ -192,14 +192,14 @@ export function useMonthlyAttendance(currentProgramType: string) {
 
   // 소속 정보가 확실히 로드된 정상적인 상태(예: 'spirituality')에서만 아래 백엔드 API를 호출합니다.
   void loadMonthlyAttendance();
-  void loadEvents();
+  void loadevent();
 
 }, [queryString, currentProgramType]); // currentProgramType이 변경될 때 다시 체크하도록 의존성 명시
   //useEffect(() => { void loadMonthlyAttendance() }, [queryString])
-  //useEffect(() => { void loadEvents() }, [])
+  //useEffect(() => { void loadevent() }, [])
 
   return {
-    state: { tempMonth, tempCohortNo, tempKeyword, tempEventId, events, loading, errorMessage, data, calendarDays, daySummaryMap, selectedDate, selectedOccurrences, selectedRows },
+    state: { tempMonth, tempCohortNo, tempKeyword, tempEventId, event, loading, errorMessage, data, calendarDays, daySummaryMap, selectedDate, selectedOccurrences, selectedRows },
     actions: { setTempMonth, setTempCohortNo, setTempKeyword, setTempEventId, handleSearch, setSelectedDate }
   }
 }

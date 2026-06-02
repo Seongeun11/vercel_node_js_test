@@ -111,7 +111,7 @@ let attendanceQuery = session.supabase
  check_time,
  created_at,
  updated_at,
- event:events(
+ event:event(
    id,
    name,
    start_time,
