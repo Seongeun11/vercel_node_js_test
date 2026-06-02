@@ -32,8 +32,7 @@ function parseBooleanParam(value: string | null): boolean | null {
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
-  // 1. 보안 최적화: getSessionProfile 내부가 getUser() 기반으로 동작하는지 점검 필수
-  // (만약 여전히 경고가 뜬다면, 여기서 직접 supabase.auth.getUser()를 호출해야 합니다)
+  //getSessionProfile 내부가 getUser() 기반으로 동작
   const session = await getSessionProfile(['admin'])
 
   if (!session.ok) {

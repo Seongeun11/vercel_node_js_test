@@ -1,7 +1,6 @@
-// app/attendance/my/MyAttendanceClient.tsx
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import AttendanceChangeRequestButton from '@/components/attendance/attendanceChangeRequestButton'
 
@@ -33,20 +32,23 @@ type AttendanceListResponse = {
   error?: string
 }
 
+// 최적화: Intl 인스턴스를 외부에 단 한 번만 생성하여 렌더링 성능을 올립니다.
+const kstFormatter = new Intl.DateTimeFormat('ko-KR', {
+  timeZone: 'Asia/Seoul',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+})
+
 function formatDateTimeKst(value: string | null): string {
   if (!value) return '-'
 
   try {
-    return new Intl.DateTimeFormat('ko-KR', {
-      timeZone: 'Asia/Seoul',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    }).format(new Date(value))
+    return kstFormatter.format(new Date(value))
   } catch {
     return value
   }
@@ -84,7 +86,8 @@ export default function MyAttendanceClient() {
   const [refreshing, setRefreshing] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
-  async function fetchAttendance(isInitial = false) {
+  // 최적화: useCallback으로 감싸 무한 루프 및 불필요한 함수 재생성을 방지합니다.
+  const fetchAttendance = useCallback(async (isInitial = false) => {
     try {
       if (isInitial) {
         setLoading(true)
@@ -94,18 +97,18 @@ export default function MyAttendanceClient() {
 
       setErrorMessage('')
 
-      const response = await fetch('/api/attendance/list', {
+      // 최근 10개만 요청하도록 limit=10 쿼리 파라미터 추가
+      const response = await fetch('/api/attendance/list?limit=10', {
         method: 'GET',
-        // credentials: 'include'는 중요합니다! 쿠키를 같이 보냅니다.
         credentials: 'include',
         cache: 'no-store',
       })
-// 디버깅을 위한 로그 추가
-    console.log('API 응답 상태 코드:', response.status);
+
+      console.log('API 응답 상태 코드:', response.status)
+      
       if (response.status === 401) {
-        console.error('인증 실패: 세션이 만료되었거나 로그인이 필요합니다.');
-      // 바로 튕기지 않고 메시지를 보여준 뒤 이동시키려면 알림창을 띄울 수 있습니다.
-      alert('세션이 만료되었습니다. 다시 로그인해주세요.');
+        console.error('인증 실패: 세션이 만료되었거나 로그인이 필요합니다.')
+        alert('세션이 만료되었습니다. 다시 로그인해주세요.')
         window.location.href = '/login'
         return
       }
@@ -135,11 +138,11 @@ export default function MyAttendanceClient() {
         setRefreshing(false)
       }
     }
-  }
+  }, [])
 
   useEffect(() => {
     void fetchAttendance(true)
-  }, [])
+  }, [fetchAttendance])
 
   if (loading) {
     return <div style={{ padding: '20px' }}>내 출석 목록을 불러오는 중입니다...</div>
@@ -157,25 +160,22 @@ export default function MyAttendanceClient() {
         }}
       >
         <div>
-          <h1 style={{ margin: 0 }}>내 출석 조회</h1>
+          <h1 style={{ margin: 0 }}>내 출석 조회 (최근 10건)</h1>
           <p style={{ marginTop: '8px', color: '#555' }}>
-            본인의 출석 기록을 확인하고 필요한 경우 변경 요청을 생성할 수 있습니다.
-          
+            본인의 최근 출석 기록 10건을 확인하고 필요한 경우 변경 요청을 생성할 수 있습니다.
           </p>
-         
+          
           <div style={{ display: 'flex', gap: '22px', flexWrap: 'wrap' }}>
-          <Link href="/">
-            <button type="button">메인으로</button>
-          </Link>
-          <Link href="/attendance/requests">
-            <button type="button">내 변경 요청 보기</button>
-          </Link>
+            <Link href="/">
+              <button type="button">메인으로</button>
+            </Link>
+            <Link href="/attendance/requests">
+              <button type="button">내 변경 요청 보기</button>
+            </Link>
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: '22px', flexWrap: 'wrap' }}>
-          
-
           <button
             type="button"
             onClick={() => void fetchAttendance(false)}
@@ -263,19 +263,7 @@ export default function MyAttendanceClient() {
                       void fetchAttendance(false)
                     }}
                   />
-                ) : (
-                  <div
-                    style={{
-                      padding: '10px',
-                      borderRadius: '8px',
-                      background: '#f8fafc',
-                      border: '1px solid #e5e7eb',
-                      color: '#475569',
-                    }}
-                  >
-                    이 출석 기록은 현재 변경 요청 대상이 아닙니다.
-                  </div>
-                )}
+                ) : null }
               </div>
             </div>
           ))}

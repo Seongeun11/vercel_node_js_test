@@ -1,6 +1,6 @@
-// app/admin/admin-only/logs/page.tsx
+// app\admin\[programType]\logs\page.tsx
 'use client'
-
+import { useParams } from 'next/navigation' // 🚀 1. useParams 추가
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 type LogAction = 'create' | 'update' | 'correct' | 'mark_absent' | 'delete'
@@ -184,6 +184,9 @@ function extractChangedFields(
 }
 
 export default function AdminAttendanceLogsPage() {
+  const params = useParams() // 🚀 2. 현재 URL 파라미터 가져오기
+  const currentProgramType = (params?.programType as string) ?? 'academy' // 🚀 주소창의 프로그램명 감지
+
   const [items, setItems] = useState<AttendanceLogItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>('')
@@ -199,17 +202,19 @@ export default function AdminAttendanceLogsPage() {
     setError('')
 
     try {
-      const params = new URLSearchParams()
+      const urlParams = new URLSearchParams()
+      // 🚀 [해결] 현재 대시보드의 프로그램 이름을 쿼리 스트링에 명시적으로 추가합니다.
+      urlParams.set('program_type', currentProgramType)
 
-      if (eventId.trim()) params.set('event_id', eventId.trim())
-      if (targetUserId.trim()) params.set('target_user_id', targetUserId.trim())
-      if (changedBy.trim()) params.set('changed_by', changedBy.trim())
-      if (dateFrom.trim()) params.set('date_from', dateFrom.trim())
-      if (dateTo.trim()) params.set('date_to', dateTo.trim())
+      if (eventId.trim()) urlParams.set('event_id', eventId.trim())
+      if (targetUserId.trim()) urlParams.set('target_user_id', targetUserId.trim())
+      if (changedBy.trim()) urlParams.set('changed_by', changedBy.trim())
+      if (dateFrom.trim()) urlParams.set('date_from', dateFrom.trim())
+      if (dateTo.trim()) urlParams.set('date_to', dateTo.trim())
 
-      params.set('limit', '100')
+      urlParams.set('limit', '100')
 
-      const response = await fetch(`/api/logs?${params.toString()}`, {
+      const response = await fetch(`/api/logs?${urlParams.toString()}`, {
         method: 'GET',
         credentials: 'include',
         cache: 'no-store',
@@ -228,7 +233,8 @@ export default function AdminAttendanceLogsPage() {
     } finally {
       setLoading(false)
     }
-  }, [eventId, targetUserId, changedBy, dateFrom, dateTo])
+  // 🚀 3. 의존성 배열에 currentProgramType 추가
+  }, [currentProgramType, eventId, targetUserId, changedBy, dateFrom, dateTo])
 
   useEffect(() => {
     void fetchLogs()
@@ -251,15 +257,24 @@ export default function AdminAttendanceLogsPage() {
     setDateFrom('')
     setDateTo('')
   }
-
+  // 상단 타이틀 구어 가공용 매핑
+  const programTitleMap: Record<string, string> = {
+    academy: '천심 영성 아카데미',
+    spirituality: '영성 40일 수련',
+    mosim: '모심 40일 수련',
+    hujin: '효진정 수련',
+    seonghwa: '성화영성 수련',
+    resonance: '3일 공명 수련',
+  }
   return (
     <main style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ marginBottom: '24px' }}>
+        {/* 🚀 상단 타이틀을 어떤 대시보드에 접근했느냐에 따라 동적으로 노출합니다 */}
         <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '8px' }}>
-          출석 감사 로그
+          {programTitleMap[currentProgramType] || '알 수 없는 프로그램'} 출석 감사 로그
         </h1>
         <p style={{ color: '#666', margin: 0 }}>
-          출석 생성, 수정, 정정, 결석 처리, 삭제 이력을 확인합니다.
+          {programTitleMap[currentProgramType] || '해당 소속'}의 생성, 수정, 정정, 결석 처리, 삭제 이력을 확인합니다.
         </p>
       </div>
 

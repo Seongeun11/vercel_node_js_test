@@ -56,7 +56,8 @@ export default async function HomePage() {
               background: '#fff',
             }}
           >
-            <h2 style={{ marginTop: 0 }}>바로가기</h2>
+            {user.role === 'trainee' &&(<h2 style={{ marginTop: 0 }}>바로가기</h2>)}
+            {user.role === 'admin' &&(<h2 style={{ marginTop: 0 }}>관리자 전용 페이지 바로가기</h2>)}
 
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               {user.role === 'trainee' &&(
@@ -80,11 +81,27 @@ export default async function HomePage() {
               )}
 
               {user.role === 'admin' && (
+                
                 <>
-                  <Link href="/admin">
-                    <button type="button">관리자 페이지</button>
-                  </Link>
                   
+                  <Link href="/admin/academy">
+                    <button type="button">아카데미 페이지</button>
+                  </Link>
+                  <Link href="/admin/spirituality">
+                    <button type="button">영성수련 페이지</button>
+                  </Link>
+                  <Link href="/admin/mosim">
+                    <button type="button">모심수련 페이지</button>
+                  </Link>
+                  <Link href="/admin/hujin">
+                    <button type="button">효진정 페이지</button>
+                  </Link>
+                  <Link href="/admin/seonghwa">
+                    <button type="button">성화영성 페이지</button>
+                  </Link>
+                  <Link href="/admin/resonance">
+                    <button type="button">3일 공명기도 페이지</button>
+                  </Link>
                 </>
               )}
             </div>

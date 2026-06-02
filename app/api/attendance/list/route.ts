@@ -81,6 +81,10 @@ export async function GET(request: NextRequest): Promise<Response> {
   const dateFrom = searchParams.get('date_from')?.trim() || ''
   const dateTo = searchParams.get('date_to')?.trim() || ''
 
+  // 클라이언트가 보낸 limit 값을 읽어옵니다.
+  const limitParam = searchParams.get('limit')?.trim()
+  const limit = limitParam ? parseInt(limitParam, 10) : null
+
   if (dateFrom && !isValidDateString(dateFrom)) {
     return jsonNoStore<AttendanceListResponse>(
       { error: 'date_from 형식은 YYYY-MM-DD 이어야 합니다.' },
@@ -142,6 +146,11 @@ if(dateTo){
    dateTo
  )
 }
+
+// 유효한 limit 숫자가 들어온 경우 Supabase 단에서 데이터 개수를 제한합니다.
+  if (limit && !isNaN(limit) && limit > 0) {
+    attendanceQuery = attendanceQuery.limit(limit)
+  }
 
   const { data, error } = await attendanceQuery
 

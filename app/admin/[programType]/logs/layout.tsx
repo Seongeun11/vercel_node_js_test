@@ -1,4 +1,4 @@
-// app/logs/layout.tsx
+// app\admin\[programType]\logs\layout.tsx
 import { ReactNode } from 'react'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/serverAuth'
