@@ -10,7 +10,7 @@ import {
 import EventForm from './components/event-form'
 import EventList from './components/event-list'
 
-import { useevent } from './hooks/use-events'
+import { useevent } from './hooks/use-event'
 
 import type {
   EventItem,
@@ -43,7 +43,7 @@ const DEFAULT_FORM: EventFormState = {
   is_active: true,
 }
 
-export default function eventClient() {
+export default function EventClient() {
   const {
     event,
     loading,

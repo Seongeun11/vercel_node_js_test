@@ -1,7 +1,7 @@
 // app/admin/admin-only/event/page.tsx
 import { redirect } from 'next/navigation'
 import { requireRole } from '@/lib/serverAuth'
-import eventClient from './event-client'
+import EventClient from './event-client'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,5 +13,5 @@ export default async function eventPage() {
     redirect('/forbidden')
   }
 
-  return <eventClient />
+  return <EventClient/>
 }
