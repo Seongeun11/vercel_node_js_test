@@ -24,15 +24,25 @@ function getTodayDate(): string {
   return `${year}-${month}-${day}`
 }
 
+function getFirstDayOfMonth(date?: string): string {
+  const base = date ? new Date(date) : new Date()
+
+  const year = base.getFullYear()
+  const month = String(base.getMonth() + 1).padStart(2, '0')
+
+  return `${year}-${month}-01`
+}
+
 export default function AttendanceExportPage() {
   const today = getTodayDate()
 
-  const [event, setevent] = useState<EventItem[]>([])
-  const [eventId, setEventId] = useState('')
+  const [events, setEvents] = useState<EventItem[]>([])
+  const [eventIds, setEventIds] = useState<string[]>([])
   const [dateFrom, setDateFrom] = useState(getFirstDayOfMonth(today))
   const [dateTo, setDateTo] = useState(today)
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     async function fetchevent() {
@@ -55,11 +65,8 @@ export default function AttendanceExportPage() {
         }
 
         const nextevent = result.items ?? []
-        setevent(nextevent)
-
-        if (nextevent.length > 0) {
-          setEventId(nextevent[0].id)
-        }
+        setEvents(nextevent)
+        setEventIds([]) 
       } catch (error) {
         console.error('[attendance/export] event fetch error:', error)
         setErrorMessage('행사 목록 조회 중 오류가 발생했습니다.')
@@ -70,20 +77,19 @@ export default function AttendanceExportPage() {
 
     void fetchevent()
   }, [])
-  // 매월 한국표준시 1일 반환 (YYYY-MM-DD)
-  function getFirstDayOfMonth(date?: string): string {
-    const base = date ? new Date(date) : new Date()
 
-    const year = base.getFullYear()
-    const month = String(base.getMonth() + 1).padStart(2, '0')
-
-    return `${year}-${month}-01`
+  function handleSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const selectedOptions = Array.from(e.target.selectedOptions).map(
+      (option) => option.value
+    )
+    setEventIds(selectedOptions)
   }
-  function handleDownloadExcel() {
+
+  async function handleDownloadExcel() {
     setErrorMessage('')
 
-    if (!eventId) {
-      setErrorMessage('행사를 선택해주세요.')
+    if (eventIds.length === 0) {
+      setErrorMessage('행사를 최소 하나 이상 선택해주세요.')
       return
     }
 
@@ -97,12 +103,58 @@ export default function AttendanceExportPage() {
       return
     }
 
-    const params = new URLSearchParams()
-    params.set('event_id', eventId)
-    params.set('date_from', dateFrom)
-    params.set('date_to', dateTo)
+    try {
+      setDownloading(true)
 
-    window.location.href = `/api/admin/attendance/export?${params.toString()}`
+      const params = new URLSearchParams()
+      
+      // ✨ [논리오류 해결] 백엔드 multi-query 파싱 규격에 맞게 event_id 키를 여러 번 append 합니다.
+      // 결과 형식: ?event_id=UUID_1&event_id=UUID_2...
+      eventIds.forEach((id) => {
+        params.append('event_id', id)
+      })
+      
+      params.set('date_from', dateFrom)
+      params.set('date_to', dateTo)
+
+      const response = await fetch(`/api/admin/attendance/export?${params.toString()}`, {
+        method: 'GET',
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type')
+        if (contentType && contentType.includes('application/json')) {
+          const errResult = await response.json()
+          throw new Error(errResult.error || '엑셀 다운로드에 실패했습니다.')
+        }
+        throw new Error('엑셀 다운로드 중 서버 오류가 발생했습니다.')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      
+      const selectedNames = events
+        .filter((ev) => eventIds.includes(ev.id))
+        .map((ev) => ev.name)
+      const fileName = selectedNames.length > 1 
+        ? `${selectedNames[0]}_외_${selectedNames.length - 1}건_통합_출석현황.xlsx`
+        : `${selectedNames[0] || '행사'}_출석현황.xlsx`
+        
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      
+      window.URL.revokeObjectURL(url)
+      a.remove()
+    } catch (error: any) {
+      console.error('[attendance/export] download error:', error)
+      setErrorMessage(error.message || '엑셀 다운로드 중 오류가 발생했습니다.')
+    } finally {
+      setDownloading(false)
+    }
   }
 
   if (loading) {
@@ -113,7 +165,7 @@ export default function AttendanceExportPage() {
     <div style={{ padding: '24px', maxWidth: '720px', margin: '0 auto' }}>
       <AdminHeader
         title="출석현황 엑셀 다운로드"
-        description="행사와 날짜 범위를 선택해 출석현황을 엑셀 파일로 다운로드합니다."
+        description="복수의 행사와 날짜 범위를 선택해 통합 출석현황을 엑셀 파일로 다운로드합니다."
       />
 
       <div
@@ -126,24 +178,26 @@ export default function AttendanceExportPage() {
       >
         <div style={{ display: 'grid', gap: '16px' }}>
           <div>
-            <label style={{ display: 'block', marginBottom: '6px' }}>
-              행사
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>
+              행사 선택 (다중 선택: Ctrl 또는 Cmd 키를 누른 채 클릭)
             </label>
             <select
-              value={eventId}
-              onChange={(event) => setEventId(event.target.value)}
+              multiple
+              value={eventIds}
+              onChange={handleSelectChange}
               style={{
                 width: '100%',
                 padding: '10px',
                 boxSizing: 'border-box',
+                height: '160px',
               }}
             >
-              {event.length === 0 ? (
-                <option value="">행사 없음</option>
+              {events.length === 0 ? (
+                <option value="" disabled>행사 없음</option>
               ) : (
-                event.map((event) => (
-                  <option key={event.id} value={event.id}>
-                    {event.name}
+                events.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
                   </option>
                 ))
               )}
@@ -151,31 +205,29 @@ export default function AttendanceExportPage() {
           </div>
 
           <div>
-            <label style={{ display: 'block', marginBottom: '6px' }}>
-              시작일 (자동: 매월 1일)
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>
+              시작일
             </label>
             <input
               type="date"
               value={dateFrom}
-              readOnly
+              onChange={(e) => setDateFrom(e.target.value)}
               style={{
                 width: '100%',
                 padding: '10px',
                 boxSizing: 'border-box',
-                background: '#f3f4f6',
-                cursor: 'not-allowed',
               }}
             />
           </div>
 
           <div>
-            <label style={{ display: 'block', marginBottom: '6px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>
               종료일
             </label>
             <input
               type="date"
               value={dateTo}
-              onChange={(event) => setDateTo(event.target.value)}
+              onChange={(e) => setDateTo(e.target.value)}
               style={{
                 width: '100%',
                 padding: '10px',
@@ -184,28 +236,53 @@ export default function AttendanceExportPage() {
             />
           </div>
 
-          <button type="button" onClick={handleDownloadExcel}>
-            엑셀 다운로드
+          <button 
+            type="button" 
+            onClick={handleDownloadExcel}
+            disabled={downloading}
+            style={{
+              padding: '12px',
+              background: downloading ? '#94a3b8' : '#2563eb',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: downloading ? 'not-allowed' : 'pointer',
+              fontWeight: 'bold'
+            }}
+          >
+            {downloading ? '엑셀 파일 생성 중...' : '통합 엑셀 다운로드'}
           </button>
         </div>
 
         {errorMessage && (
-          <p style={{ color: 'red', marginTop: '16px' }}>{errorMessage}</p>
+          <p style={{ color: '#dc2626', marginTop: '16px', fontWeight: '500' }}>{errorMessage}</p>
         )}
 
         <div
           style={{
             marginTop: '20px',
-            padding: '12px',
+            padding: '14px',
             borderRadius: '8px',
             background: '#f8fafc',
-            color: '#475569',
+            border: '1px solid #e2e8f0',
+            color: '#334155',
             fontSize: '14px',
+            lineHeight: '1.6'
           }}
         >
-          엑셀 형식: 출석번호 / 이름 / 날짜별 출석 상태
+          <strong style={{ color: '#0f172a' }}>📊 엑셀 출력 가이드 (Multi-Event)</strong>
           <br />
-          파일명과 시트명은 선택한 행사명으로 생성됩니다.
+          선택한 이벤트들이 단일 시트 내에 우측 열(Column)로 확장되어 병합 출력됩니다.
+          <div style={{ 
+            marginTop: '8px', 
+            padding: '8px', 
+            background: '#fff', 
+            borderRadius: '4px', 
+            fontFamily: 'monospace',
+            border: '1px dashed #cbd5e1'
+          }}>
+            [출석번호] | [이름] | [날짜별 출석 상태 (이벤트 A)] | [날짜별 출석 상태 (이벤트 B)] ...
+          </div>
         </div>
       </div>
     </div>
