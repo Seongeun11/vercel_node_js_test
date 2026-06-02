@@ -1,3 +1,4 @@
+//app\admin\[programType]\attendance\monthly\components\styles.ts
 import { CellStatus } from '../hooks/use-monthly-attendance'
 
 export function getStatusLabel(status: CellStatus): string {

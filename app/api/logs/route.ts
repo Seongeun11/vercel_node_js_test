@@ -68,7 +68,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       return jsonNoStore<LogsResponse>({ error: 'action 값이 올바르지 않습니다.' }, { status: 400 })
     }
 
-    // 🚀 [해결] .select() 내부의 # 주석을 완전히 제거하여 Supabase 파싱 오류를 원천 차단했습니다.
+    
     let query = supabaseAdmin
       .from('attendance_logs')
       .select(`

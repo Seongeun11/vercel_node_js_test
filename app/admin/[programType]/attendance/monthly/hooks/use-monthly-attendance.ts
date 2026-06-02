@@ -1,3 +1,4 @@
+//app\admin\[programType]\attendance\monthly\hooks\use-monthly-attendance.ts
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
@@ -49,7 +50,8 @@ function buildCalendarDays(month: string): CalendarDay[] {
   return days
 }
 
-export function useMonthlyAttendance() {
+// 고정: 인자로 주소창에서 온 소속 코드(currentProgramType)를 넘겨받음
+export function useMonthlyAttendance(currentProgramType: string) {
   const [tempMonth, setTempMonth] = useState<string>(getCurrentMonth)
   const [tempCohortNo, setTempCohortNo] = useState<string>('')
   const [tempKeyword, setTempKeyword] = useState<string>('')
@@ -70,6 +72,10 @@ export function useMonthlyAttendance() {
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams()
+
+    // 🚀 [연동 핵심] 현재 타고 온 대시보드의 소속 코드를 쿼리 스트링에 명시적으로 추가
+    params.set('program_type', currentProgramType)
+    
     params.set('month', searchParams.month)
     if (searchParams.cohortNo.trim()) params.set('cohort_no', searchParams.cohortNo.trim())
     if (searchParams.keyword.trim()) params.set('keyword', searchParams.keyword.trim())
@@ -158,7 +164,8 @@ export function useMonthlyAttendance() {
 
   const loadEvents = async () => {
     try {
-      const response = await fetch('/api/events/list', { method: 'GET', cache: 'no-store' })
+      // 필요에 따라 이벤트 목록 호출 시에도 특정 프로그램의 이벤트군만 필터링하도록 주입 가능
+      const response = await fetch(`/api/events/list?program_type=${currentProgramType}`, { method: 'GET', cache: 'no-store' })
       const result = await response.json()
       if (!response.ok) return
       const rawEvents = Array.isArray(result?.items) ? result.items : []
@@ -175,9 +182,21 @@ export function useMonthlyAttendance() {
     event.preventDefault()
     setSearchParams({ month: tempMonth, cohortNo: tempCohortNo, keyword: tempKeyword, eventId: tempEventId })
   }
+  useEffect(() => {
+  // 🚀 핵심 안전 가드: 
+  // 주소창의 programType 변수가 없거나, 공백이거나, 문자열 "undefined"인 상태라면 
+  // 백엔드 API 호출을 완전히 생략하고 리턴(대기)합니다.
+  if (!currentProgramType || currentProgramType.trim() === '' || currentProgramType === 'undefined') {
+    return;
+  }
 
-  useEffect(() => { void loadMonthlyAttendance() }, [queryString])
-  useEffect(() => { void loadEvents() }, [])
+  // 소속 정보가 확실히 로드된 정상적인 상태(예: 'spirituality')에서만 아래 백엔드 API를 호출합니다.
+  void loadMonthlyAttendance();
+  void loadEvents();
+
+}, [queryString, currentProgramType]); // currentProgramType이 변경될 때 다시 체크하도록 의존성 명시
+  //useEffect(() => { void loadMonthlyAttendance() }, [queryString])
+  //useEffect(() => { void loadEvents() }, [])
 
   return {
     state: { tempMonth, tempCohortNo, tempKeyword, tempEventId, events, loading, errorMessage, data, calendarDays, daySummaryMap, selectedDate, selectedOccurrences, selectedRows },

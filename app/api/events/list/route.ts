@@ -1,9 +1,9 @@
 // app/api/events/list/route.ts
 import { NextRequest } from 'next/server'
-import { getSessionProfile } from '@/lib/server-session' // 내부적으로 getUser()를 쓰도록 수정되었음을 전제, 혹은 아래 직렬 검증
+import { getSessionProfile } from '@/lib/server-session'
 import { jsonNoStore } from '@/lib/security/api-response'
 
-type WeekdayCode = 'sun'|'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'
+type WeekdayCode = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'
 
 type EventItem = {
   id: string
@@ -32,7 +32,6 @@ function parseBooleanParam(value: string | null): boolean | null {
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
-  //getSessionProfile 내부가 getUser() 기반으로 동작
   const session = await getSessionProfile(['admin'])
 
   if (!session.ok) {
@@ -46,8 +45,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   const upcomingOnly = parseBooleanParam(searchParams.get('upcoming_only')) ?? false
   const nowIso = new Date().toISOString()
 
-  // 2. 성능 최적화: 수많은 데이터를 자바스크립트 map 연산으로 재가공하지 않도록
-  // 필요한 데이터 포맷 그대로 select해 오거나 최소한의 가공만 거칩니다.
+  // 성능 최적화: 불필요한 조인이나 부재하는 program_type 필드 접근을 원천 차단
   let query = session.supabase
     .from('events')
     .select(`
@@ -69,8 +67,6 @@ export async function GET(request: NextRequest): Promise<Response> {
     query = query.gte('start_time', nowIso)
   }
 
-  // 3. 성능 최적화: 정렬 방향에 최적화된 DB 인덱스를 타도록 구성
-  // (Supabase dashboard에서 start_time 기준 인덱스를 꼭 생성해 주세요)
   const { data, error } = await query.order('start_time', {
     ascending: upcomingOnly,
   })
@@ -83,9 +79,6 @@ export async function GET(request: NextRequest): Promise<Response> {
     )
   }
 
-  // 4. 성능 최적화: 불필요한 고비용 배열 헬퍼 루프 연산(normalizeRecurrenceDays) 전면 제거
-  // 데이터가 DB에 정상적으로 들어있다면 타입 단언(Type Assertion)만으로 즉시 응답 가능 -> CPU 연산 시간 대폭 감소
   const items = (data ?? []) as EventItem[]
-
   return jsonNoStore<EventsListResponse>({ items })
 }

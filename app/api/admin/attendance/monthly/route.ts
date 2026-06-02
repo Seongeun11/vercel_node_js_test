@@ -1,5 +1,4 @@
 // app/api/admin/attendance/monthly/route.ts
-
 import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
@@ -7,17 +6,6 @@ import { jsonNoStore } from '@/lib/security/api-response'
 
 type AttendanceStatus = 'present' | 'late' | 'absent'
 type MonthlyCellStatus = AttendanceStatus | 'unmarked'
-
-type ProfileRow = {
-  id: string
-  student_id: string
-  full_name: string
-  cohort_no: number | null
-  enrollment_status: 'active' | 'completed'
-  roles: { name: string } | null      // roles 테이블의 name 컬럼 참조
-  affiliations: { name: string } | null // affiliations 테이블의 name 컬럼 참조
-}
-
 
 type OccurrenceRow = {
   id: string
@@ -48,7 +36,6 @@ type AttendanceRow = {
   event_id: string
   occurrence_id: string | null
   attendance_date: string | null
-  
   status: AttendanceStatus
   method: string | null
   check_time: string | null
@@ -83,7 +70,6 @@ type MonthlyAttendanceUserRow = {
   days: Record<string, MonthlyAttendanceCell>
 }
 
-
 function getJoinedEvent(event: OccurrenceRow['events']) {
   return Array.isArray(event) ? event[0] ?? null : event
 }
@@ -92,15 +78,10 @@ function isValidMonth(month: string): boolean {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(month)
 }
 
-function getMonthRange(month: string): {
-  startDate: string
-  endDate: string
-} {
+function getMonthRange(month: string): { startDate: string; endDate: string } {
   const startDate = `${month}-01`
   const end = new Date(`${startDate}T00:00:00.000Z`)
-
   end.setUTCMonth(end.getUTCMonth() + 1)
-
   return {
     startDate,
     endDate: end.toISOString().slice(0, 10),
@@ -113,38 +94,56 @@ function normalizeKeyword(value: string | null): string {
 
 function normalizeCohortNo(value: string | null): number | null {
   const text = String(value ?? '').trim()
-
-  if (!text) return null
-
+  if (!text || text === 'undefined') return null
   const cohortNo = Number(text)
-
   if (!Number.isInteger(cohortNo) || cohortNo < 1) {
     return NaN
   }
-
   return cohortNo
 }
 
 function normalizeEventId(value: string | null): string {
-  return String(value ?? '').trim()
+  const text = String(value ?? '').trim()
+  return text === 'undefined' ? '' : text
 }
 
 function buildAttendanceKey(userId: string, occurrenceId: string): string {
   return `${userId}:${occurrenceId}`
 }
 
+/**
+ * 🚀 [교정 논리]: 프론트엔드 라우트 파라미터(영문)를 실제 DB 마스터 데이터(한글)로 치환해주는 매핑 테이블 정의
+ */
+const PROGRAM_TYPE_MAP: Record<string, string> = {
+  'academy': '아카데미',
+  'spirituality': '영성 40일',
+  'mosim': '모심 40일',
+  'hyojinjeong': '효진정',
+  'seonghwa': '성화영성',
+  'gongmyeong': '3일 공명기도'
+}
+
 export async function GET(request: NextRequest): Promise<Response> {
   try {
     const authResult = await requireRole(['admin'])
-
     if (!authResult.ok) {
-      return jsonNoStore(
-        { error: '인증이 필요합니다.' },
-      { status: 401 }
-      )
+      return jsonNoStore({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     const { searchParams } = request.nextUrl
+
+    // 1. 소속 정보 파라미터 추출
+    const rawProgramType = searchParams.get('program_type')
+    if (!rawProgramType || rawProgramType.trim() === '' || rawProgramType === 'undefined') {
+      return jsonNoStore(
+        { error: '유효한 소속 정보(program_type)가 지정되지 않았습니다.' },
+        { status: 400 }
+      )
+    }
+    const programTypeKey = rawProgramType.trim().toLowerCase()
+    
+    // 🚀 [교정 논리]: 영문 소속 코드를 한글 실제 소속 이름으로 변환
+    const dbAffiliationName = PROGRAM_TYPE_MAP[programTypeKey] ?? programTypeKey
 
     const month = String(searchParams.get('month') ?? '').trim()
     const keyword = normalizeKeyword(searchParams.get('keyword'))
@@ -152,33 +151,35 @@ export async function GET(request: NextRequest): Promise<Response> {
     const eventId = normalizeEventId(searchParams.get('event_id'))
 
     if (!isValidMonth(month)) {
-      return jsonNoStore(
-        { error: 'month는 YYYY-MM 형식이어야 합니다.' },
-        { status: 400 }
-      )
+      return jsonNoStore({ error: 'month는 YYYY-MM 형식이어야 합니다.' }, { status: 400 })
     }
 
     if (Number.isNaN(cohortNo)) {
-      return jsonNoStore(
-        { error: 'cohort_no는 1 이상의 정수여야 합니다.' },
-        { status: 400 }
-      )
+      return jsonNoStore({ error: 'cohort_no는 1 이상의 정수여야 합니다.' }, { status: 400 })
     }
 
     const { startDate, endDate } = getMonthRange(month)
 
     /**
-     * 1. 수련생 목록 조회
-     * - 월별 표의 행 기준
-     * - 출석 기록이 없어도 표시되어야 하므로 profiles를 먼저 조회
+     * 2. 수련생 목록 조회
+     * 🚀 [교정 논리]: 명확한 테이블 릴레이션 스키마에 근거하여 affiliations 조인 필터링 적용
      */
     let profileQuery = supabaseAdmin
-    .from('profiles')
-    .select('id, student_id, full_name,cohort_no, enrollment_status,roles!inner(name),affiliations!inner(name)')
-    .eq('roles.name', 'trainee') // 관계 테이블의 role 필터링
-    .eq('enrollment_status', 'active')
-    .order('student_id', { ascending: true })
-    .limit(1000)
+      .from('profiles')
+      .select(`
+        id, 
+        student_id, 
+        full_name, 
+        cohort_no, 
+        enrollment_status, 
+        roles!inner(name), 
+        affiliations!inner(name)
+      `)
+      .eq('roles.name', 'trainee') // 수련생만 필터
+      .eq('enrollment_status', 'active') // 활성화 상태만 필터
+      .eq('affiliations.name', dbAffiliationName) // 🚀 [해결]: 매핑된 한글 소속명으로 DB 레벨에서 완벽 격리 필터링
+      .order('student_id', { ascending: true })
+      .limit(1000)
 
     if (cohortNo !== null) {
       profileQuery = profileQuery.eq('cohort_no', cohortNo)
@@ -188,39 +189,38 @@ export async function GET(request: NextRequest): Promise<Response> {
 
     if (profileError) {
       console.error('[admin/attendance/monthly] profile query error:', profileError)
-
-      return jsonNoStore(
-        { error: '수련생 목록을 불러오지 못했습니다.' },
-        { status: 500 }
-      )
+      return jsonNoStore({ error: '수련생 목록을 불러오지 못했습니다.' }, { status: 500 })
     }
-    // 데이터 가공: 중첩된 객체를 평탄화(Flatten)하여 기존 로직과의 호환성 유지
-    const profiles = ((profileData ?? []) as any[]).map(p => ({
+
+    // 데이터 가공 안전 처리 및 추가 필터링(키워드 등)
+    const profiles = ((profileData ?? []) as any[])
+      .map(p => {
+        const roleName = Array.isArray(p.roles) ? p.roles[0]?.name : p.roles?.name
+        const affiliationName = Array.isArray(p.affiliations) ? p.affiliations[0]?.name : p.affiliations?.name
+
+        return {
           id: p.id,
-          student_id: p.student_id,
-          full_name: p.full_name,
+          student_id: p.student_id ? String(p.student_id).trim() : '',
+          full_name: p.full_name ? String(p.full_name).trim() : '이름 없음',
           enrollment_status: p.enrollment_status,
-          // 관계 데이터가 배열로 올 경우를 대비한 안전한 접근
           cohort_no: p.cohort_no,
-     role:
-   Array.isArray(p.roles)
-   ? p.roles[0]?.name
-   : p.roles?.name,
-      affiliation:
-   Array.isArray(p.affiliations)
-   ? p.affiliations[0]?.name
-   : p.affiliations?.name
-        })).filter((profile) => {
-          if (!keyword) return true
+          role: roleName ? String(roleName).trim().toLowerCase() : '',
+          affiliation: affiliationName ? String(affiliationName).trim() : ''
+        }
+      })
+      .filter((profile) => {
+        // 검색어 필터링 적용
+        if (keyword) {
           return (
             profile.student_id.toLowerCase().includes(keyword) ||
             profile.full_name.toLowerCase().includes(keyword)
           )
-        })
+        }
+        return true
+      })
 
     /**
-     * 2. 월별 회차 목록 조회
-     * - 월별 표의 컬럼 기준
+     * 3. 월별 회차 목록 조회
      */
     let occurrenceQuery = supabaseAdmin
       .from('event_occurrences')
@@ -247,26 +247,16 @@ export async function GET(request: NextRequest): Promise<Response> {
       occurrenceQuery = occurrenceQuery.eq('event_id', eventId)
     }
 
-    const { data: occurrenceData, error: occurrenceError } =
-      await occurrenceQuery
+    const { data: occurrenceData, error: occurrenceError } = await occurrenceQuery
 
     if (occurrenceError) {
-      console.error(
-        '[admin/attendance/monthly] occurrence query error:',
-        occurrenceError
-      )
-
-      return jsonNoStore(
-        { error: '월별 회차 목록을 불러오지 못했습니다.' },
-        { status: 500 }
-      )
+      console.error('[admin/attendance/monthly] occurrence query error:', occurrenceError)
+      return jsonNoStore({ error: '월별 회차 목록을 불러오지 못했습니다.' }, { status: 500 })
     }
 
     const rawOccurrences = (occurrenceData ?? []) as OccurrenceRow[]
-
     const occurrences: MonthlyOccurrence[] = rawOccurrences.map((occurrence) => {
       const event = getJoinedEvent(occurrence.events)
-
       return {
         id: occurrence.id,
         event_id: occurrence.event_id,
@@ -282,49 +272,37 @@ export async function GET(request: NextRequest): Promise<Response> {
     const occurrenceIds = occurrences.map((occurrence) => occurrence.id)
 
     /**
-     * 3. 출석 기록 조회
-     * - profileIds/occurrenceIds가 비어 있으면 Supabase .in() 호출 생략
+     * 4. 출석 기록 조회
      */
     let attendanceRows: AttendanceRow[] = []
 
     if (profileIds.length > 0 && occurrenceIds.length > 0) {
-      const { data: attendanceData, error: attendanceError } =
-        await supabaseAdmin
-          .from('attendance')
-          .select(`
-            id,
-            user_id,
-            event_id,
-            occurrence_id,
-            attendance_date,
-            
-            status,
-            method,
-            check_time
-          `)
-          .in('user_id', profileIds)
-          .in('occurrence_id', occurrenceIds)
+      const { data: attendanceData, error: attendanceError } = await supabaseAdmin
+        .from('attendance')
+        .select(`
+          id,
+          user_id,
+          event_id,
+          occurrence_id,
+          attendance_date,
+          status,
+          method,
+          check_time
+        `)
+        .in('user_id', profileIds)
+        .in('occurrence_id', occurrenceIds)
 
       if (attendanceError) {
-        console.error(
-          '[admin/attendance/monthly] attendance query error:',
-          attendanceError
-        )
-
-        return jsonNoStore(
-          { error: '출석 기록을 불러오지 못했습니다.' },
-          { status: 500 }
-        )
+        console.error('[admin/attendance/monthly] attendance query error:', attendanceError)
+        return jsonNoStore({ error: '출석 기록을 불러오지 못했습니다.' }, { status: 500 })
       }
 
       attendanceRows = (attendanceData ?? []) as AttendanceRow[]
     }
 
     const attendanceMap = new Map<string, AttendanceRow>()
-
     for (const attendance of attendanceRows) {
       if (!attendance.occurrence_id) continue
-
       attendanceMap.set(
         buildAttendanceKey(attendance.user_id, attendance.occurrence_id),
         attendance
@@ -332,7 +310,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     }
 
     /**
-     * 4. 월별 표 형태로 조립
+     * 5. 월별 표 형태로 데이터 조립
      */
     const rows: MonthlyAttendanceUserRow[] = profiles.map((profile) => {
       const days: Record<string, MonthlyAttendanceCell> = {}
@@ -375,18 +353,10 @@ export async function GET(request: NextRequest): Promise<Response> {
     for (const row of rows) {
       for (const cell of Object.values(row.days)) {
         switch (cell.status) {
-          case 'present':
-            summary.present_count += 1
-            break
-          case 'late':
-            summary.late_count += 1
-            break
-          case 'absent':
-            summary.absent_count += 1
-            break
-          case 'unmarked':
-            summary.unmarked_count += 1
-            break
+          case 'present': summary.present_count += 1; break
+          case 'late': summary.late_count += 1; break
+          case 'absent': summary.absent_count += 1; break
+          case 'unmarked': summary.unmarked_count += 1; break
         }
       }
     }
@@ -394,27 +364,21 @@ export async function GET(request: NextRequest): Promise<Response> {
     return jsonNoStore(
       {
         month,
-        range: {
-          start_date: startDate,
-          end_date: endDate,
-        },
+        range: { start_date: startDate, end_date: endDate },
         filters: {
           cohort_no: cohortNo,
           keyword,
           event_id: eventId || null,
+          program_type: programTypeKey
         },
-        summary: summary, // 기존 summary 계산 로직 결과
-        occurrences: occurrences, // 기존 occurrences 결과
-        rows: rows, // 가공된 rows 결과
+        summary,
+        occurrences,
+        rows,
       },
       { status: 200 }
     )
   } catch (error) {
     console.error('[admin/attendance/monthly] unexpected error:', error)
-
-    return jsonNoStore(
-      { error: '서버 오류가 발생했습니다.' },
-      { status: 500 }
-    )
+    return jsonNoStore({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }

@@ -1,3 +1,4 @@
+//app\admin\[programType]\attendance\monthly\components\stat-dashboard.tsx
 'use client'
 
 interface StatDashboardProps {

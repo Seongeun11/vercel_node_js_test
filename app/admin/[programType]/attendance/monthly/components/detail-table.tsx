@@ -1,3 +1,4 @@
+//app\admin\[programType]\attendance\monthly\components\detail-table.tsx
 'use client'
 
 import { MonthlyOccurrence } from '../hooks/use-monthly-attendance'

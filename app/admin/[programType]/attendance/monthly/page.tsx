@@ -1,13 +1,29 @@
+//app\admin\[programType]\attendance\monthly\page.tsx
 'use client'
-
+//Next.js의 동적 라우팅 세그먼트(Dynamic Route Segment) 구조를 채택함
+import { use } from 'react'
 import { useMonthlyAttendance } from './hooks/use-monthly-attendance'
 import FilterForm from './components/filter-form'
 import StatDashboard from './components/stat-dashboard'
 import AttendanceCalendar from './components/attendance-calender'
 import DetailTable from './components/detail-table'
+interface MonthlyAttendancePageProps {
+  // Next.js 15/16 표준 App Router 동적 라우트 params 타입 지정
+  params: Promise<{
+    programType: string
+  }>
+}
+export default function MonthlyAttendancePage({ params }: MonthlyAttendancePageProps) {
+  // 🚀 [논리오류 해결]: 매번 Promise.resolve()를 호출하여 언캐싱된 프로미스를 만들지 않고,
+  // Next.js가 주입해준 원본 params 프로미스 그대로를 use()에 전달하여 언랩(Unwrap)합니다.
+  const resolvedParams = use(params)
+  
+  const currentProgramType = resolvedParams?.programType 
+    ? String(resolvedParams.programType).trim() 
+    : ''
 
-export default function MonthlyAttendancePage() {
-  const { state, actions } = useMonthlyAttendance()
+  // 🚀 [해결] 정의된 스펙에 맞게 1개의 인자(소속 코드)를 명시적으로 주입
+  const { state, actions } = useMonthlyAttendance(currentProgramType)
 
   return (
     <main style={{ padding: '24px' }}>

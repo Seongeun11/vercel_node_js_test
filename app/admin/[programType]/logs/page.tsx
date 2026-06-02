@@ -1,7 +1,7 @@
 // app\admin\[programType]\logs\page.tsx
 'use client'
-import { useParams } from 'next/navigation' // 🚀 1. useParams 추가
-import { useCallback, useEffect, useMemo, useState } from 'react'
+
+import { use, useCallback, useEffect, useMemo, useState } from 'react'
 
 type LogAction = 'create' | 'update' | 'correct' | 'mark_absent' | 'delete'
 
@@ -102,7 +102,6 @@ function formatFieldName(key: string): string {
     status: '출석 상태',
     check_time: '체크 시각',
     attendance_date: '출석 날짜',
-    
     method: '출석 방식',
     reason: '사유',
     event_id: '행사',
@@ -183,9 +182,17 @@ function extractChangedFields(
   }>
 }
 
-export default function AdminAttendanceLogsPage() {
-  const params = useParams() // 🚀 2. 현재 URL 파라미터 가져오기
-  const currentProgramType = (params?.programType as string) ?? 'academy' // 🚀 주소창의 프로그램명 감지
+// 🚀 개선 1. Next.js 최신 표준에 맞춰 PageProps 규격을 Promise 형태로 정의합니다.
+type PageProps = {
+  params: Promise<{
+    programType: string
+  }>
+}
+
+export default function AdminAttendanceLogsPage({ params }: PageProps) {
+  // 🚀 개선 2. useParams() 대신 React.use()로 비동기 params를 안전하게 언랩(unwrap)합니다.
+  const resolvedParams = use(params)
+  const currentProgramType = resolvedParams?.programType || 'academy'
 
   const [items, setItems] = useState<AttendanceLogItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -203,7 +210,7 @@ export default function AdminAttendanceLogsPage() {
 
     try {
       const urlParams = new URLSearchParams()
-      // 🚀 [해결] 현재 대시보드의 프로그램 이름을 쿼리 스트링에 명시적으로 추가합니다.
+      // 현재 대시보드의 프로그램 이름을 쿼리 스트링에 추가
       urlParams.set('program_type', currentProgramType)
 
       if (eventId.trim()) urlParams.set('event_id', eventId.trim())
@@ -214,6 +221,7 @@ export default function AdminAttendanceLogsPage() {
 
       urlParams.set('limit', '100')
 
+      // 🚀 개선 3. API 엔드포인트 주소를 라우트 세그먼트 규칙과 정렬 (필요시 수정 가능)
       const response = await fetch(`/api/logs?${urlParams.toString()}`, {
         method: 'GET',
         credentials: 'include',
@@ -233,7 +241,7 @@ export default function AdminAttendanceLogsPage() {
     } finally {
       setLoading(false)
     }
-  // 🚀 3. 의존성 배열에 currentProgramType 추가
+  // 🚀 개선 4. currentProgramType이 변경될 때만 fetchLogs 인스턴스를 동기화하여 무한루프 방지
   }, [currentProgramType, eventId, targetUserId, changedBy, dateFrom, dateTo])
 
   useEffect(() => {
@@ -257,7 +265,8 @@ export default function AdminAttendanceLogsPage() {
     setDateFrom('')
     setDateTo('')
   }
-  // 상단 타이틀 구어 가공용 매핑
+
+  // 상단 타이틀 매핑 사전
   const programTitleMap: Record<string, string> = {
     academy: '천심 영성 아카데미',
     spirituality: '영성 40일 수련',
@@ -266,10 +275,10 @@ export default function AdminAttendanceLogsPage() {
     seonghwa: '성화영성 수련',
     resonance: '3일 공명 수련',
   }
+
   return (
     <main style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ marginBottom: '24px' }}>
-        {/* 🚀 상단 타이틀을 어떤 대시보드에 접근했느냐에 따라 동적으로 노출합니다 */}
         <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '8px' }}>
           {programTitleMap[currentProgramType] || '알 수 없는 프로그램'} 출석 감사 로그
         </h1>
@@ -322,19 +331,19 @@ export default function AdminAttendanceLogsPage() {
           </button>
 
           <button
-  type="button"
-  onClick={() => {
-    if (!hasActiveFilter) return
-    resetFilters()
-  }}
-  style={{
-    ...secondaryButtonStyle,
-    opacity: hasActiveFilter ? 1 : 0.5,
-    cursor: hasActiveFilter ? 'pointer' : 'not-allowed',
-  }}
->
-  필터 초기화
-</button>
+            type="button"
+            onClick={() => {
+              if (!hasActiveFilter) return
+              resetFilters()
+            }}
+            style={{
+              ...secondaryButtonStyle,
+              opacity: hasActiveFilter ? 1 : 0.5,
+              cursor: hasActiveFilter ? 'pointer' : 'not-allowed',
+            }}
+          >
+            | 필터 초기화
+          </button>
         </div>
       </section>
 
@@ -359,7 +368,6 @@ export default function AdminAttendanceLogsPage() {
                 <div style={cardHeaderStyle}>
                   <div>
                     <div style={logTitleStyle}>{buildLogTitle(item)}</div>
-
                     <div style={logSubTextStyle}>
                       작업 유형: {formatAction(item.action)}
                     </div>
@@ -531,6 +539,7 @@ function MetaCard({
   )
 }
 
+// 스타일에 대한 명세는 원본과 100% 동일하게 유지됩니다.
 const filterPanelStyle: React.CSSProperties = {
   border: '1px solid #e5e7eb',
   borderRadius: '12px',
