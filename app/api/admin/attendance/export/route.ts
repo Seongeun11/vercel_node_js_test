@@ -49,7 +49,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   const { searchParams } = request.nextUrl
   
-  // 💡 [논리 오류 수정] 다중 쿼리 파라미터를 유실 없이 배열 전체로 수집합니다.
+  //다중 쿼리 파라미터를 유실 없이 배열 전체로 수집합니다.
   const eventIds = searchParams.getAll('event_id')
   const dateFrom = searchParams.get('date_from')
   const dateTo = searchParams.get('date_to')
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   // 1. 선택된 모든 행사 정보(ID, 이름) 한 번에 가져오기
   const { data: eventList, error: eventError } = await supabaseAdmin
-    .from('event')
+    .from('events')
     .select('id, name')
     .in('id', eventIds)
 
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   // 3. 해당 복수 행사들의 출석 데이터 통합 조회
-  // 💡 [논리 오류 수정] .eq에서 복수 바인딩이 가능한 .in 조건절로 교체
+  // .eq에서 복수 바인딩이 가능한 .in 조건절로 교체
   let attendanceQuery = supabaseAdmin
     .from('attendance')
     .select('user_id, event_id, attendance_date, status')
@@ -125,7 +125,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         const eventName = eventMap.get(row.event_id) || '알 수 없는 행사'
         const formattedDate = formatExcelDate(row.attendance_date)
         
-        // 💡 [요청사항 반영] 열 헤더 명칭을 "날짜 (이벤트명)" 구조로 동적 빌드
+        //  열 헤더 명칭을 "날짜 (이벤트명)" 구조로 동적 빌드
         const columnHeader = `${formattedDate} (${eventName})`
         
         columnsSet.add(columnHeader)

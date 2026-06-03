@@ -50,7 +50,7 @@ export default function AttendanceExportPage() {
         setLoading(true)
         setErrorMessage('')
 
-        const response = await fetch('/api/event/list', {
+        const response = await fetch('/api/events/list', {
           method: 'GET',
           credentials: 'include',
           cache: 'no-store',
@@ -68,7 +68,7 @@ export default function AttendanceExportPage() {
         setEvents(nextevent)
         setEventIds([]) 
       } catch (error) {
-        console.error('[attendance/export] event fetch error:', error)
+        console.error('[attendance/export] events fetch error:', error)
         setErrorMessage('행사 목록 조회 중 오류가 발생했습니다.')
       } finally {
         setLoading(false)
