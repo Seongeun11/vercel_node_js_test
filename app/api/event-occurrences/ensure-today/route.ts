@@ -123,8 +123,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     const today = getTodayInSeoul()
     const todayWeekday = getTodayWeekdayInSeoul()
 
-    const { data: event, error: eventError } = await supabaseAdmin
-      .from('event')
+    const { data: events, error: eventsError } = await supabaseAdmin
+      .from('events')
       .select(`
         id,
         name,
@@ -136,14 +136,14 @@ export async function POST(request: NextRequest): Promise<Response> {
       .eq('is_active', true)
       
 
-    if (eventError) {
+    if (eventsError) {
       return jsonNoStore(
-        { error: eventError.message },
+        { error: eventsError.message },
         { status: 500 }
       )
     }
 
-    const targetevent = ((event ?? []) as DailyEventRow[]).filter((event) => {
+    const targetEvents = ((events ?? []) as DailyEventRow[]).filter((event) => {
   const recurrenceDays = normalizeRecurrenceDays(event.recurrence_days)
 
   // 반복 행사: 오늘 요일이 포함된 경우
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   return false
 })
 
-    const targetEventIdSet = new Set(targetevent.map((event) => event.id))
+    const targetEventIdSet = new Set(targetEvents.map((event) => event.id))
 
     // 오늘 요일에서 제외된 기존 회차 정리
     const { data: todayOccurrences, error: cleanupQueryError } = await supabaseAdmin
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     const skipped: string[] = []
     const failed: Array<{ event_id: string; reason: string }> = []
 
-    for (const event of targetevent) {
+    for (const event of targetEvents) {
       try {
         const startTime = buildOccurrenceStart(event.start_time, today)
 

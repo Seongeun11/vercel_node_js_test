@@ -115,7 +115,7 @@ export default async function AdminLayout({ children, params }: Props) {
                 <Link href={`/admin/${currentProgram}/qr`} style={navLinkStyle}>
                   QR 관리
                 </Link>
-                <Link href={`/admin/${currentProgram}/event`} style={navLinkStyle}>
+                <Link href={`/admin/${currentProgram}/events`} style={navLinkStyle}>
                   행사 관리
                 </Link>
                 <Link href={`/admin/${currentProgram}/users`} style={navLinkStyle}>

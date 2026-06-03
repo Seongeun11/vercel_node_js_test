@@ -18,7 +18,7 @@ type TodayOccurrenceItem = {
   status: OccurrenceStatus
   created_at: string
   updated_at: string
-  event: {
+  events: {
     id: string
     name: string
     start_time: string
@@ -111,7 +111,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
         status,
         created_at,
         updated_at,
-        event (
+        events (
           id,
           name,
           start_time,
@@ -139,9 +139,9 @@ export async function GET(_request: NextRequest): Promise<Response> {
     const items: TodayOccurrenceItem[] = Array.isArray(data)
       ? data
           .map((row: any): TodayOccurrenceItem | null => {
-            const event = Array.isArray(row.event)
-              ? row.event[0] ?? null
-              : row.event ?? null
+            const event = Array.isArray(row.events)
+              ? row.events[0] ?? null
+              : row.events ?? null
 
             if (!event) return null
 
@@ -179,7 +179,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
               status: row.status as OccurrenceStatus,
               created_at: row.created_at,
               updated_at: row.updated_at,
-              event: {
+              events: {
                 id: event.id,
                 name: event.name,
                 start_time: event.start_time,

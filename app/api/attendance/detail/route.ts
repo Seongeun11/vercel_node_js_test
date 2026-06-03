@@ -56,7 +56,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       check_time,
       created_at,
       updated_at,
-      event:event (
+      event:events (
         id,
         name,
         start_time,

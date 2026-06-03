@@ -14,7 +14,7 @@ type OccurrenceRow = {
   start_time: string
   end_time: string | null
   status: 'scheduled' | 'open' | 'closed' | 'archived'
-  event:
+  events:
     | {
         id: string
         name: string
@@ -70,7 +70,7 @@ type MonthlyAttendanceUserRow = {
   days: Record<string, MonthlyAttendanceCell>
 }
 
-function getJoinedEvent(event: OccurrenceRow['event']) {
+function getJoinedEvent(event: OccurrenceRow['events']) {
   return Array.isArray(event) ? event[0] ?? null : event
 }
 
@@ -231,7 +231,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         start_time,
         end_time,
         status,
-        event (
+        events (
           id,
           name,
           start_time,
@@ -256,7 +256,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
     const rawOccurrences = (occurrenceData ?? []) as OccurrenceRow[]
     const occurrences: MonthlyOccurrence[] = rawOccurrences.map((occurrence) => {
-      const event = getJoinedEvent(occurrence.event)
+      const event = getJoinedEvent(occurrence.events)
       return {
         id: occurrence.id,
         event_id: occurrence.event_id,

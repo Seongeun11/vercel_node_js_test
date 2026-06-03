@@ -33,7 +33,7 @@ export default function MonthlyAttendancePage({ params }: MonthlyAttendancePageP
       </section>
 
       <FilterForm
-        tempMonth={state.tempMonth} tempCohortNo={state.tempCohortNo} tempKeyword={state.tempKeyword} tempEventId={state.tempEventId} event={state.event} loading={state.loading}
+        tempMonth={state.tempMonth} tempCohortNo={state.tempCohortNo} tempKeyword={state.tempKeyword} tempEventId={state.tempEventId} events={state.events} loading={state.loading}
         onChangeMonth={actions.setTempMonth} onChangeCohort={actions.setTempCohortNo} onChangeKeyword={actions.setTempKeyword} onChangeEvent={actions.setTempEventId}
         onSubmit={actions.handleSearch}
       />

@@ -4,13 +4,13 @@
 import { EventOption } from '../hooks/use-monthly-attendance'
 
 interface FilterFormProps {
-  tempMonth: string; tempCohortNo: string; tempKeyword: string; tempEventId: string; event: EventOption[]; loading: boolean;
+  tempMonth: string; tempCohortNo: string; tempKeyword: string; tempEventId: string; events: EventOption[]; loading: boolean;
   onChangeMonth: (v: string) => void; onChangeCohort: (v: string) => void; onChangeKeyword: (v: string) => void; onChangeEvent: (v: string) => void;
   onSubmit: (e: React.FormEvent) => void;
 }
 
 export default function FilterForm({
-  tempMonth, tempCohortNo, tempKeyword, tempEventId, event, loading,
+  tempMonth, tempCohortNo, tempKeyword, tempEventId, events, loading,
   onChangeMonth, onChangeCohort, onChangeKeyword, onChangeEvent, onSubmit
 }: FilterFormProps) {
   return (
@@ -31,7 +31,7 @@ export default function FilterForm({
         <span style={{ fontSize: '13px', fontWeight: 700 }}>행사</span>
         <select value={tempEventId} onChange={(e) => onChangeEvent(e.target.value)} style={{ padding: '9px', border: '1px solid #ccc', borderRadius: '8px', width: '180px', background: '#fff' }}>
           <option value="">전체 행사</option>
-          {event.map((ev) => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
+          {events.map((ev) => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
         </select>
       </label>
       <button type="submit" disabled={loading} style={{ padding: '10px 20px', border: 'none', borderRadius: '8px', background: '#2563eb', color: '#fff', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}>
