@@ -133,6 +133,13 @@ export async function POST(request: NextRequest): Promise<Response> {
           { status: 403 }
         )
       }
+      // 출석 가능 시간 만료 처리 (3시간 경과 등)
+      if (message.includes('attendance_closed_after_3_hours')) {
+        return jsonNoStore<AttendanceCheckResponse>(
+          { error: '출석가능시간이 지났습니다.' },
+          { status: 403 } // 상황에 따라 만료의 의미로 410(Gone)을 사용하셔도 좋습니다.
+        )
+      }
       console.error('[attendance/check] fast rpc error:', error)
       if (message.includes('invalid_or_expired_qr')) {
         return jsonNoStore<AttendanceCheckResponse>(
