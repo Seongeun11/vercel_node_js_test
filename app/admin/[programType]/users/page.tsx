@@ -1,0 +1,532 @@
+'use client'
+//app\admin\admin-only\users\page.tsx
+import { useEffect, useState } from 'react'
+import AdminHeader from '@/components/admin/AdminHeader'
+import UserBulkUpload from './user-bulk-upload'
+import ResetPasswordPanel from './reset-password-panel'
+import EnrollmentStatusToggle from './enrollment-status'
+
+// --- 타입 정의 (정규화 반영) ---
+type UserRole = {
+  id: number    // serial -> number (정수형)
+  name: string  // text -> string
+}
+type EnrollmentStatus = 'active' | 'completed'
+type Affiliation = '아카데미' | '영성' | '모심' | '효진정' | '성화영성'
+// 1. 타입을 ID 기반으로 확장합니다.
+type AffiliationOption = {
+  value: string; // 텍스트 (UI 표시용)
+  label: string; // 라벨
+  id: number;    // DB의 affiliation_id와 매칭될 값
+};
+type AdminUser = {
+  id: string
+  student_id: string
+  full_name: string
+  cohort_no: number | null
+  enrollment_status: EnrollmentStatus
+  role?: UserRole  | null // 💡 백엔드 Supabase Join 결과물에 맞춘 객체 타입 지정
+  affiliation: Affiliation;// DB Join 결과로 넘어오는 텍스트 명칭
+  password?: string
+  created_at?: string
+  updated_at?: string
+}
+
+type CreateUserResponse = {
+  ok?: boolean
+  message?: string
+  user?: AdminUser
+  error?: string
+  field_errors?: Record<string, string[]>
+}
+
+type UserListResponse = {
+  users?: AdminUser[]
+  error?: string
+}
+
+// 1. 옵션에 DB와 일치하는 실제 ID 값을 추가합니다.
+const ROLE_OPTIONS = [
+
+  { value: 'admin', label: '관리자', id: 1 },
+  { value: 'captain', label: '캡틴', id: 2 },
+  { value: 'trainee', label: '수련생', id: 3 },
+] as const;
+
+const AFFILIATION_OPTIONS: AffiliationOption[] = [
+  { value: '아카데미', label: '아카데미' ,id: 1 },
+  { value: '영성', label: '영성' ,id: 2},
+  { value: '모심', label: '모심' ,id: 3},
+  { value: '효진정', label: '효진정' ,id: 4},
+  { value: '성화영성', label: '성화영성' ,id: 5},
+]
+
+const ENROLLMENT_STATUS_OPTIONS: Array<{
+  value: EnrollmentStatus
+  label: string
+}> = [
+  { value: 'active', label: '재학' },
+  { value: 'completed', label: '수료' },
+]
+
+
+
+// 💡 ROLE_OPTIONS의 value가 'admin' 같은 문자열이라고 가정하고 작성한 안전한 버전이야.
+function getRoleLabel(role: string | UserRole | null | undefined): string {
+  if (!role) return '권한 없음'
+
+  // 💡 DB 스펙에 맞게 객체(UserRole)로 들어오면 .name 문자열을 추출하고, 
+  // 기존 코드 호환성을 위해 문자열로 들어오면 그대로 사용해.
+  const roleName = typeof role === 'object' && 'name' in role 
+    ? role.name 
+    : role
+
+  // ROLE_OPTIONS에서 백엔드 DB의 name 값(예: 'admin', 'user' 등)과 일치하는 항목을 검색
+  const matchedOption = ROLE_OPTIONS.find((option) => option.value === roleName)
+
+  // 매칭되는 한글 라벨이 있으면 리턴, 없으면 DB의 알파벳 name 값을 그대로 노출해줘.
+  return matchedOption?.label ?? String(roleName)
+}
+
+function getEnrollmentStatusLabel(status?: EnrollmentStatus): string {
+  return status === 'completed' ? '수료' : '재학'
+}
+
+function getFirstFieldError(
+  fieldErrors: Record<string, string[]> | undefined
+): string {
+  if (!fieldErrors) return ''
+
+  const firstError = Object.values(fieldErrors)
+    .flat()
+    .find((message) => Boolean(message))
+
+  return firstError ?? ''
+}
+
+export default function AdminUsersPage() {
+  
+  const [studentId, setStudentId] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [roleId, setRoleId] = useState<number>(3) // 초기값: 수련생 ID
+  const [password, setPassword] = useState('')
+  const [cohortNo, setCohortNo] = useState('')
+  const [enrollmentStatus, setEnrollmentStatus] =
+    useState<EnrollmentStatus>('active')
+  // 3. 상태 변수를 텍스트가 아닌 ID(number)를 저장하도록 변경하는 것이 관리하기 편합니다.
+  const [affiliationId, setAffiliationId] = useState<number | ''>('');
+  const [isUserListOpen, setIsUserListOpen] = useState(false)
+  const [users, setUsers] = useState<AdminUser[]>([])
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [selectedPasswordUser, setSelectedPasswordUser] =
+    useState<AdminUser | null>(null)
+
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
+
+  async function fetchUsers() {
+    try {
+      setUsersLoading(true)
+
+      const response = await fetch('/api/profiles/list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      })
+
+      const text = await response.text()
+      const result: UserListResponse = text ? JSON.parse(text) : {}
+
+      if (!response.ok) {
+        setErrorMessage(result.error || '사용자 목록 조회에 실패했습니다.')
+        return
+      }
+
+      setUsers(result.users ?? [])
+    } catch (error) {
+      console.error('[admin/users] list error:', error)
+      setErrorMessage('사용자 목록 조회 중 오류가 발생했습니다.')
+    } finally {
+      setUsersLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    // 초기 로드 시에는 아무것도 하지 않음
+    //void fetchUsers()
+  }, [])
+
+  // 사용자 생성 핸들러
+  async function handleCreateUser() {
+    setMessage('')
+    setErrorMessage('')
+
+    const normalizedStudentId = studentId.trim()
+    const normalizedFullName = fullName.trim()
+    const normalizedCohortNo = cohortNo.trim()
+
+    if (!normalizedStudentId) {
+      setErrorMessage('학번을 입력해주세요.')
+      return
+    }
+
+    if (!normalizedFullName) {
+      setErrorMessage('이름을 입력해주세요.')
+      return
+    }
+
+    if (!password.trim()) {
+      setErrorMessage('초기 비밀번호를 입력해주세요.')
+      return
+    }
+
+    if (normalizedCohortNo) {
+      const cohortNumber = Number(normalizedCohortNo)
+
+      if (!Number.isInteger(cohortNumber) || cohortNumber <= 0) {
+        setErrorMessage('기수는 1 이상 정수로 입력해주세요.')
+        return
+      }
+    }
+
+    try {
+      setLoading(true)
+
+      const response = await fetch('/api/admin/users/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          student_id: normalizedStudentId,
+          full_name: normalizedFullName,
+          role_id: roleId,             // 수정: ID 전송
+          affiliation_id: affiliationId, // 수정: ID 전송
+          password,
+          cohort_no:
+            normalizedCohortNo === '' ? null : Number(normalizedCohortNo),
+          enrollment_status: enrollmentStatus,
+          
+        }),
+      })
+
+      const text = await response.text()
+      const result: CreateUserResponse = text ? JSON.parse(text) : {}
+
+      if (!response.ok) {
+        const fieldError = getFirstFieldError(result.field_errors)
+
+        setErrorMessage(
+          fieldError || result.error || '사용자 생성에 실패했습니다.'
+        )
+        return
+      }
+
+      setMessage(result.message || '사용자가 생성되었습니다.')
+      //성공후 초기화
+      setStudentId('')
+      setFullName('')
+      setRoleId(3)
+      setPassword('')
+      setCohortNo('')
+      setEnrollmentStatus('active')
+      setAffiliationId('')
+
+      await fetchUsers()
+    } catch (error) {
+      console.error('[admin/users] create error:', error)
+      setErrorMessage('사용자 생성 중 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+  <div style={{ padding: '24px', maxWidth: '960px', margin: '0 auto' }}>
+    <AdminHeader
+      title="회원 생성"
+      description="관리자가 수련생, 캡틴, 관리자 계정을 생성할 수 있습니다."
+    />
+
+    <div
+      style={{
+        border: '1px solid #ddd',
+        borderRadius: '12px',
+        background: '#fff',
+        padding: '20px',
+      }}
+    >
+      <div style={{ display: 'grid', gap: '12px' }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '6px' }}>학번</label>
+          <input
+            value={studentId}
+            onChange={(event) => setStudentId(event.target.value)}
+            placeholder="예: 20260001"
+            style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '6px' }}>이름</label>
+          <input
+            value={fullName}
+            onChange={(event) => setFullName(event.target.value)}
+            placeholder="예: 홍길동"
+            style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '6px' }}>권한</label>
+          <select value={roleId} onChange={(e) => setRoleId(Number(e.target.value))} style={{ width: '100%', padding: '10px' }}>
+              {ROLE_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+          </select>
+        </div>
+        
+        <div>
+            <label style={{ display: 'block', marginBottom: '6px' }}>
+              소속
+            </label>
+            <select value={affiliationId} onChange={(e) => setAffiliationId(Number(e.target.value))} style={{ width: '100%', padding: '10px' }}>
+              <option value="">소속 선택</option>
+              {AFFILIATION_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '6px' }}>
+            재학/수료
+          </label>
+          <select
+            value={enrollmentStatus}
+            onChange={(event) =>
+              setEnrollmentStatus(event.target.value as EnrollmentStatus)
+            }
+            style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
+          >
+            {ENROLLMENT_STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        
+        <div>
+          <label style={{ display: 'block', marginBottom: '6px' }}>
+            초기 비밀번호
+          </label>
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="초기 비밀번호 입력"
+            style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
+          />
+          <p style={{ margin: '6px 0 0', color: '#666', fontSize: '13px' }}>
+            8자 이상, 소문자/숫자를 포함해야 합니다.
+          </p>
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '6px' }}>기수</label>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={cohortNo}
+            onChange={(event) => setCohortNo(event.target.value)}
+            placeholder="예: 10"
+            style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
+          />
+        </div>
+
+        <button type="button" onClick={handleCreateUser} disabled={loading}>
+          {loading ? '생성 중...' : '회원 생성'}
+        </button>
+      </div>
+
+      {message && (
+        <p style={{ color: 'green', marginTop: '16px' }}>{message}</p>
+      )}
+
+      {errorMessage && (
+        <p style={{ color: 'red', marginTop: '16px' }}>{errorMessage}</p>
+      )}
+    </div>
+
+    <div
+      style={{
+        marginTop: '24px',
+        border: '1px solid #ddd',
+        borderRadius: '12px',
+        background: '#fff',
+        padding: '20px',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          flexWrap: 'wrap',
+        }}
+      >
+        <h3 style={{ margin: 0 }}>계정 목록</h3>
+
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          펼치기를 누르면 계정 목록이 표시됩니다.
+          <button
+            type="button"
+            onClick={() => {
+              setIsUserListOpen((prev) => {
+                const next = !prev
+                
+                // 목록을 열 때 데이터가 없는 경우에만 fetch (또는 열 때마다 fetch)
+                if (next && users.length === 0) {
+                  void fetchUsers()
+                }
+
+                if (!next) {
+                  setSelectedPasswordUser(null)
+                }
+
+                return next
+              })
+            }}
+          >
+            {isUserListOpen ? '접기' : '펼치기'}
+          </button>
+
+          <button type="button" onClick={fetchUsers} disabled={usersLoading}>
+            {usersLoading ? '불러오는 중...' : '새로고침'}
+          </button>
+        </div>
+      </div>
+
+      {isUserListOpen && (
+        <>
+          <div style={{ overflowX: 'auto', marginTop: '12px' }}>
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: '14px',
+              }}
+            >
+              <thead>
+                <tr>
+                  <th style={{ borderBottom: '1px solid #ddd', padding: '8px' }}>
+                    학번
+                  </th>
+                  <th style={{ borderBottom: '1px solid #ddd', padding: '8px' }}>
+                    이름
+                  </th>
+                  <th style={{ borderBottom: '1px solid #ddd', padding: '8px' }}>
+                    권한
+                  </th>
+                  <th style={{ borderBottom: '1px solid #ddd', padding: '8px' }}>
+                    기수
+                  </th>
+                  <th style={{ borderBottom: '1px solid #ddd', padding: '8px' }}>
+                    재학/수료
+                  </th>
+                  <th style={{ borderBottom: '1px solid #ddd', padding: '8px' }}>
+                    소속
+                  </th>
+                  <th style={{ borderBottom: '1px solid #ddd', padding: '8px' }}>
+                    비밀번호
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {users.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      style={{ padding: '16px', textAlign: 'center' }}
+                    >
+                      표시할 계정이 없습니다.
+                    </td>
+                  </tr>
+                ) : (
+                  users.map((user) => (
+                    <tr key={user.id}>
+                      <td style={{ borderBottom: '1px solid #eee', padding: '8px' }}>
+                        {user.student_id}
+                      </td>
+
+                      <td style={{ borderBottom: '1px solid #eee', padding: '8px' }}>
+                        {user.full_name}
+                      </td>
+
+                      <td style={{ borderBottom: '1px solid #eee', padding: '8px' }}>
+                        {getRoleLabel(user.role)}
+                      </td>
+
+                      <td style={{ borderBottom: '1px solid #eee', padding: '8px' }}>
+                        {user.cohort_no ?? '-'}
+                      </td>
+
+                      <td style={{ borderBottom: '1px solid #eee', padding: '8px' }}>
+                        <EnrollmentStatusToggle
+                          user={user}
+                          onUpdated={(updatedUser) => {
+                            setUsers((prevUsers) =>
+                              prevUsers.map((prevUser) =>
+                                prevUser.id === updatedUser.id
+                                  ? { ...prevUser, ...updatedUser }
+                                  : prevUser
+                                
+                              )
+                            )
+                          }}
+                        />
+                      
+                      </td>
+                      <td style={{ borderBottom: '1px solid #eee', padding: '8px' }}>
+                        {user.affiliation}{/* 서버에서 Join된 명칭 표시 */}
+                      </td>
+                      <td style={{ borderBottom: '1px solid #eee', padding: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedPasswordUser(user)
+                            setMessage('')
+                            setErrorMessage('')
+                          }}
+                        >
+                          변경
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {selectedPasswordUser && (
+            <ResetPasswordPanel
+              user={selectedPasswordUser}
+              onCancel={() => setSelectedPasswordUser(null)}
+              onSuccess={() => {
+                setSelectedPasswordUser(null)
+              }}
+            />
+          )}
+        </>
+      )}
+    </div>
+
+    <UserBulkUpload />
+  </div>
+)
+}
