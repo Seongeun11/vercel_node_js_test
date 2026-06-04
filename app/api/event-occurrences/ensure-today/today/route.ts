@@ -1,5 +1,4 @@
 // app/api/event-occurrences/ensure-today/today/route.ts
-// 화면 표시전 최종필터
 import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
@@ -28,6 +27,7 @@ type TodayOccurrenceItem = {
     recurrence_type: RecurrenceType
     recurrence_days: WeekdayCode[]
     is_active: boolean
+    affiliations_id: number | null // 💡 필드 타입 정의 추가
   } | null
 }
 
@@ -78,15 +78,13 @@ function getKstWeekdayCode(date = new Date()): WeekdayCode {
 
 function normalizeRecurrenceDays(input: unknown): WeekdayCode[] {
   if (!Array.isArray(input)) return []
-
   const unique = Array.from(
     new Set(input.map((value) => String(value).trim().toLowerCase()))
   )
-
   return WEEKDAY_CODES.filter((day) => unique.includes(day))
 }
 
-export async function GET(_request: NextRequest): Promise<Response> {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const authResult = await requireRole(['admin'])
 
@@ -97,10 +95,15 @@ export async function GET(_request: NextRequest): Promise<Response> {
       )
     }
 
+    // 💡 [논리오류 교정]: URL에서 affiliation_id 쿼리 파라미터 추출
+    const { searchParams } = new URL(request.url)
+    const affiliationIdParam = searchParams.get('affiliation_id')
+
     const todayKstDate = getKstTodayDateString()
     const todayWeekday = getKstWeekdayCode()
 
-    const { data, error } = await supabaseAdmin
+    // 💡 [성능 & 논리 최적화]: 기본 쿼리 작성 (events 관계 테이블 내 affiliations_id 필드 추가 서치)
+    let query = supabaseAdmin
       .from('event_occurrences')
       .select(`
         id,
@@ -111,7 +114,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
         status,
         created_at,
         updated_at,
-        events (
+        events!inner (
           id,
           name,
           start_time,
@@ -120,18 +123,28 @@ export async function GET(_request: NextRequest): Promise<Response> {
           is_special_event,
           recurrence_type,
           recurrence_days,
-          is_active
+          is_active,
+          affiliations_id
         )
       `)
       .eq('occurrence_date', todayKstDate)
       .neq('status', 'archived')
-      .order('start_time', { ascending: true })
+
+    // 💡 [논리오류 교정]: 소속 필터 선택 시 부모 테이블 조건절(inner join filter) 동적 바인딩
+    if (affiliationIdParam && affiliationIdParam.trim() !== '') {
+      const parsedAffiliationId = parseInt(affiliationIdParam, 10)
+      if (!isNaN(parsedAffiliationId)) {
+        query = query.eq('events.affiliations_id', parsedAffiliationId)
+      }
+    }
+
+    // 최종 정렬 후 실행
+    const { data, error } = await query.order('start_time', { ascending: true })
 
     if (error) {
       console.error('[event-occurrences/ensure-today/today] query error:', error)
-
       return jsonNoStore<TodayOccurrenceResponse>(
-        { error: '오늘 회차 조회에 실패했습니다.' },
+        { error: '오늘 회차 소속별 조회에 실패했습니다.' },
         { status: 500 }
       )
     }
@@ -189,6 +202,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
                 recurrence_type: recurrenceType,
                 recurrence_days: recurrenceDays,
                 is_active: isActive,
+                affiliations_id: event.affiliations_id,
               },
             }
           })
@@ -202,7 +216,6 @@ export async function GET(_request: NextRequest): Promise<Response> {
     })
   } catch (error) {
     console.error('[event-occurrences/ensure-today/today] unexpected error:', error)
-
     return jsonNoStore<TodayOccurrenceResponse>(
       { error: '서버 오류가 발생했습니다.' },
       { status: 500 }

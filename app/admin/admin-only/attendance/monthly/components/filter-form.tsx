@@ -23,7 +23,7 @@ interface FilterFormProps {
 export default function FilterForm({
   tempMonth, tempCohortNo, tempKeyword, tempEventId, tempAffiliationId,
   events = [], 
-  affiliations = [], // 💡 방어 코드: 프로퍼티가 undefined 상태로 넘어와도 깨지지 않도록 빈 배열 기본 설정
+  affiliations = [], 
   loading,
   onChangeMonth, onChangeCohort, onChangeKeyword, onChangeEvent, onChangeAffiliation, onSubmit
 }: FilterFormProps) {
@@ -38,7 +38,6 @@ export default function FilterForm({
         <span style={{ fontSize: '13px', fontWeight: 700 }}>소속</span>
         <select value={tempAffiliationId} onChange={(e) => onChangeAffiliation(e.target.value)} style={{ padding: '9px', border: '1px solid #ccc', borderRadius: '8px', width: '150px', background: '#fff' }}>
           <option value="">전체 소속</option>
-          {/* 💡 정제된 소속 리스트 순회 매핑 */}
           {affiliations && affiliations.map((aff) => (
             <option key={aff.id} value={aff.id}>
               {aff.name}

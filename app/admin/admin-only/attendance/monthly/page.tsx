@@ -23,37 +23,36 @@ export default function MonthlyAttendancePage() {
         </div>
       )}
 
-      {/* 💡 [해결 포인트]: 훅에서 안전하게 받아온 소속 리스트(affiliations)를 FilterForm에 바인딩 */}
-      <FilterForm
-        tempMonth={state.tempMonth}
-        tempCohortNo={state.tempCohortNo}
-        tempKeyword={state.tempKeyword}
-        tempEventId={state.tempEventId}
-        tempAffiliationId={state.tempAffiliationId}
-        events={state.events}
-        affiliations={state.affiliations}
-        loading={state.loading}
-        onChangeMonth={actions.setTempMonth}
-        onChangeCohort={actions.setTempCohortNo}
-        onChangeKeyword={actions.setTempKeyword}
-        onChangeEvent={actions.setTempEventId}
-        onChangeAffiliation={actions.setTempAffiliationId}
-        onSubmit={actions.handleSearchSubmit}
+      <FilterForm 
+        tempMonth={state.tempMonth} 
+        tempCohortNo={state.tempCohortNo} 
+        tempKeyword={state.tempKeyword} 
+        tempEventId={state.tempEventId} 
+        tempAffiliationId={state.tempAffiliationId} 
+        events={state.events} 
+        affiliations={state.affiliations} 
+        loading={state.loading} 
+        onChangeMonth={actions.setTempMonth} 
+        onChangeCohort={actions.setTempCohortNo} 
+        onChangeKeyword={actions.setTempKeyword} 
+        onChangeEvent={actions.setTempEventId} 
+        onChangeAffiliation={actions.setTempAffiliationId} 
+        onSubmit={actions.handleSearchSubmit} 
       />
 
       {state.data?.summary && <StatDashboard summary={state.data.summary} />}
 
-      <AttendanceCalendar
-        calendarDays={state.calendarDays}
-        daySummaryMap={state.daySummaryMap}
-        selectedDate={state.selectedDate}
-        onSelectDate={actions.setSelectedDate}
+      <AttendanceCalendar 
+        calendarDays={state.calendarDays} 
+        daySummaryMap={state.daySummaryMap} 
+        selectedDate={state.selectedDate} 
+        onSelectDate={actions.setSelectedDate} 
       />
 
-      <DetailTable
-        selectedDate={state.selectedDate}
-        selectedOccurrences={state.selectedOccurrences}
-        selectedRows={state.selectedRows}
+      <DetailTable 
+        selectedDate={state.selectedDate} 
+        selectedOccurrences={state.selectedOccurrences} 
+        selectedRows={state.selectedRows} 
       />
     </main>
   )

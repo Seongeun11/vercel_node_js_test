@@ -4,11 +4,34 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 
 export type CellStatus = 'present' | 'late' | 'absent' | 'unmarked'
-export type MonthlyOccurrence = { id: string; event_id: string; event_name: string; occurrence_date: string; start_time: string; end_time: string | null; status: string }
-export type MonthlyAttendanceCell = { occurrence_id: string; event_id: string; event_name: string; occurrence_date: string; status: CellStatus; attendance_id: string | null; method: string | null; check_time: string | null }
-export type MonthlyAttendanceUserRow = { profile_id: string; student_id: string; full_name: string; cohort_no: number | null; affiliation_name: string; days: Record<string, MonthlyAttendanceCell> }
+export type MonthlyOccurrence = { 
+  id: string; 
+  event_id: string; 
+  event_name: string; 
+  occurrence_date: string; 
+  start_time: string;
+  end_time: string | null; 
+  status: string 
+}
+export type MonthlyAttendanceCell = { 
+  occurrence_id: string; 
+  event_id: string; 
+  event_name: string; 
+  occurrence_date: string;
+  status: CellStatus; 
+  attendance_id: string | null; 
+  method: string | null; 
+  check_time: string | null 
+}
+export type MonthlyAttendanceUserRow = { 
+  profile_id: string; 
+  student_id: string; 
+  full_name: string; 
+  cohort_no: number | null; 
+  affiliation_name: string;
+  days: Record<string, MonthlyAttendanceCell> 
+}
 
-// 로그 페이지에 있던 마스터 소속 정보를 폴백(Fallback)용으로 배치
 const MASTER_AFFILIATIONS = [
   { id: 1, name: '아카데미' },
   { id: 2, name: '영성 40일' },
@@ -88,7 +111,6 @@ export function useMonthlyAttendance() {
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
-  // 💡 논리 오류 수정: 쿼리스트링 생성 시 cohort_no와 affiliation_id의 바인딩 꼬임 해결
   const queryString = useMemo(() => {
     const params = new URLSearchParams()
     if (searchParams.month) params.set('month', searchParams.month)
@@ -193,58 +215,53 @@ export function useMonthlyAttendance() {
     }
   }
 
-  const loadEvents = async () => {
+  // 소속 ID 파라미터를 받아 해당 소속에 종속된 행사만 백엔드에서 가져오도록 보완
+  const loadEvents = useCallback(async (affiliationId: string) => {
     try {
-      const response = await fetch('/api/events/list', { method: 'GET', cache: 'no-store' })
+      const params = new URLSearchParams()
+      if (affiliationId.trim()) {
+        params.set('affiliation_id', affiliationId.trim())
+      }
+      const response = await fetch(`/api/events/list?${params.toString()}`, { method: 'GET', cache: 'no-store' })
       if (!response.ok) return
       const result = await response.json()
       const rawEvents = Array.isArray(result?.items) ? result.items : Array.isArray(result) ? result : []
       setEvents(rawEvents.map((e: any) => ({ id: String(e.id), name: String(e.name) })))
     } catch (e) {
-      console.error(e)
+      console.error('행사 목록 로드 실패:', e)
     }
-  }
+  }, [])
 
-  // 💡 [핵심 교정]: 소속 데이터를 안전하게 받아오고 가공하는 로직
   const loadAffiliations = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/affiliations/list', { method: 'GET', cache: 'no-store' })
-      
       if (!response.ok) {
-        // API 호출 실패 시 하드코딩 데이터로 대체 구동 트리거
         setAffiliations(MASTER_AFFILIATIONS.map(a => ({ id: String(a.id), name: a.name })))
         return
       }
-      
       const result = await response.json()
-      
-      // 구조적 문제 파괴: result, result.items, result.data 패턴 전체 유연화 방어막
-      const rawItems = Array.isArray(result) 
-        ? result 
-        : Array.isArray(result?.items) 
-          ? result.items 
-          : Array.isArray(result?.data) 
-            ? result.data 
-            : []
-
+      const rawItems = Array.isArray(result) ? result : Array.isArray(result?.items) ? result.items : Array.isArray(result?.data) ? result.data : []
       if (rawItems.length === 0) {
-        // 만약 받아온 데이터가 정상적으로 조회가 안 되었다면 안전하게 마스터 정보 바인딩
         setAffiliations(MASTER_AFFILIATIONS.map(a => ({ id: String(a.id), name: a.name })))
         return
       }
-
-      // 키 명칭 불일치 대응: item.name과 item.affiliation_name 둘 다 스캔
       const formatted = rawItems.map((item: any) => ({
         id: String(item.id),
         name: String(item.name || item.affiliation_name || `소속 ${item.id}`)
       }))
-
       setAffiliations(formatted)
     } catch (e) {
       console.error('소속 로드 실패, 마스터 데이터로 대체합니다.', e)
       setAffiliations(MASTER_AFFILIATIONS.map(a => ({ id: String(a.id), name: a.name })))
     }
   }, [])
+
+  // 💡 [논리오류 핵심 교정]: 사용자가 소속을 선택 변경할 때 동적으로 행사 목록을 다시 로딩하는 커스텀 핸들러
+  const handleAffiliationChange = useCallback((affiliationId: string) => {
+    setTempAffiliationId(affiliationId)
+    setTempEventId('') // 소속이 전환되면 이전에 선택한 다른 소속의 행사 ID 바인딩 해제 및 초기화
+    void loadEvents(affiliationId) // 변경된 소속 ID에 대응하는 행사 API Re-fetch 유도
+  }, [loadEvents])
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -253,7 +270,7 @@ export function useMonthlyAttendance() {
       cohortNo: tempCohortNo,
       keyword: tempKeyword,
       eventId: tempEventId,
-      affiliationId: tempAffiliationId, // 이 부분이 누락 없이 들어가야 합니다.
+      affiliationId: tempAffiliationId,
     });
   };
 
@@ -262,9 +279,9 @@ export function useMonthlyAttendance() {
   }, [queryString])
 
   useEffect(() => {
-    void loadEvents()
     void loadAffiliations()
-  }, [])
+    void loadEvents('') // 최초 페이지 렌더링 시에는 전체 행사 로드
+  }, [loadAffiliations, loadEvents])
 
   return {
     state: {
@@ -273,7 +290,8 @@ export function useMonthlyAttendance() {
       daySummaryMap, selectedDate, selectedOccurrences, selectedRows
     },
     actions: {
-      setTempMonth, setTempCohortNo, setTempKeyword, setTempEventId, setTempAffiliationId,
+      setTempMonth, setTempCohortNo, setTempKeyword, setTempEventId,
+      setTempAffiliationId: handleAffiliationChange, // 💡 단순 State 변경 훅을 커스텀 이벤트 처리 핸들러로 스와프
       handleSearchSubmit, setSelectedDate
     }
   }

@@ -43,6 +43,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   const searchParams = request.nextUrl.searchParams
+  const affiliationId = searchParams.get('affiliation_id')
   const upcomingOnly = parseBooleanParam(searchParams.get('upcoming_only')) ?? false
   const nowIso = new Date().toISOString()
 
@@ -69,7 +70,10 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (upcomingOnly) {
     query = query.gte('start_time', nowIso)
   }
-
+// 💡 소속 필터 정보가 쿼리파라미터로 넘어왔다면 조건절을 동적으로 추가
+  if (affiliationId && affiliationId.trim() !== '') {
+    query = query.eq('affiliations_id', Number(affiliationId))
+  }
   // 3. 성능 최적화: 정렬 방향에 최적화된 DB 인덱스를 타도록 구성
   // (Supabase dashboard에서 start_time 기준 인덱스를 꼭 생성해 주세요)
   const { data, error } = await query.order('start_time', {
