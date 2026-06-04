@@ -1,7 +1,7 @@
-// app\admin\[programType]\logs\page.tsx
+// app/admin/admin-only/logs/page.tsx
 'use client'
 
-import { use, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 type LogAction = 'create' | 'update' | 'correct' | 'mark_absent' | 'delete'
 
@@ -10,6 +10,7 @@ type ProfileMeta = {
   full_name: string
   student_id: string
   role: 'admin' | 'captain' | 'trainee'
+  affiliation_id: number | null
 }
 
 type EventMeta = {
@@ -40,12 +41,20 @@ type LogsResponse = {
   error?: string
 }
 
+// 스키마 상의 마스터 소속 정보 
+const AFFILIATIONS = [
+  { id: 1, name: '아카데미' },
+  { id: 2, name: '영성 40일' },
+  { id: 3, name: '모심 40일' },
+  { id: 4, name: '효진정' },
+  { id: 5, name: '성화영성' },
+  { id: 6, name: '3일 공명기도' },
+]
+
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '-'
-
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-
   return new Intl.DateTimeFormat('ko-KR', {
     dateStyle: 'medium',
     timeStyle: 'short',
@@ -54,32 +63,34 @@ function formatDateTime(value: string | null | undefined) {
 
 function formatAction(action: LogAction) {
   switch (action) {
-    case 'create':
-      return '생성'
-    case 'update':
-      return '수정'
-    case 'correct':
-      return '정정'
-    case 'mark_absent':
-      return '결석 처리'
-    case 'delete':
-      return '삭제'
-    default:
-      return action
+    case 'create': return '생성'
+    case 'update': return '수정'
+    case 'correct': return '정정'
+    case 'mark_absent': return '결석 처리'
+    case 'delete': return '삭제'
+    default: return action
   }
 }
 
 function formatRole(role: ProfileMeta['role'] | null | undefined) {
   switch (role) {
-    case 'admin':
-      return '관리자'
-    case 'captain':
-      return '캡틴'
-    case 'trainee':
-      return '수련생'
-    default:
-      return '-'
+    case 'admin': return '관리자'
+    case 'captain': return '캡틴'
+    case 'trainee': return '수련생'
+    default: return '-'
   }
+}
+
+function formatAffiliation(id: number | null | undefined) {
+  if (!id) return '-'
+  const found = AFFILIATIONS.find(a => a.id === id)
+  return found ? found.name : `소속 ID: ${id}`
+}
+
+type AffiliationBtnProps = {
+  name: string
+  active: boolean
+  onClick: () => void
 }
 
 function stringifySafe(value: unknown) {
@@ -111,23 +122,18 @@ function formatFieldName(key: string): string {
     occurrence_id: '회차',
     attendance_id: '출석 기록',
   }
-
   return labelMap[key] ?? key
 }
 
 function formatFieldValue(key: string, value: unknown): string {
   if (key === 'status') return getStatusLabel(value)
-
   if (key.includes('time') && typeof value === 'string') {
     return formatDateTime(value)
   }
-
   if (value === null || value === undefined || value === '') return '-'
-
   if (typeof value === 'object') {
     return stringifySafe(value)
   }
-
   return String(value)
 }
 
@@ -136,18 +142,12 @@ function buildLogTitle(item: AttendanceLogItem): string {
   const eventName = item.event_meta?.name ?? '알 수 없는 행사'
 
   switch (item.action) {
-    case 'create':
-      return `${targetName}님의 ${eventName} 출석 기록이 생성되었습니다.`
-    case 'update':
-      return `${targetName}님의 ${eventName} 출석 기록이 수정되었습니다.`
-    case 'correct':
-      return `${targetName}님의 ${eventName} 출석 기록이 정정되었습니다.`
-    case 'mark_absent':
-      return `${targetName}님이 ${eventName}에서 결석 처리되었습니다.`
-    case 'delete':
-      return `${targetName}님의 ${eventName} 출석 기록이 삭제되었습니다.`
-    default:
-      return `${targetName}님의 출석 로그가 기록되었습니다.`
+    case 'create': return `${targetName}님의 ${eventName} 출석 기록이 생성되었습니다.`
+    case 'update': return `${targetName}님의 ${eventName} 출석 기록이 수정되었습니다.`
+    case 'correct': return `${targetName}님의 ${eventName} 출석 기록이 정정되었습니다.`
+    case 'mark_absent': return `${targetName}님이 ${eventName}에서 결석 처리되었습니다.`
+    case 'delete': return `${targetName}님의 ${eventName} 출석 기록이 삭제되었습니다.`
+    default: return `${targetName}님의 출석 로그가 기록되었습니다.`
   }
 }
 
@@ -164,65 +164,42 @@ function extractChangedFields(
     .map((key) => {
       const before = beforeValue?.[key]
       const after = afterValue?.[key]
-
-      if (JSON.stringify(before) === JSON.stringify(after)) {
-        return null
-      }
-
-      return {
-        key,
-        before,
-        after,
-      }
+      if (JSON.stringify(before) === JSON.stringify(after)) return null
+      return { key, before, after }
     })
-    .filter(Boolean) as Array<{
-    key: string
-    before: unknown
-    after: unknown
-  }>
+    .filter(Boolean) as Array<{ key: string; before: unknown; after: unknown }>
 }
 
-// 🚀 개선 1. Next.js 최신 표준에 맞춰 PageProps 규격을 Promise 형태로 정의합니다.
-type PageProps = {
-  params: Promise<{
-    programType: string
-  }>
-}
-
-export default function AdminAttendanceLogsPage({ params }: PageProps) {
-  // 🚀 개선 2. useParams() 대신 React.use()로 비동기 params를 안전하게 언랩(unwrap)합니다.
-  const resolvedParams = use(params)
-  const currentProgramType = resolvedParams?.programType || 'academy'
-
+export default function AdminAttendanceLogsPage() {
   const [items, setItems] = useState<AttendanceLogItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>('')
 
+  // 상단 필터 상태 정의
   const [eventId, setEventId] = useState('')
   const [targetUserId, setTargetUserId] = useState('')
   const [changedBy, setChangedBy] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [selectedAffiliation, setSelectedAffiliation] = useState<string>('') // 빈 값은 '전체' 의미
 
   const fetchLogs = useCallback(async () => {
     setLoading(true)
     setError('')
 
     try {
-      const urlParams = new URLSearchParams()
-      // 현재 대시보드의 프로그램 이름을 쿼리 스트링에 추가
-      urlParams.set('program_type', currentProgramType)
+      const params = new URLSearchParams()
 
-      if (eventId.trim()) urlParams.set('event_id', eventId.trim())
-      if (targetUserId.trim()) urlParams.set('target_user_id', targetUserId.trim())
-      if (changedBy.trim()) urlParams.set('changed_by', changedBy.trim())
-      if (dateFrom.trim()) urlParams.set('date_from', dateFrom.trim())
-      if (dateTo.trim()) urlParams.set('date_to', dateTo.trim())
+      if (eventId.trim()) params.set('event_id', eventId.trim())
+      if (targetUserId.trim()) params.set('target_user_id', targetUserId.trim())
+      if (changedBy.trim()) params.set('changed_by', changedBy.trim())
+      if (dateFrom.trim()) params.set('date_from', dateFrom.trim())
+      if (dateTo.trim()) params.set('date_to', dateTo.trim())
+      if (selectedAffiliation) params.set('affiliation_id', selectedAffiliation)
 
-      urlParams.set('limit', '100')
+      params.set('limit', '100')
 
-      // 🚀 개선 3. API 엔드포인트 주소를 라우트 세그먼트 규칙과 정렬 (필요시 수정 가능)
-      const response = await fetch(`/api/logs?${urlParams.toString()}`, {
+      const response = await fetch(`/api/logs?${params.toString()}`, {
         method: 'GET',
         credentials: 'include',
         cache: 'no-store',
@@ -241,8 +218,7 @@ export default function AdminAttendanceLogsPage({ params }: PageProps) {
     } finally {
       setLoading(false)
     }
-  // 🚀 개선 4. currentProgramType이 변경될 때만 fetchLogs 인스턴스를 동기화하여 무한루프 방지
-  }, [currentProgramType, eventId, targetUserId, changedBy, dateFrom, dateTo])
+  }, [eventId, targetUserId, changedBy, dateFrom, dateTo, selectedAffiliation])
 
   useEffect(() => {
     void fetchLogs()
@@ -254,9 +230,10 @@ export default function AdminAttendanceLogsPage({ params }: PageProps) {
         targetUserId.trim() ||
         changedBy.trim() ||
         dateFrom.trim() ||
-        dateTo.trim()
+        dateTo.trim() ||
+        selectedAffiliation
     )
-  }, [eventId, targetUserId, changedBy, dateFrom, dateTo])
+  }, [eventId, targetUserId, changedBy, dateFrom, dateTo, selectedAffiliation])
 
   const resetFilters = () => {
     setEventId('')
@@ -264,28 +241,41 @@ export default function AdminAttendanceLogsPage({ params }: PageProps) {
     setChangedBy('')
     setDateFrom('')
     setDateTo('')
-  }
-
-  // 상단 타이틀 매핑 사전
-  const programTitleMap: Record<string, string> = {
-    academy: '천심 영성 아카데미',
-    spirituality: '영성 40일 수련',
-    mosim: '모심 40일 수련',
-    hujin: '효진정 수련',
-    seonghwa: '성화영성 수련',
-    resonance: '3일 공명 수련',
+    setSelectedAffiliation('')
   }
 
   return (
     <main style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '8px' }}>
-          {programTitleMap[currentProgramType] || '알 수 없는 프로그램'} 출석 감사 로그
+          출석 감사 로그
         </h1>
         <p style={{ color: '#666', margin: 0 }}>
-          {programTitleMap[currentProgramType] || '해당 소속'}의 생성, 수정, 정정, 결석 처리, 삭제 이력을 확인합니다.
+          출석 생성, 수정, 정정, 결석 처리, 삭제 이력을 확인합니다.
         </p>
       </div>
+
+      {/* [추가 요구사항] 소속 필터링 버튼 목록 그룹 UI */}
+      <section style={{ marginBottom: '20px' }}>
+        <div style={{ fontWeight: 800, marginBottom: '10px', fontSize: '15px' }}>소속별 필터</div>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setSelectedAffiliation('')}
+            style={selectedAffiliation === '' ? activeAffiliationBtnStyle : affiliationBtnStyle}
+          >
+            전체
+          </button>
+          {AFFILIATIONS.map((aff) => (
+            <button
+              key={aff.id}
+              onClick={() => setSelectedAffiliation(String(aff.id))}
+              style={selectedAffiliation === String(aff.id) ? activeAffiliationBtnStyle : affiliationBtnStyle}
+            >
+              {aff.name}
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section style={filterPanelStyle}>
         <div style={filterGridStyle}>
@@ -342,15 +332,13 @@ export default function AdminAttendanceLogsPage({ params }: PageProps) {
               cursor: hasActiveFilter ? 'pointer' : 'not-allowed',
             }}
           >
-            | 필터 초기화
+            필터 초기화
           </button>
         </div>
       </section>
 
       {loading && <div style={infoBoxStyle}>로그를 불러오는 중입니다...</div>}
-
       {!loading && error && <div style={errorBoxStyle}>{error}</div>}
-
       {!loading && !error && items.length === 0 && (
         <div style={infoBoxStyle}>조회된 로그가 없습니다.</div>
       )}
@@ -397,6 +385,7 @@ export default function AdminAttendanceLogsPage({ params }: PageProps) {
                     subTexts={[
                       `학번: ${item.target_user_profile?.student_id ?? '-'}`,
                       `역할: ${formatRole(item.target_user_profile?.role)}`,
+                      `소속: ${formatAffiliation(item.target_user_profile?.affiliation_id)}`,
                     ]}
                   />
 
@@ -406,6 +395,7 @@ export default function AdminAttendanceLogsPage({ params }: PageProps) {
                     subTexts={[
                       `학번: ${item.changed_by_profile?.student_id ?? '-'}`,
                       `역할: ${formatRole(item.changed_by_profile?.role)}`,
+                      `소속: ${formatAffiliation(item.changed_by_profile?.affiliation_id)}`,
                     ]}
                   />
 
@@ -426,7 +416,6 @@ export default function AdminAttendanceLogsPage({ params }: PageProps) {
 
                 <section style={{ marginBottom: '16px' }}>
                   <div style={sectionTitleStyle}>변경 내용</div>
-
                   {changedFields.length === 0 ? (
                     <div style={infoInlineStyle}>비교 가능한 변경 필드가 없습니다.</div>
                   ) : (
@@ -436,7 +425,6 @@ export default function AdminAttendanceLogsPage({ params }: PageProps) {
                           <div style={{ fontWeight: 800, marginBottom: '8px' }}>
                             {formatFieldName(field.key)}
                           </div>
-
                           <div style={compareGridStyle}>
                             <div>
                               <div style={compareLabelStyle}>이전</div>
@@ -444,7 +432,6 @@ export default function AdminAttendanceLogsPage({ params }: PageProps) {
                                 {formatFieldValue(field.key, field.before)}
                               </div>
                             </div>
-
                             <div>
                               <div style={compareLabelStyle}>이후</div>
                               <div style={compareValueStyle}>
@@ -462,19 +449,13 @@ export default function AdminAttendanceLogsPage({ params }: PageProps) {
                   <summary style={{ cursor: 'pointer', fontWeight: 700 }}>
                     원본 데이터 보기
                   </summary>
-
                   <div style={rawJsonGridStyle}>
                     <div>
-                      <div style={{ fontWeight: 700, marginBottom: '6px' }}>
-                        before_value
-                      </div>
+                      <div style={{ fontWeight: 700, marginBottom: '6px' }}>before_value</div>
                       <pre style={preStyle}>{stringifySafe(item.before_value)}</pre>
                     </div>
-
                     <div>
-                      <div style={{ fontWeight: 700, marginBottom: '6px' }}>
-                        after_value
-                      </div>
+                      <div style={{ fontWeight: 700, marginBottom: '6px' }}>after_value</div>
                       <pre style={preStyle}>{stringifySafe(item.after_value)}</pre>
                     </div>
                   </div>
@@ -503,9 +484,7 @@ function FilterInput({
 }) {
   return (
     <div>
-      <label style={{ display: 'block', fontWeight: 700, marginBottom: '6px' }}>
-        {label}
-      </label>
+      <label style={{ display: 'block', fontWeight: 700, marginBottom: '6px' }}>{label}</label>
       <input
         type={type}
         value={value}
@@ -531,15 +510,32 @@ function MetaCard({
       <div style={metaTitleStyle}>{title}</div>
       <div style={metaValueStyle}>{value}</div>
       {subTexts.map((text) => (
-        <div key={text} style={metaSubStyle}>
-          {text}
-        </div>
+        <div key={text} style={metaSubStyle}>{text}</div>
       ))}
     </div>
   )
 }
 
-// 스타일에 대한 명세는 원본과 100% 동일하게 유지됩니다.
+// 스타일 가이드 정의 추가 부문
+const affiliationBtnStyle: React.CSSProperties = {
+  padding: '8px 16px',
+  borderRadius: '20px',
+  border: '1px solid #d1d5db',
+  background: '#fff',
+  color: '#374151',
+  fontWeight: 600,
+  cursor: 'pointer',
+  fontSize: '14px',
+  transition: 'all 0.2s',
+}
+
+const activeAffiliationBtnStyle: React.CSSProperties = {
+  ...affiliationBtnStyle,
+  background: '#111827',
+  color: '#fff',
+  border: '1px solid #111827',
+}
+
 const filterPanelStyle: React.CSSProperties = {
   border: '1px solid #e5e7eb',
   borderRadius: '12px',
@@ -547,21 +543,18 @@ const filterPanelStyle: React.CSSProperties = {
   marginBottom: '20px',
   background: '#fff',
 }
-
 const filterGridStyle: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
   gap: '12px',
   marginBottom: '12px',
 }
-
 const logCardStyle: React.CSSProperties = {
   border: '1px solid #e5e7eb',
   borderRadius: '14px',
   padding: '18px',
   background: '#fff',
 }
-
 const cardHeaderStyle: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
@@ -570,31 +563,15 @@ const cardHeaderStyle: React.CSSProperties = {
   flexWrap: 'wrap',
   marginBottom: '14px',
 }
-
-const logTitleStyle: React.CSSProperties = {
-  fontSize: '18px',
-  fontWeight: 800,
-  lineHeight: 1.4,
-}
-
-const logSubTextStyle: React.CSSProperties = {
-  marginTop: '6px',
-  color: '#6b7280',
-  fontSize: '14px',
-}
-
+const logTitleStyle: React.CSSProperties = { fontSize: '18px', fontWeight: 800, lineHeight: 1.4 }
+const logSubTextStyle: React.CSSProperties = { marginTop: '6px', color: '#6b7280', fontSize: '14px' }
 const metaGridStyle: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
   gap: '12px',
   marginBottom: '16px',
 }
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontWeight: 800,
-  marginBottom: '8px',
-}
-
+const sectionTitleStyle: React.CSSProperties = { fontWeight: 800, marginBottom: '8px' }
 const reasonBoxStyle: React.CSSProperties = {
   border: '1px solid #e5e7eb',
   borderRadius: '10px',
@@ -602,32 +579,10 @@ const reasonBoxStyle: React.CSSProperties = {
   background: '#fafafa',
   color: '#333',
 }
-
-const changeCardStyle: React.CSSProperties = {
-  border: '1px solid #e5e7eb',
-  borderRadius: '10px',
-  padding: '12px',
-  background: '#fff',
-}
-
-const compareGridStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: '12px',
-}
-
-const compareLabelStyle: React.CSSProperties = {
-  color: '#666',
-  marginBottom: '4px',
-}
-
-const rawJsonGridStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: '12px',
-  marginTop: '12px',
-}
-
+const changeCardStyle: React.CSSProperties = { border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px', background: '#fff' }
+const compareGridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }
+const compareLabelStyle: React.CSSProperties = { color: '#666', marginBottom: '4px' }
+const rawJsonGridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }
 const inputStyle: React.CSSProperties = {
   width: '100%',
   height: '40px',
@@ -637,7 +592,6 @@ const inputStyle: React.CSSProperties = {
   outline: 'none',
   background: '#fff',
 }
-
 const primaryButtonStyle: React.CSSProperties = {
   height: '40px',
   padding: '0 16px',
@@ -648,7 +602,6 @@ const primaryButtonStyle: React.CSSProperties = {
   fontWeight: 700,
   cursor: 'pointer',
 }
-
 const secondaryButtonStyle: React.CSSProperties = {
   height: '40px',
   padding: '0 16px',
@@ -659,56 +612,13 @@ const secondaryButtonStyle: React.CSSProperties = {
   fontWeight: 700,
   cursor: 'pointer',
 }
-
-const infoBoxStyle: React.CSSProperties = {
-  padding: '14px 16px',
-  borderRadius: '12px',
-  background: '#f9fafb',
-  border: '1px solid #e5e7eb',
-  color: '#374151',
-}
-
-const errorBoxStyle: React.CSSProperties = {
-  padding: '14px 16px',
-  borderRadius: '12px',
-  background: '#fef2f2',
-  border: '1px solid #fecaca',
-  color: '#b91c1c',
-}
-
-const infoInlineStyle: React.CSSProperties = {
-  padding: '12px',
-  borderRadius: '10px',
-  background: '#f9fafb',
-  border: '1px solid #e5e7eb',
-  color: '#4b5563',
-}
-
-const metaCardStyle: React.CSSProperties = {
-  border: '1px solid #e5e7eb',
-  borderRadius: '12px',
-  padding: '12px',
-  background: '#fafafa',
-}
-
-const metaTitleStyle: React.CSSProperties = {
-  fontSize: '13px',
-  color: '#6b7280',
-  marginBottom: '6px',
-}
-
-const metaValueStyle: React.CSSProperties = {
-  fontSize: '16px',
-  fontWeight: 700,
-  color: '#111827',
-}
-
-const metaSubStyle: React.CSSProperties = {
-  marginTop: '4px',
-  fontSize: '13px',
-  color: '#6b7280',
-}
-
+const infoBoxStyle: React.CSSProperties = { padding: '14px 16px', borderRadius: '12px', background: '#f9fafb', border: '1px solid #e5e7eb', color: '#374151' }
+const errorBoxStyle: React.CSSProperties = { padding: '14px 16px', borderRadius: '12px', background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c' }
+const infoInlineStyle: React.CSSProperties = { padding: '12px', borderRadius: '10px', background: '#f9fafb', border: '1px solid #e5e7eb', color: '#4b5563' }
+const metaCardStyle: React.CSSProperties = { border: '1px solid #e5e7eb', borderRadius: '12px', padding: '12px', background: '#fafafa' }
+const metaTitleStyle: React.CSSProperties = { fontSize: '13px', color: '#6b7280', marginBottom: '6px' }
+const metaValueStyle: React.CSSProperties = { fontSize: '16px', fontWeight: 700, color: '#111827' }
+const metaSubStyle: React.CSSProperties = { marginTop: '4px', fontSize: '13px', color: '#6b7280' }
 const compareValueStyle: React.CSSProperties = {
   minHeight: '40px',
   padding: '10px 12px',
@@ -719,7 +629,6 @@ const compareValueStyle: React.CSSProperties = {
   wordBreak: 'break-word',
   whiteSpace: 'pre-wrap',
 }
-
 const preStyle: React.CSSProperties = {
   margin: 0,
   padding: '12px',

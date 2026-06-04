@@ -1,11 +1,14 @@
-//app\admin\[programType]\attendance\monthly\components\attendance-calender.tsx
+// app/admin/admin-only/attendance/monthly/components/attendance-calendar.tsx
 'use client'
 
 import { CalendarDay, DaySummary, CellStatus } from '../hooks/use-monthly-attendance'
 import { getStatusStyle } from './styles'
 
 interface AttendanceCalendarProps {
-  calendarDays: CalendarDay[]; daySummaryMap: Map<string, DaySummary>; selectedDate: string; onSelectDate: (date: string) => void;
+  calendarDays: CalendarDay[];
+  daySummaryMap: Map<string, DaySummary>;
+  selectedDate: string;
+  onSelectDate: (date: string) => void;
 }
 
 export default function AttendanceCalendar({ calendarDays, daySummaryMap, selectedDate, onSelectDate }: AttendanceCalendarProps) {

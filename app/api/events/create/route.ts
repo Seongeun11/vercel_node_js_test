@@ -17,6 +17,7 @@ type CreateEventBody = {
   recurrence_type?: RecurrenceType
   recurrence_days?: string[]
   is_active?: boolean
+  affiliations_id?: string | number | null // [수정] 소속 아이디 수신 타입 추가
 }
 
 type CreateEventResponse = {
@@ -32,6 +33,7 @@ type CreateEventResponse = {
     recurrence_days: WeekdayCode[]
     is_active: boolean
     created_at: string
+    affiliations_id: number | null // [수정] 반환 타입 규격 반영
   }
   error?: string
 }
@@ -113,6 +115,15 @@ export async function POST(request: NextRequest): Promise<Response> {
     const isSpecialEvent = Boolean(body.is_special_event)
     const isActive = body.is_active ?? true
 
+    // [수정] affiliations_id 데이터 안전 가공 로직 추가 (공백이거나 유효하지 않으면 null 처리)
+    let parsedAffiliationsId: number | null = null
+    if (body.affiliations_id !== undefined && body.affiliations_id !== null && String(body.affiliations_id).trim() !== '') {
+      parsedAffiliationsId = Number(body.affiliations_id)
+      if (Number.isNaN(parsedAffiliationsId)) {
+        parsedAffiliationsId = null
+      }
+    }
+
     if (!name) {
       return jsonNoStore<CreateEventResponse>(
         { error: '행사명을 입력해주세요.' },
@@ -161,7 +172,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     const recurrenceType: RecurrenceType =
       recurrenceDays.length > 0 ? 'daily' : 'none'
 
-    // 1. 이벤트 마스터 레코드 삽입
+    // 1. 이벤트 마스터 레코드 삽입 (affiliations_id 적용)
     const { data: createdEvent, error } = await supabaseAdmin
       .from('events')
       .insert({
@@ -173,10 +184,11 @@ export async function POST(request: NextRequest): Promise<Response> {
         recurrence_type: recurrenceType,
         recurrence_days: recurrenceDays, // PostgreSQL의 _text 타입으로 안전하게 삽입됨
         is_active: Boolean(isActive),
+        affiliations_id: parsedAffiliationsId, // [수정] 필드 할당 반영
       })
       .select(
-        'id, name, start_time, late_threshold_min, allow_duplicate_check, is_special_event, recurrence_type, recurrence_days, is_active, created_at'
-      )
+        'id, name, start_time, late_threshold_min, allow_duplicate_check, is_special_event, recurrence_type, recurrence_days, is_active, created_at, affiliations_id'
+      ) // [수정] select 구문에 affiliations_id 반환 추가
       .single()
 
     if (error || !createdEvent) {

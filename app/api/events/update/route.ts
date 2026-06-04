@@ -1,3 +1,4 @@
+// app/api/events/update/route.ts
 import { NextRequest } from 'next/server'
 import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
@@ -17,6 +18,7 @@ type UpdateEventBody = {
   recurrence_type?: RecurrenceType
   recurrence_days?: WeekdayCode[]
   is_active?: boolean
+  affiliations_id?: string | number | null // [수정] 소속 아이디 입력 타입 정의 추가
 }
 
 type UpdateEventResponse = {
@@ -32,6 +34,7 @@ type UpdateEventResponse = {
     recurrence_days: WeekdayCode[]
     is_active: boolean
     created_at: string
+    affiliations_id: number | null // [수정] 소속 아이디 출력 규격 추가
   }
   error?: string
 }
@@ -82,6 +85,15 @@ export async function POST(request: NextRequest): Promise<Response> {
     const recurrenceDays =
       recurrenceType === 'daily' ? normalizeRecurrenceDays(body.recurrence_days) : []
     const isActive = body.is_active ?? true
+
+    // [수정] affiliations_id 데이터 정제 및 타입 변환 처리 (공백이나 유효하지 않은 타입 유입 시 null 바인딩)
+    let parsedAffiliationsId: number | null = null
+    if (body.affiliations_id !== undefined && body.affiliations_id !== null && String(body.affiliations_id).trim() !== '') {
+      parsedAffiliationsId = Number(body.affiliations_id)
+      if (Number.isNaN(parsedAffiliationsId)) {
+        parsedAffiliationsId = null
+      }
+    }
 
     if (!id) {
       return jsonNoStore<UpdateEventResponse>(
@@ -145,6 +157,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
+    // [수정] select 절에 affiliations_id 컬럼 추가 기입
     const { data: existingEvent, error: existingError } = await supabaseAdmin
       .from('events')
       .select(`
@@ -157,7 +170,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         recurrence_type,
         recurrence_days,
         is_active,
-        created_at
+        created_at,
+        affiliations_id
       `)
       .eq('id', id)
       .single()
@@ -180,6 +194,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       recurrence_type: RecurrenceType
       recurrence_days: WeekdayCode[]
       is_active: boolean
+      affiliations_id: number | null
     }> = {}
 
     const existingDays = normalizeRecurrenceDays(existingEvent.recurrence_days)
@@ -204,6 +219,10 @@ export async function POST(request: NextRequest): Promise<Response> {
     if (Boolean(existingEvent.is_active) !== Boolean(isActive)) {
       updatePayload.is_active = Boolean(isActive)
     }
+    // [수정] 변환 완료된 소속 식별값의 변경 감지 매핑 파트 추가
+    if (existingEvent.affiliations_id !== parsedAffiliationsId) {
+      updatePayload.affiliations_id = parsedAffiliationsId
+    }
 
     if (Object.keys(updatePayload).length === 0) {
       return jsonNoStore<UpdateEventResponse>(
@@ -212,6 +231,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
+    // [수정] 최종 반환 데이터 select 구문에도 affiliations_id 포함 처리 명시화
     const { data: updatedEvent, error: updateError } = await supabaseAdmin
       .from('events')
       .update(updatePayload)
@@ -226,7 +246,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         recurrence_type,
         recurrence_days,
         is_active,
-        created_at
+        created_at,
+        affiliations_id
       `)
       .single()
 

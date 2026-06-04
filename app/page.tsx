@@ -84,9 +84,10 @@ export default async function HomePage() {
                 
                 <>
                   
-                  <Link href="/admin/academy">
+                  <Link href="/admin/admin-only">
                     <button type="button">아카데미 페이지</button>
                   </Link>
+                  {/* 
                   <Link href="/admin/spirituality">
                     <button type="button">영성수련 페이지</button>
                   </Link>
@@ -101,7 +102,7 @@ export default async function HomePage() {
                   </Link>
                   <Link href="/admin/resonance">
                     <button type="button">3일 공명기도 페이지</button>
-                  </Link>
+                  </Link>*/}
                 </>
               )}
             </div>

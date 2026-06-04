@@ -1,3 +1,4 @@
+//app\admin\admin-only\events\events-client.tsx
 'use client'
 
 import {
@@ -41,11 +42,13 @@ const DEFAULT_FORM: EventFormState = {
   recurrence_type: 'none',
   recurrence_days: [],
   is_active: true,
+  affiliations_id: '', // 기본값 공백 처리 (null 대응)
 }
 
 export default function EventsClient() {
   const {
     events,
+    affiliations, // 훅에서 가져온 소속 목록 리스트 추가
     loading,
     refresh,
   } = useEvents()
@@ -236,6 +239,7 @@ export default function EventsClient() {
             Boolean(
               event.is_active
             ),
+          affiliations_id: event.affiliations_id ? String(event.affiliations_id) : '', // 도메인 매핑 바인딩
         })
 
         window.scrollTo({
@@ -262,6 +266,7 @@ export default function EventsClient() {
         setError('')
         setSuccess('')
 
+        // 전송용 데이터 생성 (소속 아이디 string -> number | null 가공 파트 포함)
         const payload = {
           ...(editingId
             ? {
@@ -290,6 +295,7 @@ export default function EventsClient() {
               : [],
           is_active:
             form.is_active,
+          affiliations_id: form.affiliations_id ? Number(form.affiliations_id) : null, // DB 호환 변환 처리
         }
 
         const endpoint =
@@ -454,7 +460,7 @@ export default function EventsClient() {
           }}
         >
           관리자 전용 행사 설정
-          화면입니다. 반복
+          화면입니다. 소속설정, 반복
           규칙과 기본 속성을
           관리합니다.
         </p>
@@ -462,6 +468,7 @@ export default function EventsClient() {
 
       <EventForm
         form={form}
+        affiliations={affiliations}
         isEditing={isEditing}
         submitting={submitting}
         onChange={handleChange}
@@ -507,6 +514,7 @@ export default function EventsClient() {
 
         <EventList
           events={events}
+          affiliations={affiliations}
           submitting={
             submitting
           }

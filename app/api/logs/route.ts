@@ -1,3 +1,5 @@
+// app/api/logs/route.ts
+
 import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
@@ -5,21 +7,42 @@ import { jsonNoStore } from '@/lib/security/api-response'
 
 type LogAction = 'create' | 'update' | 'correct' | 'mark_absent' | 'delete'
 
+type AttendanceLogRow = {
+  id: string
+  attendance_id: string | null
+  changed_by: string | null
+  target_user_id: string | null
+  event_id: string | null
+  attendance_date: string
+  action: LogAction
+  reason: string | null
+  before_value: Record<string, unknown> | null
+  after_value: Record<string, unknown> | null
+  changed_at: string
+}
+
+type ProfileRow = {
+  id: string
+  full_name: string
+  student_id: string
+  affiliation_id: number
+  roles?: {
+    name: string
+  } | null
+}
+
+type EventRow = {
+  id: string
+  name: string
+  start_time: string | null
+}
+
 type LogsResponse = {
   items?: unknown[]
   error?: string
 }
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
-
-const PROGRAM_ID_MAP: Record<string, number> = {
-  academy: 1,
-  spirituality: 2,
-  mosim: 3,
-  hujin: 4,
-  seonghwa: 5,
-  resonance: 6,
-}
 
 function parseLimit(value: string | null): number {
   const parsed = Number(value ?? 100)
@@ -34,18 +57,15 @@ function isValidDateText(value: string): boolean {
 export async function GET(request: NextRequest): Promise<Response> {
   try {
     const authResult = await requireRole(['admin'])
+
     if (!authResult.ok) {
-      return jsonNoStore<LogsResponse>({ error: authResult.error }, { status: authResult.status })
+      return jsonNoStore<LogsResponse>(
+        { error: authResult.error },
+        { status: authResult.status }
+      )
     }
 
     const searchParams = request.nextUrl.searchParams
-
-    const programType = (searchParams.get('program_type') ?? 'academy').trim().toLowerCase()
-    const affiliationId = PROGRAM_ID_MAP[programType]
-
-    if (!affiliationId) {
-      return jsonNoStore<LogsResponse>({ items: [] }, { status: 200 })
-    }
 
     const eventId = searchParams.get('event_id')?.trim() ?? ''
     const targetUserId = searchParams.get('target_user_id')?.trim() ?? ''
@@ -53,22 +73,42 @@ export async function GET(request: NextRequest): Promise<Response> {
     const action = searchParams.get('action')?.trim() as LogAction | ''
     const dateFrom = searchParams.get('date_from')?.trim() ?? ''
     const dateTo = searchParams.get('date_to')?.trim() ?? ''
+    const affiliationId = searchParams.get('affiliation_id')?.trim() ?? ''
     const limit = parseLimit(searchParams.get('limit'))
 
     if (dateFrom && !isValidDateText(dateFrom)) {
-      return jsonNoStore<LogsResponse>({ error: 'date_from 형식이 올바르지 않습니다. (YYYY-MM-DD)' }, { status: 400 })
-    }
-    if (dateTo && !isValidDateText(dateTo)) {
-      return jsonNoStore<LogsResponse>({ error: 'date_to 형식이 올바르지 않습니다. (YYYY-MM-DD)' }, { status: 400 })
-    }
-    if (dateFrom && dateTo && dateFrom > dateTo) {
-      return jsonNoStore<LogsResponse>({ error: 'date_from은 date_to보다 늦을 수 없습니다.' }, { status: 400 })
-    }
-    if (action && !['create', 'update', 'correct', 'mark_absent', 'delete'].includes(action)) {
-      return jsonNoStore<LogsResponse>({ error: 'action 값이 올바르지 않습니다.' }, { status: 400 })
+      return jsonNoStore<LogsResponse>(
+        { error: 'date_from 형식이 올바르지 않습니다. (YYYY-MM-DD)' },
+        { status: 400 }
+      )
     }
 
-    
+    if (dateTo && !isValidDateText(dateTo)) {
+      return jsonNoStore<LogsResponse>(
+        { error: 'date_to 형식이 올바르지 않습니다. (YYYY-MM-DD)' },
+        { status: 400 }
+      )
+    }
+
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      return jsonNoStore<LogsResponse>(
+        { error: 'date_from은 date_to보다 늦을 수 없습니다.' },
+        { status: 400 }
+      )
+    }
+
+    if (
+      action &&
+      !['create', 'update', 'correct', 'mark_absent', 'delete'].includes(action)
+    ) {
+      return jsonNoStore<LogsResponse>(
+        { error: 'action 값이 올바르지 않습니다.' },
+        { status: 400 }
+      )
+    }
+
+    // [개선] 기본 조인 및 관계 설정을 고려하여 컬럼 필터 준비
+    // 대상 수련생의 소속(affiliation_id) 검색을 위해 관계성 필터링 활용
     let query = supabaseAdmin
       .from('attendance_logs')
       .select(`
@@ -82,47 +122,133 @@ export async function GET(request: NextRequest): Promise<Response> {
         reason,
         before_value,
         after_value,
-        changed_at,
-        target_user_profile:profiles!attendance_logs_target_user_id_fkey!inner(
-          id,
-          full_name,
-          student_id,
-          affiliation_id,
-          roles(name)
-        ),
-        changed_by_profile:profiles!attendance_logs_changed_by_fkey(
-          id,
-          full_name,
-          student_id,
-          roles(name)
-        ),
-        event_meta:events(
-          id,
-          name,
-          start_time
-        )
+        changed_at
       `)
-      .order('changed_at', { ascending: false })
-      .limit(limit)
 
-    // 정확한 타겟 별칭 구조를 기반으로 조건 매핑 수행
-    query = query.eq('target_user_profile.affiliation_id', affiliationId)
+    // 2단계: [🔥 수정 완료] 소속 필터링 분기 처리
+    if (affiliationId) {
+      // 해당 소속인 프로필들의 ID 목록을 명시적으로 먼저 쿼리합니다.
+      const { data: allowedProfiles, error: affError } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('affiliation_id', Number(affiliationId))
 
-    if (eventId) query = query.eq('event_id', eventId)
-    if (targetUserId) query = query.eq('target_user_id', targetUserId)
-    if (changedBy) query = query.eq('changed_by', changedBy)
-    if (action) query = query.eq('action', action)
-    if (dateFrom) query = query.gte('attendance_date', dateFrom)
-    if (dateTo) query = query.lte('attendance_date', dateTo)
+      if (affError) {
+        console.error('[api/logs] affiliation profiles query error:', affError)
+        return jsonNoStore<LogsResponse>({ error: '소속 사용자 조회 실패' }, { status: 500 })
+      }
+
+      const profileIds = allowedProfiles?.map(p => p.id) ?? []
+
+      // 만약 해당 소속에 수련생이 한 명도 없다면 더 이상 결과가 없는 것이므로 빈 배열 즉시 반환
+      if (profileIds.length === 0) {
+        return jsonNoStore<LogsResponse>({ items: [] }, { status: 200 })
+      }
+
+      // 올바른 JavaScript 문자열 배열을 .in() 에 전달합니다.
+      query = query.in('target_user_id', profileIds)
+    }
+
+    if (eventId) {
+      query = query.eq('event_id', eventId)
+    }
+    if (targetUserId) {
+      query = query.eq('target_user_id', targetUserId)
+    }
+    if (changedBy) {
+      query = query.eq('changed_by', changedBy)
+    }
+    if (action) {
+      query = query.eq('action', action)
+    }
+    if (dateFrom) {
+      query = query.gte('attendance_date', dateFrom)
+    }
+    if (dateTo) {
+      query = query.lte('attendance_date', dateTo)
+    }
+
+    // 최종 정렬 및 제한 적용
+    query = query.order('changed_at', { ascending: false }).limit(limit)
 
     const { data: rawLogs, error: logsError } = await query
 
     if (logsError) {
       console.error('[api/logs] logs query error:', logsError)
-      return jsonNoStore<LogsResponse>({ error: '로그 조회에 실패했습니다.' }, { status: 500 })
+      return jsonNoStore<LogsResponse>(
+        { error: '로그 조회에 실패했습니다.' },
+        { status: 500 }
+      )
     }
 
-    const items = (rawLogs ?? []).map((log: any) => ({
+    const logs = (rawLogs ?? []) as AttendanceLogRow[]
+
+    if (logs.length === 0) {
+      return jsonNoStore<LogsResponse>(
+        { items: [] },
+        { status: 200 }
+      )
+    }
+
+    const changedByIds = new Set<string>()
+    const targetUserIds = new Set<string>()
+    const eventIds = new Set<string>()
+
+    for (const log of logs) {
+      if (log.changed_by) changedByIds.add(log.changed_by)
+      if (log.target_user_id) targetUserIds.add(log.target_user_id)
+      if (log.event_id) eventIds.add(log.event_id)
+    }
+
+    const allProfileIds = Array.from(new Set([...changedByIds, ...targetUserIds]))
+    const allEventIds = Array.from(eventIds)
+
+    const [
+      { data: profilesData, error: profilesError },
+      { data: eventsData, error: eventsError },
+    ] = await Promise.all([
+      allProfileIds.length > 0
+        ? supabaseAdmin
+            .from('profiles')
+            .select('id, full_name, student_id, affiliation_id, roles(name)')
+            .in('id', allProfileIds)
+        : Promise.resolve({ data: [], error: null }),
+
+      allEventIds.length > 0
+        ? supabaseAdmin
+            .from('events')
+            .select('id, name, start_time')
+            .in('id', allEventIds)
+        : Promise.resolve({ data: [], error: null }),
+    ])
+
+    if (profilesError) {
+      console.error('[api/logs] profiles query error:', profilesError)
+      return jsonNoStore<LogsResponse>(
+        { error: '사용자 정보를 불러오지 못했습니다.' },
+        { status: 500 }
+      )
+    }
+
+    if (eventsError) {
+      console.error('[api/logs] events query error:', eventsError)
+      return jsonNoStore<LogsResponse>(
+        { error: '행사 정보를 불러오지 못했습니다.' },
+        { status: 500 }
+      )
+    }
+
+    const profileMap = new Map<string, ProfileRow>()
+    for (const profile of (profilesData ?? []) as ProfileRow[]) {
+      profileMap.set(profile.id, profile)
+    }
+
+    const eventMap = new Map<string, EventRow>()
+    for (const event of (eventsData ?? []) as EventRow[]) {
+      eventMap.set(event.id, event)
+    }
+
+    const items = logs.map((log) => ({
       id: log.id,
       attendance_id: log.attendance_id,
       changed_by: log.changed_by,
@@ -135,29 +261,31 @@ export async function GET(request: NextRequest): Promise<Response> {
       after_value: log.after_value ?? {},
       changed_at: log.changed_at,
 
-      changed_by_profile: log.changed_by_profile
+      changed_by_profile: log.changed_by
         ? {
-            id: log.changed_by_profile.id,
-            full_name: log.changed_by_profile.full_name ?? '알 수 없음',
-            student_id: log.changed_by_profile.student_id ?? '-',
-            role: (log.changed_by_profile.roles?.name ?? 'trainee') as 'admin' | 'captain' | 'trainee',
+            id: log.changed_by,
+            full_name: profileMap.get(log.changed_by)?.full_name ?? '알 수 없음',
+            student_id: profileMap.get(log.changed_by)?.student_id ?? '-',
+            role: (profileMap.get(log.changed_by)?.roles as any)?.name ?? 'trainee',
+            affiliation_id: profileMap.get(log.changed_by)?.affiliation_id ?? null,
           }
         : null,
 
-      target_user_profile: log.target_user_profile
+      target_user_profile: log.target_user_id
         ? {
-            id: log.target_user_profile.id,
-            full_name: log.target_user_profile.full_name ?? '알 수 없음',
-            student_id: log.target_user_profile.student_id ?? '-',
-            role: (log.target_user_profile.roles?.name ?? 'trainee') as 'admin' | 'captain' | 'trainee',
+            id: log.target_user_id,
+            full_name: profileMap.get(log.target_user_id)?.full_name ?? '알 수 없음',
+            student_id: profileMap.get(log.target_user_id)?.student_id ?? '-',
+            role: (profileMap.get(log.target_user_id)?.roles as any)?.name ?? 'trainee',
+            affiliation_id: profileMap.get(log.target_user_id)?.affiliation_id ?? null,
           }
         : null,
 
-      event_meta: log.event_meta
+      event_meta: log.event_id
         ? {
-            id: log.event_meta.id,
-            name: log.event_meta.name ?? '알 수 없음',
-            start_time: log.event_meta.start_time ?? null,
+            id: log.event_id,
+            name: eventMap.get(log.event_id)?.name ?? '알 수 없음',
+            start_time: eventMap.get(log.event_id)?.start_time ?? null,
           }
         : null,
     }))
@@ -165,6 +293,9 @@ export async function GET(request: NextRequest): Promise<Response> {
     return jsonNoStore<LogsResponse>({ items }, { status: 200 })
   } catch (error) {
     console.error('[api/logs] unexpected error:', error)
-    return jsonNoStore<LogsResponse>({ error: '로그 조회 중 오류가 발생했습니다.' }, { status: 500 })
+    return jsonNoStore<LogsResponse>(
+      { error: '로그 조회 중 오류가 발생했습니다.' },
+      { status: 500 }
+    )
   }
 }
