@@ -257,7 +257,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 500 }
       )
     } 
-const { error: rpcError } = await supabaseAdmin.rpc('fn_create_today_occurrences')
+    const { error: rpcError } = await supabaseAdmin.rpc('fn_create_today_occurrences')
     
         if (rpcError) {
           console.error('[events/create] rpc sync error:', rpcError)
