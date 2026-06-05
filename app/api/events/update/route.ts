@@ -230,7 +230,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 400 }
       )
     }
-
+    
     // [수정] 최종 반환 데이터 select 구문에도 affiliations_id 포함 처리 명시화
     const { data: updatedEvent, error: updateError } = await supabaseAdmin
       .from('events')
@@ -250,14 +250,23 @@ export async function POST(request: NextRequest): Promise<Response> {
         affiliations_id
       `)
       .single()
-
+        
     if (updateError || !updatedEvent) {
       return jsonNoStore<UpdateEventResponse>(
         { error: updateError?.message || '행사 수정에 실패했습니다.' },
         { status: 500 }
       )
-    }
-
+    } 
+const { error: rpcError } = await supabaseAdmin.rpc('fn_create_today_occurrences')
+    
+        if (rpcError) {
+          console.error('[events/create] rpc sync error:', rpcError)
+          // 사용자 경험을 위해 행사는 만들어졌으므로 에러로 튕구기보단 경고 메시지 형태를 권장하나, 
+          // 완벽한 트랜잭션을 원한다면 아래처럼 500 에러를 반환할 수 있습니다.
+          return jsonNoStore<UpdateEventResponse>(
+            { error: '행사는 생성되었으나 출석판 자동 동기화에 실패했습니다. 관리자 화면에서 동기화를 눌러주세요.' },
+            { status: 500 }
+          )}
     return jsonNoStore<UpdateEventResponse>(
       {
         message: '행사가 수정되었습니다.',
