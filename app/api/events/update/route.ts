@@ -257,16 +257,41 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 500 }
       )
     } 
+
+    // 2. 기존 부모 데이터의 날짜에 유저가 보낸 "시/분"만 이식한 새로운 부모용 ISO 타임 생성
+    const existingParentDate = new Date(existingEvent.start_time)
+    existingParentDate.setUTCHours(startTime.getUTCHours(), startTime.getUTCMinutes(), 0, 0)
+    const nextParentStartTimeIso = existingParentDate.toISOString()
+
+    // 3. 부모 테이블 변경 감지 및 페이로드 세팅
+    if (existingEvent.start_time !== nextParentStartTimeIso) {
+      updatePayload.start_time = nextParentStartTimeIso
+    }
+    // 4. [핵심] 부모 시간이 바뀌었다면, 오늘 열려 있는 자식 회차 시간도 동기화
+    if (updatePayload.start_time) {
+      // 오늘 자식 날짜(2026-06-05)를 구하고 유저가 원한 시/분 세팅
+      const todayOccurrenceDate = new Date() // 혹은 데이터 기반의 날짜
+      todayOccurrenceDate.setUTCHours(startTime.getUTCHours(), startTime.getUTCMinutes(), 0, 0)
+      
+      await supabaseAdmin
+        .from('event_occurrences')
+        .update({ 
+          start_time: todayOccurrenceDate.toISOString() 
+        })
+        .eq('event_id', id)
+        .eq('occurrence_date', '2026-06-05') // 오늘 자 데이터 타겟팅
+        .in('status', ['scheduled', 'open']) // 닫힌 행사는 제외
+    }
     const { error: rpcError } = await supabaseAdmin.rpc('fn_create_today_occurrences')
-    
-        if (rpcError) {
-          console.error('[events/create] rpc sync error:', rpcError)
-          // 사용자 경험을 위해 행사는 만들어졌으므로 에러로 튕구기보단 경고 메시지 형태를 권장하나, 
-          // 완벽한 트랜잭션을 원한다면 아래처럼 500 에러를 반환할 수 있습니다.
-          return jsonNoStore<UpdateEventResponse>(
-            { error: '행사는 생성되었으나 출석판 자동 동기화에 실패했습니다. 관리자 화면에서 동기화를 눌러주세요.' },
-            { status: 500 }
-          )}
+        
+            if (rpcError) {
+              console.error('[events/create] rpc sync error:', rpcError)
+              // 사용자 경험을 위해 행사는 만들어졌으므로 에러로 튕구기보단 경고 메시지 형태를 권장하나, 
+              // 완벽한 트랜잭션을 원한다면 아래처럼 500 에러를 반환할 수 있습니다.
+              return jsonNoStore<UpdateEventResponse>(
+                { error: '행사는 생성되었으나 출석판 자동 동기화에 실패했습니다. 관리자 화면에서 동기화를 눌러주세요.' },
+                { status: 500 }
+              )}
     return jsonNoStore<UpdateEventResponse>(
       {
         message: '행사가 수정되었습니다.',
