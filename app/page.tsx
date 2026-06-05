@@ -85,7 +85,7 @@ export default async function HomePage() {
                 <>
                   
                   <Link href="/admin/admin-only">
-                    <button type="button">아카데미 페이지</button>
+                    <button type="button">관리자 전용 수련관리 페이지</button>
                   </Link>
                   {/* 
                   <Link href="/admin/spirituality">

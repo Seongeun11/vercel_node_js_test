@@ -1,20 +1,21 @@
-//app\admin\[programType]\attendance-today\occurrence-card.tsx
+//app\admin\admin-only\attendance-today\occurrence-card.tsx
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo} from 'react';
 import QRCode from 'qrcode';
 import { 
   TodayOccurrenceItem, QrItem, AttendanceSummary, AttendanceItem, MissingItem, 
-  ExpireUnit, QrCreateResponse, AttendanceByOccurrenceResponse, MissingByOccurrenceResponse 
+  ExpireUnit, QrCreateResponse, AttendanceByOccurrenceResponse, MissingByOccurrenceResponse,AffiliationItem 
 } from './types';
 import { AttendanceDetailTable, MissingDetailTable } from './attendance-tables';
 
 interface OccurrenceCardProps {
   item: TodayOccurrenceItem;
+  affiliations: AffiliationItem[]; // ◀ 부모 대시보드로부터 마스터 소속 목록 수수구조 정의
   onQrCountChange: (id: string, total: number, active: number) => void;
 }
 
-export function OccurrenceCard({ item, onQrCountChange }: OccurrenceCardProps) {
+export function OccurrenceCard({ item, affiliations,onQrCountChange }: OccurrenceCardProps) {
   const [qrs, setQrs] = useState<QrItem[]>([]);
   const [attendance, setAttendance] = useState<{ summary: AttendanceSummary; items: AttendanceItem[] }>({
     summary: { total_checked_count: 0, present_count: 0, late_count: 0, absent_count: 0 },
@@ -34,6 +35,14 @@ export function OccurrenceCard({ item, onQrCountChange }: OccurrenceCardProps) {
 
   const [expireUnit, setExpireUnit] = useState<ExpireUnit>('unlimited');
   const [expireValue, setExpireValue] = useState('0');
+  // 2. [추가] affiliations_id를 바탕으로 실명 텍스트를 찾는 변수를 선언합니다.
+  const affiliationName = useMemo(() => {
+    const targetId = item.events?.affiliations_id;
+    if (targetId === undefined || targetId === null) return '지정 없음';
+    
+    const found = affiliations.find((a) => a.id === Number(targetId));
+    return found ? found.name : `미등록 소속(ID: ${targetId})`;
+  }, [item.events?.affiliations_id, affiliations]);
 
   const fetchQr = useCallback(async () => {
     try {
@@ -55,25 +64,43 @@ export function OccurrenceCard({ item, onQrCountChange }: OccurrenceCardProps) {
   }, [item.id, onQrCountChange]);
 
   const fetchAttendance = useCallback(async () => {
-    setAttendanceLoading(true);
-    try {
-      const res = await fetch('/api/attendance/by-occurrence', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ occurrence_id: item.id }),
-      });
-      const data = (await res.json()) as AttendanceByOccurrenceResponse;
-      if (res.ok) {
-        setAttendance({
-          summary: data.summary ?? { total_checked_count: 0, present_count: 0, late_count: 0, absent_count: 0 },
-          items: Array.isArray(data.items) ? data.items : []
-        });
-      }
-    } catch (e) { console.error(e); } finally {
-      setAttendanceLoading(false);
+  setAttendanceLoading(true);
+  try {
+    const res = await fetch('/api/attendance/by-occurrence', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ occurrence_id: item.id }),
+    });
+
+    // 1. HTTP 상태 코드가 실패(4xx, 5xx 등)인 경우 안전하게 텍스트로 읽기
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`서버 에러 (${res.status}): ${errorText.substring(0, 100)}`);
     }
-  }, [item.id]);
+
+    // 2. 응답 헤더가 실제 JSON 인지 확인 후 파싱
+    const contentType = res.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const rawText = await res.text();
+      throw new Error(`서버가 JSON이 아닌 데이터를 반환했습니다: ${rawText.substring(0, 100)}`);
+    }
+
+    const data = (await res.json()) as AttendanceByOccurrenceResponse;
+    
+    setAttendance({
+      summary: data.summary ?? { total_checked_count: 0, present_count: 0, late_count: 0, absent_count: 0 },
+      items: Array.isArray(data.items) ? data.items : []
+    });
+
+  } catch (e) { 
+    console.error(e); 
+    // 사용자에게 에러 상태를 시각적으로 노출해주는 로직
+    setCardError(e instanceof Error ? e.message : '출석 정보 조회 중 에러 발생');
+  } finally {
+    setAttendanceLoading(false);
+  }
+}, [item.id]);
 
   const fetchMissing = useCallback(async () => {
     setMissingLoading(true);
@@ -263,40 +290,63 @@ export function OccurrenceCard({ item, onQrCountChange }: OccurrenceCardProps) {
   };
 
   const handleOpenQrWindow = async (qrUrl: string) => {
-    if (!qrUrl) {
-      setCardError('QR 링크가 없습니다. 새 QR을 발급해주세요.');
-      return;
-    }
-    const popup = window.open('', '_blank', 'width=760,height=860');
-    if (!popup) {
-      setCardError('팝업이 차단되었습니다. 팝업 허용 후 다시 시도해주세요.');
-      return;
-    }
+  if (!qrUrl) {
+    setCardError('QR 링크가 없습니다. 새 QR을 발급해주세요.');
+    return;
+  }
+  const popup = window.open('', '_blank', 'width=760,height=860');
+  if (!popup) {
+    setCardError('팝업이 차단되었습니다. 팝업 허용 후 다시 시도해주세요.');
+    return;
+  }
 
-    try {
-      const qrDataUrl = await createQrDataUrl(qrUrl);
-      popup.document.write(`
-        <!doctype html>
-        <html lang="ko">
-          <head><meta charset="UTF-8" /><title>출석 QR 크게보기</title></head>
-          <body style="margin:0;padding:24px;background:#111827;color:white;text-align:center;font-family:sans-serif;">
-            <h1>출석 QR 크게보기</h1>
-            <div style="background:white;padding:16px;border-radius:20px;margin:20px auto;width:min(80vw,600px);height:min(80vw,600px);box-sizing:border-box;">
-              <img src="${qrDataUrl}" alt="출석 QR" style="width:100%;height:100%;object-fit:contain;" />
-            </div>
-            <div style="word-break:break-all;font-size:14px;">${qrUrl}</div>
-            <div style="margin-top:20px;">
-              <button onclick="navigator.clipboard.writeText('${qrUrl}').then(() => alert('복사되었습니다.'))">링크 복사</button>
-              <button onclick="window.close()">닫기</button>
-            </div>
-          </body>
-        </html>
-      `);
-      popup.document.close();
-    } catch {
-      setCardError('QR 크게보기에 실패했습니다.');
-    }
-  };
+  try {
+    const qrDataUrl = await createQrDataUrl(qrUrl);
+    
+    // 안전한 DOM 텍스트 렌더링을 보장하고 클립보드 인젝션 에러를 방지하기 위해 팝업 자체 이벤트를 코드로 바인딩
+    popup.document.write(`
+      <!doctype html>
+      <html lang="ko">
+        <head>
+          <meta charset="UTF-8" />
+          <title>출석 QR 크게보기</title>
+        </head>
+        <body style="margin:0;padding:24px;background:#111827;color:white;text-align:center;font-family:sans-serif;">
+          <h1 style="font-size:24px;margin-bottom:10px;">출석 QR 크게보기</h1>
+          <div style="background:white;padding:16px;border-radius:20px;margin:20px auto;width:min(80vw,500px);height:min(80vw,500px);box-sizing:border-box;">
+            <img src="${qrDataUrl}" alt="출석 QR" style="width:100%;height:100%;object-fit:contain;" />
+          </div>
+          <div id="url-container" style="word-break:break-all;font-size:14px;color:#9ca3af;max-width:600px;margin:0 auto;padding:10px;background:#1f2937;border-radius:6px;"></div>
+          <div style="margin-top:24px;display:flex;justify-content:center;gap:12px;">
+            <button id="btn-copy" style="padding:10px 20px;background:#2563eb;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;">링크 복사</button>
+            <button id="btn-close" style="padding:10px 20px;background:#4b5563;color:white;border:none;border-radius:6px;cursor:pointer;">닫기</button>
+          </div>
+          <script>
+            // 문자열 치환 취약점 우회 처리 구조화
+            const targetUrl = ${JSON.stringify(qrUrl)};
+            document.getElementById('url-container').innerText = targetUrl;
+            
+            document.getElementById('btn-copy').onclick = function() {
+              navigator.clipboard.writeText(targetUrl).then(() => {
+                alert('링크가 클립보드에 복사되었습니다.');
+              }).catch(() => {
+                alert('복사에 실패했습니다.');
+              });
+            };
+            
+            document.getElementById('btn-close').onclick = function() {
+              window.close();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    popup.document.close();
+  } catch (err) {
+    console.error(err);
+    setCardError('QR 크게보기에 실패했습니다.');
+  }
+};
 
   function formatOccurrenceStatus(status: string) {
     if (status === 'scheduled') return '대기 중';
@@ -319,6 +369,8 @@ export function OccurrenceCard({ item, onQrCountChange }: OccurrenceCardProps) {
           <div style={{ fontSize: 18, fontWeight: 800 }}>{item.events?.name ?? '알 수 없는 행사'}</div>
           <div style={{ color: '#666', marginTop: 6 }}>회차 날짜: {item.occurrence_date}</div>
           <div style={{ color: '#666', marginTop: 4 }}>시작 시간: {new Date(item.start_time).toLocaleString()}</div>
+          {/* ◀ [논리 오류 수정 완결부] 소속 데이터에 중복 할당되었던 start_time을 매핑된 실명 변환 값으로 대체 */}
+          <div style={{ color: '#0f172a', fontWeight: 600, marginTop: 4 }}>소속: <span style={{ color: '#2563eb' }}>{affiliationName}</span></div>
           <div style={{ color: '#666', marginTop: 4 }}>상태: {formatOccurrenceStatus(item.status)}</div>
           <div style={{ color: '#666', marginTop: 4 }}>
             반복 요일: {formatRecurrenceDays(item.events?.recurrence_days, item.events?.recurrence_type)}
@@ -435,7 +487,7 @@ export function OccurrenceCard({ item, onQrCountChange }: OccurrenceCardProps) {
 
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button onClick={() => void handleOpenQrWindow(qr.qr_url ?? '')} disabled={qr.is_expired} style={actionButtonStyle}>크게보기</button>
-                  <button onClick={() => void handleCopyQrLink(qr.qr_url)} style={actionButtonStyle}>リンク복사</button>
+                  <button onClick={() => void handleCopyQrLink(qr.qr_url)} style={actionButtonStyle}>링크복사</button>
                   <button onClick={() => void handleReissueQr(qr.id)} disabled={submitting || item.status === 'closed' || item.status === 'archived'} style={actionButtonStyle}>시간 변경</button>
                   <button onClick={() => void handleDeleteQr(qr.id)} disabled={submitting} style={{ ...actionButtonStyle, color: '#b91c1c' }}>삭제</button>
                 </div>

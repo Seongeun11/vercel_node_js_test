@@ -1,4 +1,4 @@
-//app\admin\[programType]\attendance-today\types.ts
+//app\admin\admin-only\attendance-today\types.ts
 export type ExpireUnit = 'hours' | 'days' | 'unlimited';
 export type WeekdayCode = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat';
 export type AttendanceStatus = 'present' | 'late' | 'absent';
@@ -7,7 +7,10 @@ export type UserRole = {
   id: number;
   name: 'admin' | 'captain' | 'trainee';
 };
-
+export interface AffiliationItem {
+  id: number;     // 소속 고유 ID (DB 및 필터링 매핑용)
+  name: string;   // 화면에 표시될 소속 명칭 (예: '아카데미', '영성 40일')
+}
 export type TodayOccurrenceItem = {
   id: string;
   event_id: string;
@@ -27,6 +30,7 @@ export type TodayOccurrenceItem = {
     recurrence_type: 'none' | 'daily';
     recurrence_days: WeekdayCode[];
     is_active: boolean;
+    affiliations_id?: number | null; // ◀ 이 부분도 함께 확인하여 매핑이 잘 되도록 합니다.
   } | null;
 };
 

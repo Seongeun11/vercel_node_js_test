@@ -1,4 +1,4 @@
-//app\admin\[programType]\attendance-today\attendance-tables.tsx
+//app\admin\admin-only\attendance-today\attendance-tables.tsx
 'use client'
 
 import React from 'react';
