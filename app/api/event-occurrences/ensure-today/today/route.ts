@@ -130,7 +130,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       .eq('occurrence_date', todayKstDate)
       .neq('status', 'archived')
 
-    // 💡 [논리오류 교정]: 소속 필터 선택 시 부모 테이블 조건절(inner join filter) 동적 바인딩
+    // 소속 필터 선택 시 부모 테이블 조건절(inner join filter) 동적 바인딩
     if (affiliationIdParam && affiliationIdParam.trim() !== '') {
       const parsedAffiliationId = parseInt(affiliationIdParam, 10)
       if (!isNaN(parsedAffiliationId)) {

@@ -267,21 +267,42 @@ export async function POST(request: NextRequest): Promise<Response> {
     if (existingEvent.start_time !== nextParentStartTimeIso) {
       updatePayload.start_time = nextParentStartTimeIso
     }
-    // 4. [핵심] 부모 시간이 바뀌었다면, 오늘 열려 있는 자식 회차 시간도 동기화
+
+    // 4. [완벽 교정] 부모 시간이 바뀌었다면, 오늘 열려 있는 자식 회차 시간도 동기화
     if (updatePayload.start_time) {
-      // 오늘 자식 날짜(2026-06-05)를 구하고 유저가 원한 시/분 세팅
-      const todayOccurrenceDate = new Date() // 혹은 데이터 기반의 날짜
-      todayOccurrenceDate.setUTCHours(startTime.getUTCHours(), startTime.getUTCMinutes(), 0, 0)
       
-      await supabaseAdmin
+      // [교정 1] 서버의 Date()를 쓰면 시차가 깨지므로, 기존 부모 이벤트(existingEvent.start_time)의 
+      // 실제 한국 기준 날짜 문자열("YYYY-MM-DD")을 직접 안전하게 추출합니다.
+      const targetOccurrenceDateStr = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Seoul',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date(existingEvent.start_time)) // 기존 마스터 시간에 박혀있던 정직한 날짜 사용
+
+      // [교정 2] 자식 테이블에 주입할 start_time ISO도 기존 마스터 날짜 기반에 유저가 보낸 시/분만 정밀 이식합니다.
+      const childTargetDate = new Date(existingEvent.start_time)
+      childTargetDate.setUTCHours(startTime.getUTCHours(), startTime.getUTCMinutes(), 0, 0)
+      const targetStartTimeIso = childTargetDate.toISOString()
+
+      // Supabase 갱신 실행 (이제 날짜 문자열이 정확히 2026-06-07로 매치됩니다)
+      const { error: updateError } = await supabaseAdmin
         .from('event_occurrences')
         .update({ 
-          start_time: todayOccurrenceDate.toISOString() 
+          start_time: targetStartTimeIso 
         })
         .eq('event_id', id)
-        .eq('occurrence_date', '2026-06-05') // 오늘 자 데이터 타겟팅
-        .in('status', ['scheduled', 'open']) // 닫힌 행사는 제외
+        .eq('occurrence_date', targetOccurrenceDateStr) // ◀ 이제 정확히 "2026-06-07"이 매핑되어 조건 일치
+        .in('status', ['scheduled', 'open'])
+
+      if (updateError) {
+        console.error('자식 회차 동기화 실패:', updateError)
+      }
+
+      console.log('타겟팅된 회차 날짜 문자열(KST): ', targetOccurrenceDateStr) // 출력: 2026-06-07
+      console.log('변경될 자식 시작시간 ISO: ', targetStartTimeIso)
     }
+
     const { error: rpcError } = await supabaseAdmin.rpc('fn_create_today_occurrences')
         
             if (rpcError) {
