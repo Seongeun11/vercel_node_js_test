@@ -38,7 +38,7 @@ function validateExpireSetting(
     if (
       !Number.isInteger(expireValue) ||
       expireValue < 1 ||
-      expireValue >6
+      expireValue > 6
     ) {
       return '시간 단위 QR 유효시간은 1~6시간 사이 정수입니다. (예: 1, 2, 3)'
     }
@@ -54,15 +54,16 @@ function validateExpireSetting(
 
   return '유효시간 단위가 올바르지 않습니다.'
 }
+
 function buildExpiresAt(
   baseTime: string,
   expireUnit: ExpireUnit,
   expireValue: number
 ): string | null {
-  const baseMs = new Date(baseTime).getTime()
   if (expireUnit === 'unlimited') {
     return null
   }
+  const baseMs = new Date(baseTime).getTime()
   if (Number.isNaN(baseMs)) {
     throw new Error('INVALID_OCCURRENCE_START_TIME')
   }
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
-    // ✅ 회차 기반 QR인지 확인
+    // 1. 수정할 대상 QR 정보 가져오기
     const { data: existingQr, error: existingError } = await supabaseAdmin
       .from('qr_tokens')
       .select('id, event_id, occurrence_id, expires_at, used_count, created_at')
@@ -119,63 +120,44 @@ export async function POST(request: NextRequest): Promise<Response> {
         { status: 404 }
       )
     }
-/*
-    if (!existingQr.occurrence_id) {
-      return jsonNoStore<UpdateQrResponse>(
-        { error: '회차 기반 QR이 아닙니다. 마이그레이션이 필요합니다.' },
-        { status: 400 }
-      )
-    }
 
-    // ✅ 회차가 실제 존재하는지도 확인
-    const { data: occurrence, error: occurrenceError } = await supabaseAdmin
-      .from('event_occurrences')
-      .select('id,start_time,status')
-      .eq('id', existingQr.occurrence_id)
-      .single()
-*/
+    let expiresAt: string | null = null
 
-    let occurrenceQuery = supabaseAdmin
-  .from('event_occurrences')
-  .select('id, start_time, status')
-  .limit(1)
-
+    // 💡 논리 개선: 하이브리드 만료 연산 분기 처리
     if (existingQr.occurrence_id) {
-      // 일반 QR: 기존 회차 기준
-      occurrenceQuery = occurrenceQuery.eq('id', existingQr.occurrence_id)
+      // 분기 A: 특정 회차에 명확히 종속되어 있는 일반 QR인 경우
+      const { data: occurrence, error: occurrenceError } = await supabaseAdmin
+        .from('event_occurrences')
+        .select('id, start_time, status')
+        .eq('id', existingQr.occurrence_id)
+        .single()
+
+      if (occurrenceError || !occurrence) {
+        return jsonNoStore<UpdateQrResponse>(
+          { error: '연장 대상 회차 정보를 찾을 수 없습니다.' },
+          { status: 404 }
+        )
+      }
+
+      if (occurrence.status === 'closed' || occurrence.status === 'archived') {
+        return jsonNoStore<UpdateQrResponse>(
+          { error: '종료되었거나 아카이브된 회차의 QR은 연장할 수 없습니다.' },
+          { status: 400 }
+        )
+      }
+
+      expiresAt = buildExpiresAt(occurrence.start_time, expireUnit, expireValue)
     } else {
-      // 무제한 QR: event_id 기준 오늘 회차 사용
-      const todayKst = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Seoul',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(new Date())
-
-      occurrenceQuery = occurrenceQuery
-        .eq('event_id', existingQr.event_id)
-        .eq('occurrence_date', todayKst)
+      // 분기 B: 회차가 지정되지 않은 미래 예약형/고정형 QR인 경우
+      if (expireUnit === 'unlimited') {
+        expiresAt = null
+      } else {
+        // 미래 예약 건에 수동으로 만료 제한을 두는 경우, 현재 서버 요청 시각을 베이스로 연산 처리 유도
+        expiresAt = buildExpiresAt(new Date().toISOString(), expireUnit, expireValue)
+      }
     }
 
-    const { data: occurrence, error: occurrenceError } = await occurrenceQuery.single()
-
-    if (occurrenceError || !occurrence) {
-      return jsonNoStore<UpdateQrResponse>(
-        { error: '오늘 출석 가능한 회차를 찾을 수 없습니다.' },
-        { status: 404 }
-      )
-    }
-
-    if (occurrence.status === 'closed' || occurrence.status === 'archived') {
-      return jsonNoStore<UpdateQrResponse>(
-        { error: '종료된 회차의 QR은 연장할 수 없습니다.' },
-        { status: 400 }
-      )
-    }
-    
-        
-    const expiresAt = buildExpiresAt(occurrence.start_time,expireUnit, expireValue)
-
+    // 2. 최종 만료 날짜 반영
     const { data: updatedQr, error: updateError } = await supabaseAdmin
       .from('qr_tokens')
       .update({ expires_at: expiresAt })
@@ -192,7 +174,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     return jsonNoStore<UpdateQrResponse>(
       {
-        message: 'QR 유효 시간이 수정되었습니다.',
+        message: 'QR 코드의 유효 시간이 성공적으로 수정 동기화되었습니다.',
         qr_token: {
           id: updatedQr.id,
           event_id: updatedQr.event_id,
@@ -212,11 +194,11 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
     if (error instanceof Error && error.message === 'INVALID_OCCURRENCE_START_TIME') {
-  return jsonNoStore<UpdateQrResponse>(
-    { error: '회차 시작 시간이 올바르지 않습니다.' },
-    { status: 500 }
-  )
-}
+      return jsonNoStore<UpdateQrResponse>(
+        { error: '회차 시작 시간이 올바르지 않습니다.' },
+        { status: 500 }
+      )
+    }
 
     if (process.env.NODE_ENV !== 'production') {
       console.error('[qr/update] unexpected error:', error)
@@ -226,7 +208,5 @@ export async function POST(request: NextRequest): Promise<Response> {
       { error: '서버 오류가 발생했습니다.' },
       { status: 500 }
     )
-    
   }
-  
 }

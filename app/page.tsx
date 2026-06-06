@@ -46,6 +46,7 @@ export default async function HomePage() {
             <p><strong>이름:</strong> {user.full_name}</p>
             <p><strong>학번:</strong> {user.student_id}</p>
             <p><strong>권한:</strong> {user.role}</p>
+           {user.role === 'trainee' &&<p><strong>아카데미 포인트:</strong> {}</p>}
           </div>
 
           <div
@@ -70,10 +71,11 @@ export default async function HomePage() {
               <Link href="/attendance/my">
                 <button type="button">내 출석 조회</button>
               </Link>
-
+              {/*
               <Link href="/attendance/requests">
               <button type="button">내 출석 변경 요청</button>
               </Link>
+              */}
               <Link href="/account/password">
               <button type="button">비밀번호 변경</button>
               </Link>
@@ -85,7 +87,7 @@ export default async function HomePage() {
                 <>
                   
                   <Link href="/admin/admin-only">
-                    <button type="button">관리자 전용 수련관리 페이지</button>
+                    <button type="button">관리자 전용 페이지</button>
                   </Link>
                   {/* 
                   <Link href="/admin/spirituality">

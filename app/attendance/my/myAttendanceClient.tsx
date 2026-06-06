@@ -169,9 +169,11 @@ export default function MyAttendanceClient() {
             <Link href="/">
               <button type="button">메인으로</button>
             </Link>
+            {/*
             <Link href="/attendance/requests">
               <button type="button">내 변경 요청 보기</button>
             </Link>
+            */}
           </div>
         </div>
 
