@@ -440,7 +440,47 @@ export default function CentralizedEventsQrClient() {
           </div>
         )}
 
-        {/* ...하단 크게보기 모달 Layout 유지... */}
+              {/* ========================================== */}
+      {/* 💡 크게보기 기능 제어용 라이트박스 모달 UI 레이어 */}
+      {/* ========================================== */}
+      {isModalOpen && selectedQr && (
+        <div style={styles.modalBackdrop} onClick={() => setIsModalOpen(false)}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <h4 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>{selectedQr.eventName}</h4>
+            <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: '#64748b' }}>현장 스캐너 인식용 QR 코드입니다.</p>
+            
+            {/* 💡 파일 추출이 용이하도록 QRCodeCanvas 규격 사용 및 고유 id 바인딩 */}
+      <div style={{ background: '#fff', padding: '16px', borderRadius: '12px', display: 'inline-block', boxShadow: '0 0 0 1px #e2e8f0' }}>
+        <QRCodeCanvas 
+          id="zoom-qr-canvas"
+          value={selectedQr.qrUrl} 
+          size={256} // 고화질 출력을 보장하는 확장 해상도 비율
+          level="H"   // 카메라 렌즈 이물질이나 인쇄 번짐에도 인식 가능하도록 High 레벨 정정 적용
+          includeMargin={true}
+        />
       </div>
-    )
-  }
+      
+      {/* 버튼 배치 영역에 'QR 코드 이미지 저장' 트리거 추가 */}
+      <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {/* 다운로드 버튼 */}
+        <button 
+          onClick={() => handleDownloadQrImage(selectedQr.eventName)}
+          style={{ width: '100%', padding: '10px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', fontSize: '14px' }}
+        >
+          QR 이미지(.PNG) 저장하기
+        </button>
+
+        {/* 닫기 버튼 */}
+        <button 
+          onClick={() => setIsModalOpen(false)}
+          style={{ width: '100%', padding: '10px', background: '#64748b', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 500, cursor: 'pointer', fontSize: '14px' }}
+        >
+          화면 닫기
+        </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
