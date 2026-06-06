@@ -301,23 +301,7 @@ export default function CentralizedEventsQrClient() {
 
 
 
-  const handleEditSetup = useCallback((event: EventItem) => {
-    setEditingId(event.id)
-    setForm({
-      name: event.name,
-      start_time: toDateTimeLocalValue(event.start_time),
-      late_threshold_min: event.late_threshold_min,
-      allow_duplicate_check: event.allow_duplicate_check,
-      is_special_event: event.is_special_event,
-      recurrence_type: event.recurrence_type,
-      recurrence_days: event.recurrence_days ?? [],
-      is_active: event.is_active,
-      affiliations_id: event.affiliations_id ?? '',
-      pre_generate_qr: false,
-      qr_valid_duration_min: '60'
-    })
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [])
+ 
 
   // 💡 크게보기 모달 핸들러 오픈 함수
   const openQrZoomModal = (eventName: string, qrUrl: string | null) => {
@@ -429,9 +413,10 @@ export default function CentralizedEventsQrClient() {
                           </div>
                         )}
                       </td>
+                      {/* 
                       <td style={styles.tdStyle}>
                         <button onClick={() => handleEditSetup(event)} style={{ ...styles.secondaryButtonStyle, padding: '6px 10px', fontSize: '12px' }}>수정</button>
-                      </td>
+                      </td>*/}
                     </tr>
                   )
                 })}
