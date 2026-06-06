@@ -299,8 +299,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         console.error('자식 회차 동기화 실패:', updateError)
       }
 
-      console.log('타겟팅된 회차 날짜 문자열(KST): ', targetOccurrenceDateStr) // 출력: 2026-06-07
-      console.log('변경될 자식 시작시간 ISO: ', targetStartTimeIso)
+      //console.log('타겟팅된 회차 날짜 문자열(KST): ', targetOccurrenceDateStr) // 출력: 2026-06-07
+      //console.log('변경될 자식 시작시간 ISO: ', targetStartTimeIso)
     }
 
     const { error: rpcError } = await supabaseAdmin.rpc('fn_create_today_occurrences')
