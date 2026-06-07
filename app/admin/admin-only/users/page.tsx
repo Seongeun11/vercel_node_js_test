@@ -1,10 +1,12 @@
-'use client'
 //app\admin\admin-only\users\page.tsx
+'use client'
+
 import { useEffect, useState } from 'react'
 import AdminHeader from '@/components/admin/AdminHeader'
 import UserBulkUpload from './user-bulk-upload'
 import ResetPasswordPanel from './reset-password-panel'
 import EnrollmentStatusToggle from './enrollment-status'
+import AffiliationSelect from '@/components/common/affiliation-select' // 공용 컴포넌트 추가
 
 // --- 타입 정의 (정규화 반영) ---
 type UserRole = {
@@ -12,13 +14,8 @@ type UserRole = {
   name: string  // text -> string
 }
 type EnrollmentStatus = 'active' | 'completed'
-type Affiliation = '아카데미' | '영성' | '모심' | '효진정' | '성화영성'
-// 1. 타입을 ID 기반으로 확장합니다.
-type AffiliationOption = {
-  value: string; // 텍스트 (UI 표시용)
-  label: string; // 라벨
-  id: number;    // DB의 affiliation_id와 매칭될 값
-};
+
+
 type AdminUser = {
   id: string
   student_id: string
@@ -26,7 +23,7 @@ type AdminUser = {
   cohort_no: number | null
   enrollment_status: EnrollmentStatus
   role?: UserRole  | null // 💡 백엔드 Supabase Join 결과물에 맞춘 객체 타입 지정
-  affiliation: Affiliation;// DB Join 결과로 넘어오는 텍스트 명칭
+  affiliation: string// DB Join 결과로 넘어오는 텍스트 명칭
   password?: string
   created_at?: string
   updated_at?: string
@@ -53,13 +50,7 @@ const ROLE_OPTIONS = [
   { value: 'trainee', label: '수련생', id: 3 },
 ] as const;
 
-const AFFILIATION_OPTIONS: AffiliationOption[] = [
-  { value: '아카데미', label: '아카데미' ,id: 1 },
-  { value: '영성', label: '영성' ,id: 2},
-  { value: '모심', label: '모심' ,id: 3},
-  { value: '효진정', label: '효진정' ,id: 4},
-  { value: '성화영성', label: '성화영성' ,id: 5},
-]
+
 
 const ENROLLMENT_STATUS_OPTIONS: Array<{
   value: EnrollmentStatus
@@ -113,8 +104,14 @@ export default function AdminUsersPage() {
   const [cohortNo, setCohortNo] = useState('')
   const [enrollmentStatus, setEnrollmentStatus] =
     useState<EnrollmentStatus>('active')
+
+
+ 
+
   // 3. 상태 변수를 텍스트가 아닌 ID(number)를 저장하도록 변경하는 것이 관리하기 편합니다.
-  const [affiliationId, setAffiliationId] = useState<number | ''>('');
+  // 공용 컴포넌트 규격(string)에 맞춰 상태 변수 선언 통합
+  const [affiliationId, setAffiliationId] = useState<string>('')
+
   const [isUserListOpen, setIsUserListOpen] = useState(false)
   const [users, setUsers] = useState<AdminUser[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
@@ -165,6 +162,7 @@ export default function AdminUsersPage() {
     const normalizedStudentId = studentId.trim()
     const normalizedFullName = fullName.trim()
     const normalizedCohortNo = cohortNo.trim()
+    const normalizedAffiliationid = affiliationId.trim()
 
     if (!normalizedStudentId) {
       setErrorMessage('학번을 입력해주세요.')
@@ -178,6 +176,10 @@ export default function AdminUsersPage() {
 
     if (!password.trim()) {
       setErrorMessage('초기 비밀번호를 입력해주세요.')
+      return
+    }
+    if (!normalizedAffiliationid) {
+      setErrorMessage('소속을 선택해주세요.')
       return
     }
 
@@ -201,7 +203,7 @@ export default function AdminUsersPage() {
           student_id: normalizedStudentId,
           full_name: normalizedFullName,
           role_id: roleId,             // 수정: ID 전송
-          affiliation_id: affiliationId, // 수정: ID 전송
+          affiliation_id: Number(affiliationId), // 서버 전송 시 정수형 변환 안전 장치 추가
           password,
           cohort_no:
             normalizedCohortNo === '' ? null : Number(normalizedCohortNo),
@@ -263,7 +265,16 @@ export default function AdminUsersPage() {
             value={studentId}
             onChange={(event) => setStudentId(event.target.value)}
             placeholder="예: 20260001"
-            style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
+            style={{
+        padding: '8px 12px',
+        borderRadius: '6px',
+        border: '1px solid #cbd5e1',
+        fontSize: '14px',
+        minWidth: '180px',
+        outline: 'none',
+        background: '#ffffff',
+        cursor: 'pointer'
+      }}
           />
         </div>
 
@@ -273,29 +284,47 @@ export default function AdminUsersPage() {
             value={fullName}
             onChange={(event) => setFullName(event.target.value)}
             placeholder="예: 홍길동"
-            style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
+            style={{
+        padding: '8px 12px',
+        borderRadius: '6px',
+        border: '1px solid #cbd5e1',
+        fontSize: '14px',
+        minWidth: '180px',
+        outline: 'none',
+        background: '#ffffff',
+        cursor: 'pointer'
+      }}
           />
         </div>
 
         <div>
           <label style={{ display: 'block', marginBottom: '6px' }}>권한</label>
-          <select value={roleId} onChange={(e) => setRoleId(Number(e.target.value))} style={{ width: '100%', padding: '10px' }}>
+          <select value={roleId} onChange={(e) => setRoleId(Number(e.target.value))} style={{
+        padding: '8px 12px',
+        borderRadius: '6px',
+        border: '1px solid #cbd5e1',
+        fontSize: '14px',
+        minWidth: '180px',
+        outline: 'none',
+        background: '#ffffff',
+        cursor: 'pointer'
+      }}>
               {ROLE_OPTIONS.map((opt) => (
                 <option key={opt.id} value={opt.id}>{opt.label}</option>
               ))}
+              
           </select>
         </div>
         
         <div>
-            <label style={{ display: 'block', marginBottom: '6px' }}>
-              소속
-            </label>
-            <select value={affiliationId} onChange={(e) => setAffiliationId(Number(e.target.value))} style={{ width: '100%', padding: '10px' }}>
-              <option value="">소속 선택</option>
-              {AFFILIATION_OPTIONS.map((opt) => (
-                <option key={opt.id} value={opt.id}>{opt.label}</option>
-              ))}
-            </select>
+            <label style={{ display: 'block', marginBottom: '6px' }}>소속</label>
+            {/* 공용 컴포넌트 AffiliationSelect 적용구간 */}
+            <AffiliationSelect 
+              value={affiliationId}
+              onChange={(value) => setAffiliationId(value)}
+              showAllOption={true}
+              allOptionLabel="소속 선택"
+            />
           </div>
 
         <div>
@@ -307,7 +336,16 @@ export default function AdminUsersPage() {
             onChange={(event) =>
               setEnrollmentStatus(event.target.value as EnrollmentStatus)
             }
-            style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
+            style={{
+        padding: '8px 12px',
+        borderRadius: '6px',
+        border: '1px solid #cbd5e1',
+        fontSize: '14px',
+        minWidth: '180px',
+        outline: 'none',
+        background: '#ffffff',
+        cursor: 'pointer'
+      }}
           >
             {ENROLLMENT_STATUS_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -326,7 +364,16 @@ export default function AdminUsersPage() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             placeholder="초기 비밀번호 입력"
-            style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
+            style={{
+        padding: '8px 12px',
+        borderRadius: '6px',
+        border: '1px solid #cbd5e1',
+        fontSize: '14px',
+        minWidth: '180px',
+        outline: 'none',
+        background: '#ffffff',
+        cursor: 'pointer'
+      }}
           />
           <p style={{ margin: '6px 0 0', color: '#666', fontSize: '13px' }}>
             8자 이상, 소문자/숫자를 포함해야 합니다.
@@ -342,7 +389,16 @@ export default function AdminUsersPage() {
             value={cohortNo}
             onChange={(event) => setCohortNo(event.target.value)}
             placeholder="예: 10"
-            style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
+            style={{
+        padding: '8px 12px',
+        borderRadius: '6px',
+        border: '1px solid #cbd5e1',
+        fontSize: '14px',
+        minWidth: '180px',
+        outline: 'none',
+        background: '#ffffff',
+        cursor: 'pointer'
+      }}
           />
         </div>
 

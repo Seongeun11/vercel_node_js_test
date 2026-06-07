@@ -1,5 +1,6 @@
-'use client'
 //app\admin\admin-only\users\enrollment-status.tsx
+'use client'
+
 import { useState } from 'react'
 
 type EnrollmentStatus = 'active' | 'completed'
