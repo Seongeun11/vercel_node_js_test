@@ -22,12 +22,15 @@ type AttendanceManageItem = {
     name: string
     start_time: string
     late_threshold_min: number
+    // 💡 소속 필터링 및 조회를 위한 컬럼 명세 확장
+    affiliations_id?: string | number | null
+    affiliation_name?: string
   } | null
   user: {
     id: string
     student_id: string
     full_name: string
-    role: 'admin' | 'captain' | 'trainee' // 기존 UI 호환성을 위해 문자열 유지
+    role: 'admin' | 'captain' | 'trainee'
   } | null
 }
 
@@ -52,7 +55,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   if (!authResult.ok) {
     return jsonNoStore<AttendanceManageListResponse>(
-       {error: '인증이 필요합니다.' },
+       { error: '인증이 필요합니다.' },
       { status: 401 }
     )
   }
@@ -79,6 +82,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     )
   }
 
+  // 💡 1. Supabase Query 수정: events 가져올 때 affiliations 테이블을 중첩 조인하도록 수정
   let query = supabaseAdmin
     .from('attendance')
     .select(`
@@ -95,7 +99,11 @@ export async function GET(request: NextRequest): Promise<Response> {
         id,
         name,
         start_time,
-        late_threshold_min
+        late_threshold_min,
+        affiliations_id,
+        affiliation:affiliations (
+          name
+        )
       ),
       user:profiles!attendance_user_id_fkey (
         id,
@@ -136,16 +144,17 @@ export async function GET(request: NextRequest): Promise<Response> {
     )
   }
 
-// 2) 데이터 가공 및 역할(role) 추출 로직 수정
+  // 2) 데이터 가공 및 역할(role) / 소속(affiliation) 추출 로직
   let items: AttendanceManageItem[] = (data ?? []).map((row: any) => {
     const eventData = Array.isArray(row.event) ? row.event[0] : row.event
     const userData = Array.isArray(row.user) ? row.user[0] : row.user
     
-    
-    // roles 테이블에서 name 추출 (중첩 구조 해제)
-    const roleName =
-    userData?.role?.name ??
-    'trainee'
+    // 💡 2. 중첩 조인 구조 해제: affiliation 객체 내부의 name 추출 및 평탄화
+    const singleAffiliation = Array.isArray(eventData?.affiliation) ? eventData.affiliation[0] : eventData?.affiliation
+    const affiliationName = singleAffiliation?.name ?? undefined
+
+    // roles 테이블에서 name 추출
+    const roleName = userData?.role?.name ?? 'trainee'
 
     return {
       id: row.id,
@@ -157,7 +166,15 @@ export async function GET(request: NextRequest): Promise<Response> {
       check_time: row.check_time,
       created_at: row.created_at,
       updated_at: row.updated_at,
-      event: eventData ?? null,
+      // 💡 3. 클라이언트 컴포넌트 규격(types/attendance.ts)에 맞게 객체 매핑
+      event: eventData ? {
+        id: eventData.id,
+        name: eventData.name,
+        start_time: eventData.start_time,
+        late_threshold_min: eventData.late_threshold_min,
+        affiliations_id: eventData.affiliations_id,
+        affiliation_name: affiliationName // 평탄화 처리 완료
+      } : null,
       user: userData ? {
         id: userData.id,
         student_id: userData.student_id,
@@ -166,6 +183,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       } : null,
     }
   })
+
   if (userKeyword) {
     const keyword = userKeyword.toLowerCase()
     items = items.filter((item) => {

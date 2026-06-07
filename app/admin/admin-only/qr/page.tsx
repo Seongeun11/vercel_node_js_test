@@ -3,12 +3,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { QRCodeCanvas } from 'qrcode.react'
+// 💡 공용 컴포넌트 Import
+import AffiliationSelect from '@/components/common/affiliation-select'
 // ==========================================
 // 1. 시스템 공통 타입 정의 (기존 규격 완벽 유지 + 확장)
 // ==========================================
 export type WeekdayCode = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'
 export type RecurrenceType = 'none' | 'daily'
 export type OccurrenceStatus = 'scheduled' | 'open' | 'closed' | 'archived'
+
 
 export interface AffiliationItem {
   id: number
@@ -40,6 +43,7 @@ export interface EventItem {
   created_at: string
   updated_at: string
   affiliations_id: string | number | null
+  affiliation_name: string // 💡 백엔드 전용 JOIN 필드로 타입 보완 처리 추가 스펙화
 }
 
 export interface EventFormState {
@@ -160,15 +164,7 @@ export default function CentralizedEventsQrClient() {
       setLoading(true)
       setError('')
 
-      // 1. 소속 정보 로딩 (⚠️ 기존 하드코딩 mockAffiliations 제거 후 API 라우트 연동)
-      const affRes = await fetch('/api/affiliations', { method: 'GET', cache: 'no-store' })
-      const affResult = await affRes.json()
-      if (affRes.ok && affResult.success && affResult.data) {
-        setAffiliations(affResult.data)
-      } else {
-        console.warn('DB 소속 목록 로드 실패, 시뮬레이션 폴백 적용')
-        // 실패 시 방어 코드로 최소한의 폴백 마련 가능
-      }
+      // ❌ 변경 논리: 소속 정보 로딩 API 불필요 구역으로 제거 완료 (공용 컴포넌트가 알아서 수행)
 
       // 2. 중앙 집중형 이벤트 전체 리스트업 조회
       const eventRes = await fetch('/api/events/list', { method: 'GET', cache: 'no-store' })
@@ -199,8 +195,8 @@ export default function CentralizedEventsQrClient() {
     void refreshAllData()
   }, [refreshAllData])
 
-  const isEditing = useMemo(() => editingId !== null, [editingId])
-  const affiliationMap = useMemo(() => new Map(affiliations.map(a => [a.id, a.name])), [affiliations])
+  // ❌ 변경 논리: affiliationMap 생성용 useMemo 로직 완벽히 제거 처리
+  // 소속 선택 필터링은 프론트엔드 연산 최적화를 위해 유지
   // 💡 [추가] 소속 선택 상태에 따른 이벤트 필터링 연산
   const filteredEvents = useMemo(() => {
     if (!selectedAffiliationId) return events // 전체 노출
@@ -331,19 +327,11 @@ export default function CentralizedEventsQrClient() {
           <label htmlFor="affiliation-filter" style={{ fontSize: '14px', fontWeight: 700, color: '#334155' }}>
             🔍 소속 필터 조회 :
           </label>
-          <select
-            id="affiliation-filter"
-            value={selectedAffiliationId}
-            onChange={(e) => setSelectedAffiliationId(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', minWidth: '180px', outline: 'none' }}
-          >
-            <option value="">전체 보기 (전체 노출)</option>
-            {affiliations.map((aff) => (
-              <option key={aff.id} value={String(aff.id)}>
-                {aff.name}
-              </option>
-            ))}
-          </select>
+          {/* 💡 정제 추출된 공용 컴포넌트 주입 */}
+        <AffiliationSelect 
+          value={selectedAffiliationId} 
+          onChange={setSelectedAffiliationId} 
+        />
           {selectedAffiliationId && (
             <span style={{ fontSize: '13px', color: '#64748b' }}>
               총 <strong>{filteredEvents.length}</strong>개의 예약 건이 검색되었습니다.
@@ -374,16 +362,22 @@ export default function CentralizedEventsQrClient() {
               <tbody>
                 {/* 💡 [수정] events.map -> filteredEvents.map 변경 */}
                 {filteredEvents.map((event) => {
-                  const matchedAffName = event.affiliations_id ? affiliationMap.get(Number(event.affiliations_id)) : '전체 노출'
+                  
                   const isFuture = new Date(event.start_time) > new Date()
                   const attachedToken = activeQrTokens[event.id]
 
                   return (
-                    <tr key={event.id} style={{ background: isEditing && editingId === event.id ? '#f0f9ff' : 'transparent' }}>
+                    <tr key={event.id} style={{ background: editingId === event.id ? '#f0f9ff' : 'transparent' }}>
                       <td style={{ ...styles.tdStyle, fontWeight: 700 }}>{event.name}</td>
-                      <td style={{ ...styles.tdStyle, color: '#2563eb', fontWeight: 500 }}>{matchedAffName ?? '미지정 소속'}</td>
+                      {/* 💡 기존의 매핑 맵 대신, 백엔드로부터 가공 전송된 필드데이터 직접 바인딩 완료 */}
+                      <td style={{ ...styles.tdStyle, color: '#2563eb', fontWeight: 500 }}>
+                        {event.affiliation_name}
+                      </td>
                       <td style={styles.tdStyle}>{new Date(event.start_time).toLocaleString()}</td>
                       <td style={styles.tdStyle}>
+
+                    
+                  
                         {isFuture ? (
                           <span style={styles.badgeScheduled}>예약 대기 (Scheduled)</span>
                         ) : (

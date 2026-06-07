@@ -1,503 +1,155 @@
+//app\admin\admin-only\attendance\attendance-page-client.tsx
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AdminHeader from '@/components/admin/AdminHeader'
 
-type AttendanceStatus = 'present' | 'late' | 'absent'
-type AttendanceMethod = 'manual' | 'qr' | 'nfc'
+import AttendanceFilterBar from './attendance-filterbar'
+import AttendanceTable from './attendance-table'
+import AttendanceEditModal from './attendance-edit-modal'
 
-type AttendanceManageItem = {
-  id: string
-  user_id: string
-  event_id: string
-  attendance_date: string
-  status: AttendanceStatus
-  method: AttendanceMethod
-  check_time: string
-  created_at: string
-  updated_at: string
-  event: {
-    id: string
-    name: string
-    start_time: string
-    late_threshold_min: number
-  } | null
-  user: {
-    id: string
-    student_id: string
-    full_name: string
-    // 서버 API가 평탄화를 해준다면 string, 아니라면 중첩 객체로 정의해야 합니다.
-    // 여기서는 안전하게 가공된 role 문자열을 받는다고 가정하거나 옵셔널하게 처리합니다.
-    role?: string
-  } | null
-}
-
-type AttendanceManageListResponse = {
-  items?: AttendanceManageItem[]
-  error?: string
-}
-
-type EditAttendanceResponse = {
-  message?: string
-  item?: AttendanceManageItem
-  error?: string
-}
+import { AttendanceManageItem, AttendanceStatus } from './types/attendance'
 
 type AttendanceClientProps = {
   initialDate: string
 }
 
-const STATUS_OPTIONS: AttendanceStatus[] = ['present', 'late', 'absent']
-const METHOD_OPTIONS: AttendanceMethod[] = ['manual', 'qr', 'nfc']
-
-function formatDateTimeKst(value: string): string {
-  try {
-    return new Intl.DateTimeFormat('ko-KR', {
-      timeZone: 'Asia/Seoul',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    }).format(new Date(value))
-  } catch {
-    return value
-  }
-}
-
-function toLocalDateTimeInputValue(value: string): string {
-  try {
-    const date = new Date(value)
-    const kstMs = date.getTime() + 9 * 60 * 60 * 1000
-    return new Date(kstMs).toISOString().slice(0, 16)
-  } catch {
-    return ''
-  }
-}
-
-function formatDate(date: Date): string {
-  return date.toISOString().slice(0, 10)
-}
-
-function getTodayLocalDate(): string {
-  return formatDate(new Date())
-}
-
-export default function AdminAttendancePage({ initialDate }: AttendanceClientProps) {
+export default function AttendanceManageClient({ initialDate }: AttendanceClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const currentDate = searchParams.get('date') || initialDate
 
-  const [items, setItems] = useState<AttendanceManageItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchLoading, setSearchLoading] = useState(false)
-  const [submitLoading, setSubmitLoading] = useState(false)
+  const [attendances, setAttendances] = useState<AttendanceManageItem[]>([])
+  const [loading, setLoading] = useState<boolean>(true)
+  const [error, setError] = useState<string>('')
+  const [selectedAffiliationId, setSelectedAffiliationId] = useState<string>('')
 
-  const [errorMessage, setErrorMessage] = useState('')
-  const [message, setMessage] = useState('')
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
+  const [activeItem, setActiveItem] = useState<AttendanceManageItem | null>(null)
+  const [submittingId, setSubmittingId] = useState<string | null>(null)
 
-  const [userKeyword, setUserKeyword] = useState('')
-  const [selectedDate, setSelectedDate] = useState(initialDate)
-  const [dateFrom, setDateFrom] = useState(initialDate)
-  const [dateTo, setDateTo] = useState(initialDate)
-
-  const [selectedId, setSelectedId] = useState('')
-  const selectedItem = useMemo(
-    () => items.find((item) => item.id === selectedId) ?? null,
-    [items, selectedId]
-  )
-
-  const [status, setStatus] = useState<AttendanceStatus>('present')
-  const [method, setMethod] = useState<AttendanceMethod>('manual')
-  const [checkTime, setCheckTime] = useState('')
-  const [reason, setReason] = useState('')
-
-  function syncDate(nextDate: string) {
-    setSelectedDate(nextDate)
-    setDateFrom(nextDate)
-    setDateTo(nextDate)
-
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('date', nextDate)
-    router.replace(`?${params.toString()}`)
-  }
-
-  async function fetchAttendance(isInitial = false) {
-    try {
-      if (isInitial) {
-        setLoading(true)
-      } else {
-        setSearchLoading(true)
-      }
-
-      setErrorMessage('')
-
-      const params = new URLSearchParams()
-      if (userKeyword.trim()) params.set('user_keyword', userKeyword.trim())
-      if (dateFrom) params.set('date_from', dateFrom)
-      if (dateTo) params.set('date_to', dateTo)
-
-      const response = await fetch(
-        `/api/attendance/manage/list${params.toString() ? `?${params.toString()}` : ''}`,
-        {
-          method: 'GET',
-          credentials: 'include',
-          cache: 'no-store',
-        }
-      )
-
-      if (response.status === 403) {
-        window.location.href = '/forbidden'
-        return
-      }
-
-      const text = await response.text()
-      const result: AttendanceManageListResponse = text ? JSON.parse(text) : {}
-
-      if (!response.ok) {
-        setItems([])
-        setErrorMessage(result.error || '출석 목록을 불러오지 못했습니다.')
-        return
-      }
-
-      const fetchedItems = result.items ?? []
-      setItems(fetchedItems)
-
-      if (fetchedItems.length > 0) {
-        const first = fetchedItems[0]
-        setSelectedId(first.id)
-        setStatus(first.status)
-        setMethod(first.method)
-        setCheckTime(toLocalDateTimeInputValue(first.check_time))
-      } else {
-        setSelectedId('')
-      }
-    } catch (error) {
-      console.error('[admin/attendance] fetch error:', error)
-      setItems([])
-      setErrorMessage('출석 목록 조회 중 오류가 발생했습니다.')
-    } finally {
-      if (isInitial) {
-        setLoading(false)
-      } else {
-        setSearchLoading(false)
-      }
+  // 1. 데이터 로드 엔진
+  const loadAttendanceData = useCallback(async (dateStr: string) => {
+  try {
+    setLoading(true)
+    setError('')
+    
+    // 💡 원본 관리자 전용 엔드포인트 주소로 원복
+    const params = new URLSearchParams()
+    if (dateStr) {
+      params.set('date_from', dateStr)
+      params.set('date_to', dateStr)
     }
+
+    const res = await fetch(`/api/attendance/manage/list?${params.toString()}`, { 
+      method: 'GET', 
+      cache: 'no-store',
+      credentials: 'include' // 필요시 관리자 세션 쿠키 포함
+    })
+    const data = await res.json()
+    
+    if (res.ok && data.items) {
+      setAttendances(data.items)
+    } else {
+      throw new Error(data.error || '출석 명단을 가져오지 못했습니다.')
+    }
+  } catch (err: any) {
+    setError(err.message || '출석 데이터 서버 연동 중 오류 발생')
+  } finally {
+    setLoading(false)
   }
+}, [])
 
   useEffect(() => {
-    void fetchAttendance(true)
-  }, [dateFrom, dateTo])
+    void loadAttendanceData(currentDate)
+  }, [currentDate, loadAttendanceData])
 
-  useEffect(() => {
-    if (!selectedItem) return
-    setStatus(selectedItem.status)
-    setMethod(selectedItem.method)
-    setCheckTime(toLocalDateTimeInputValue(selectedItem.check_time))
-  }, [selectedItem])
-
-  async function handleEditAttendance() {
-    if (!selectedItem) {
-      setErrorMessage('수정할 출석 기록을 선택해주세요.')
-      return
-    }
-
-    if (!reason.trim()) {
-      setErrorMessage('수정 사유를 입력해주세요.')
-      return
-    }
-
-    try {
-      setSubmitLoading(true)
-      setErrorMessage('')
-      setMessage('')
-
-      const payload = {
-        attendance_id: selectedItem.id,
-        status,
-        method,
-        check_time: checkTime ? new Date(checkTime).toISOString() : null,
-        reason: reason.trim(),
-      }
-
-      const response = await fetch('/api/attendance/edit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(payload),
+  // 2. 통합 수정 실행부 (모달 및 테이블 공용 API 허브)
+  const handleUpdateAttendance = async (id: string, nextStatus: AttendanceStatus, checkTime: string, reason: string) => {
+  setSubmittingId(id)
+  try {
+    // 💡 원본 수정 API 스펙 주소 및 명세 일치화
+    const res = await fetch('/api/attendance/edit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        attendance_id: id,                              // id -> attendance_id
+        status: nextStatus, 
+        check_time: checkTime ? new Date(checkTime).toISOString() : null, // checkTime -> check_time + ISO 포맷팅
+        reason: reason.trim()
       })
-
-      const text = await response.text()
-      const result: EditAttendanceResponse = text ? JSON.parse(text) : {}
-
-      if (!response.ok) {
-        setErrorMessage(result.error || '출석 수정에 실패했습니다.')
-        return
-      }
-
-      setMessage(result.message || '출석 정보가 수정되었습니다.')
-      setReason('')
-      await fetchAttendance(false)
-    } catch (error) {
-      console.error('[admin/attendance] edit error:', error)
-      setErrorMessage('출석 수정 중 오류가 발생했습니다.')
-    } finally {
-      setSubmitLoading(false)
+    })
+    
+    const data = await res.json()
+    if (!res.ok || data.error) {
+      throw new Error(data.error || '인증 오류 혹은 수정 권한이 거부되었습니다.')
     }
+    
+    // 로컬 상태 업데이트 로직 유지
+    setAttendances(prev => prev.map(item => 
+      item.id === id 
+        ? { 
+            ...item, 
+            status: nextStatus, 
+            check_time: checkTime ? new Date(checkTime).toISOString() : item.check_time, 
+            updated_at: new Date().toISOString() 
+          } 
+        : item
+    ))
+  } catch (err: any) {
+    alert(err.message || '업데이트에 실패했습니다.')
+    throw err
+  } finally {
+    setSubmittingId(null)
   }
+}
 
-  if (loading) {
-    return <div style={{ padding: '20px' }}>출석 수정 화면을 불러오는 중입니다...</div>
-  }
+  const filteredAttendances = useMemo(() => {
+    if (!selectedAffiliationId) return attendances
+    return attendances.filter(item => item.event?.affiliations_id && String(item.event.affiliations_id) === selectedAffiliationId)
+  }, [attendances, selectedAffiliationId])
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <AdminHeader
-        title="출석 조회 및 수정"
-        description="관리자만 출석 기록을 조회하고 수정할 수 있습니다."
+    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto', fontFamily: 'sans-serif', color: '#1e293b' }}>
+      <AdminHeader title="실시간 출석 상태 대시보드" />
+
+      <AttendanceFilterBar 
+        currentDate={currentDate}
+        onDateChange={(d) => router.push(`?date=${d}`)}
+        selectedAffiliationId={selectedAffiliationId}
+        onAffiliationChange={setSelectedAffiliationId}
+        totalCount={filteredAttendances.length}
       />
 
-      <h1 style={{ marginTop: 0 }}>출석 조회 및 수정</h1>
+      {error && <div style={{ padding: '20px', background: '#fef2f2', color: '#ef4444', borderRadius: '12px', fontWeight: 600, marginBottom: '24px' }}>⚠️ {error}</div>}
 
-      <div
-        style={{
-          border: '1px solid #ddd',
-          borderRadius: '12px',
-          background: '#fff',
-          padding: '16px',
-          marginBottom: '20px',
-        }}
-      >
-        <h2 style={{ marginTop: 0, fontSize: '18px' }}>조회 조건</h2>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: '12px',
+      {loading ? (
+        <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '8px' }}>데이터 데이터베이스 동기화 중...</div>
+      ) : filteredAttendances.length === 0 ? (
+        <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>지정한 조건에 부합하는 출석 데이터가 존재하지 않습니다.</div>
+      ) : (
+        <AttendanceTable 
+          items={filteredAttendances}
+          submittingId={submittingId}
+          onOpenEditModal={(item) => {
+            setActiveItem(item)
+            setIsModalOpen(true)
           }}
-        >
-          <div>
-            <label style={{ display: 'block', marginBottom: '6px' }}>
-              이름/학번
-            </label>
-            <input
-              value={userKeyword}
-              onChange={(e) => setUserKeyword(e.target.value)}
-              placeholder="이름 또는 ID번호"
-              style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', marginBottom: '6px' }}>조회 날짜</label>
-            <input
-              type="date"
-              value={selectedDate}
-              max={getTodayLocalDate()}
-              onChange={(e) => syncDate(e.target.value)}
-              style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
-            />
-          </div>
-        </div>
-
-        <div style={{ marginTop: '16px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-          <button type="button" onClick={() => void fetchAttendance(false)} disabled={searchLoading}>
-            {searchLoading ? '조회 중...' : '조회'}
-          </button>
-          <button type="button" onClick={() => syncDate(getTodayLocalDate())}>
-            오늘
-          </button>
-
-          
-        </div>
-      </div>
-
-      {errorMessage && (
-        <div
-          style={{
-            marginBottom: '16px',
-            padding: '12px',
-            borderRadius: '8px',
-            background: '#fff1f2',
-            border: '1px solid #fecdd3',
-            color: '#be123c',
-          }}
-        >
-          {errorMessage}
-        </div>
+          // 테이블 직렬 변경 연동 바인딩
+          onQuickStatusChange={(id, status) => handleUpdateAttendance(id, status, new Date().toISOString(), '관리자 대시보드 빠른 수정')}
+        />
       )}
 
-      {message && (
-        <div
-          style={{
-            marginBottom: '16px',
-            padding: '12px',
-            borderRadius: '8px',
-            background: '#f0fdf4',
-            border: '1px solid #bbf7d0',
-            color: '#166534',
-          }}
-        >
-          {message}
-        </div>
-      )}
-
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(360px, 1fr) minmax(360px, 1fr)',
-          gap: '20px',
-          alignItems: 'start',
+      <AttendanceEditModal 
+        isOpen={isModalOpen}
+        item={activeItem}
+        onClose={() => {
+          setIsModalOpen(false)
+          setActiveItem(null)
         }}
-      >
-        <div
-          style={{
-            border: '1px solid #ddd',
-            borderRadius: '12px',
-            background: '#fff',
-            padding: '16px',
-          }}
-        >
-          <h2 style={{ marginTop: 0, fontSize: '18px' }}>출석 기록 목록</h2>
-
-          {items.length === 0 ? (
-            <div>조회된 출석 기록이 없습니다.</div>
-          ) : (
-            <div style={{ display: 'grid', gap: '10px' }}>
-              {items.map((item) => {
-                const isSelected = item.id === selectedId
-
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setSelectedId(item.id)}
-                    style={{
-                      textAlign: 'left',
-                      border: isSelected ? '2px solid #2563eb' : '1px solid #ddd',
-                      borderRadius: '10px',
-                      padding: '12px',
-                      background: isSelected ? '#eff6ff' : '#fff',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div style={{ fontWeight: 700 }}>
-                      {item.user?.full_name || '-'} ({item.user?.student_id || '-'})
-                    </div>
-                    <div style={{ marginTop: '6px', color: '#555' }}>
-                      {item.event?.name || '-'} / {item.attendance_date}
-                    </div>
-                    <div style={{ marginTop: '6px', color: '#666', fontSize: '14px' }}>
-                      상태: {item.status} / 방식: {item.method}
-                    </div>
-                    <div style={{ marginTop: '4px', color: '#666', fontSize: '13px' }}>
-                      처리 시각: {formatDateTimeKst(item.check_time)}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        <div
-          style={{
-            border: '1px solid #ddd',
-            borderRadius: '12px',
-            background: '#fff',
-            padding: '16px',
-          }}
-        >
-          <h2 style={{ marginTop: 0, fontSize: '18px' }}>출석 수정</h2>
-
-          {!selectedItem ? (
-            <div>수정할 출석 기록을 선택해주세요.</div>
-          ) : (
-            <>
-              <div style={{ marginBottom: '12px', color: '#555' }}>
-                <div><strong>대상:</strong> {selectedItem.user?.full_name || '-'} ({selectedItem.user?.student_id || '-'})</div>
-                <div><strong>행사:</strong> {selectedItem.event?.name || '-'}</div>
-                <div><strong>현재 상태:</strong> {selectedItem.status}</div>
-                <div><strong>현재 방식:</strong> {selectedItem.method}</div>
-              </div>
-
-              <div style={{ display: 'grid', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px' }}>상태</label>
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as AttendanceStatus)}
-                    style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
-                  >
-                    {STATUS_OPTIONS.map((value) => (
-                      <option key={value} value={value}>
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px' }}>방식</label>
-                  <select
-                    value={method}
-                    onChange={(e) => setMethod(e.target.value as AttendanceMethod)}
-                    style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
-                  >
-                    {METHOD_OPTIONS.map((value) => (
-                      <option key={value} value={value}>
-                        {value==='manual'
-                          ? '수동'
-                          : value==='qr'
-                          ? 'QR'
-                          : 'NFC'
-                          }
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px' }}>
-                    처리 시각
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={checkTime}
-                    onChange={(e) => setCheckTime(e.target.value)}
-                    style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px' }}>
-                    수정 사유
-                  </label>
-                  <textarea
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    rows={4}
-                    placeholder="예: 출석 누락 보정, 오출석 수정, 시스템 오류 정정"
-                    style={{
-                      width: '100%',
-                      padding: '10px',
-                      boxSizing: 'border-box',
-                      resize: 'vertical',
-                    }}
-                  />
-                </div>
-
-                <button type="button" onClick={handleEditAttendance} disabled={submitLoading}>
-                  {submitLoading ? '수정 중...' : '출석 수정 저장'}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+        onSave={(id, status, time, reas) => handleUpdateAttendance(id, status, time, reas)}
+      />
     </div>
   )
 }

@@ -63,8 +63,11 @@ export async function GET(request: NextRequest): Promise<Response> {
       is_active,
       created_at,
       updated_at,
-      affiliations_id
-    `)//affiliations_id 컬럼 조회 추가
+      affiliations_id,
+        affiliations (
+          name
+        )
+      `)//affiliations_id 컬럼 조회 추가
     .is('deleted_at', null)
 
   if (upcomingOnly) {
@@ -90,7 +93,12 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   // 4. 성능 최적화: 불필요한 고비용 배열 헬퍼 루프 연산(normalizeRecurrenceDays) 전면 제거
   // 데이터가 DB에 정상적으로 들어있다면 타입 단언(Type Assertion)만으로 즉시 응답 가능 -> CPU 연산 시간 대폭 감소
-  const items = (data ?? []) as EventItem[]
+  // 프론트엔드가 중첩 객체 depth를 타지 않고 깔끔하게 소속 이름을 쓸 수 있도록 포맷 맵핑
+    const items = data.map((event: any) => ({
+      ...event,
+      // 백엔드 단에서 결합 완료된 소속명 주입 (외래키 데이터 매핑이 누락된 경우 '전체 노출' 처리)
+      affiliation_name: event.affiliations?.name ?? '전체 노출'
+    }))
 
   return jsonNoStore<EventsListResponse>({ items })
 }
