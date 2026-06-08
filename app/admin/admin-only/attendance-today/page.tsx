@@ -1,47 +1,45 @@
+//app\admin\admin-only\attendance-today\page.tsx
 'use client'
 
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { TodayOccurrenceItem, AffiliationItem } from './types'; // AffiliationItem 타입 추가 필요
 import { OccurrenceCard } from './occurrence-card';
+// 공용 컴포넌트 
+import AffiliationSelect from '@/components/common/affiliation-select'
 
 export default function TodayOperationsClient() {
   const [date, setDate] = useState('');
   const [items, setItems] = useState<TodayOccurrenceItem[]>([]);
   const [affiliations, setAffiliations] = useState<AffiliationItem[]>([]); // ◀ 소속 목록 상태 추가
-  const [selectedAffiliationId, setSelectedAffiliationId] = useState<string>('all'); // ◀ 필터 상태 추가
+  // 공용 컴포넌트 규격에 맞춰 초기값을 'all'에서 ''(빈 문자열)로 변경
+  const [selectedAffiliationId, setSelectedAffiliationId] = useState<string>('');
+
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
 
   // 개별 ID 단위 상태 매핑을 통한 중복 합산 방지
   const [qrCountsMap, setQrCountsMap] = useState<Record<string, { total: number; active: number }>>({});
 
-  // 1. 소속 마스터 데이터 조회 (이벤트 훅 분석 내용 반영)
+  // 1. 소속 마스터 데이터 조회 (OccurrenceCard 매핑 출력 용도 유지)
   const fetchAffiliations = useCallback(async (): Promise<AffiliationItem[]> => {
     try {
       const res = await fetch('/api/affiliations', {
         method: 'GET',
         cache: 'no-store',
-        credentials: 'include',
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.items && Array.isArray(data.items)) {
-          return data.items;
+        // 공용 컴포넌트의 데이터 포맷(data.data)과 기존 포맷(data.items)을 모두 방어적으로 지원
+        const list = data.data || data.items;
+        if (list && Array.isArray(list)) {
+          return list;
         }
       }
     } catch (e) {
-      console.error('소속 목록을 불러오지 못해 폴백 기본값을 제공합니다.', e);
+      console.error('소속 목록을 불러오지 못했습니다', e);
     }
-    // API 조회 실패 시 기본 마스터 로컬 데이터 반환
     return [
-      { id: 1, name: '아카데미' },
-      { id: 2, name: '영성 40일' },
-      { id: 3, name: '모심 40일' },
-      { id: 4, name: '효진정' },
-      { id: 5, name: '성화영성' },
-      { id: 6, name: '3일 공명기도' },
+      
     ];
   }, []);
 
@@ -80,21 +78,20 @@ export default function TodayOperationsClient() {
   }, [loadTodayData]);
 
   // 2. [핵심] 선택된 소속 ID에 따른 행사 목록 필터링 계산 연산
+  // 2. 선택된 소속 ID 기반 필터링 논리 수정 ('' 일 때 전체 보기)
   const filteredItems = useMemo(() => {
-    if (selectedAffiliationId === 'all') {
+    if (selectedAffiliationId === '') {
       return items;
     }
     return items.filter((item) => {
-      // DB의 affiliations_id가 number 형식이므로 엄격 일치 처리를 위해 형변환 매핑 후 필터링
       return item.events?.affiliations_id === Number(selectedAffiliationId);
     });
   }, [items, selectedAffiliationId]);
 
-  // 필터링된 결과 기반으로 카운트 및 요약 재계산
+  // 필터링 결과 기반 요약 재계산
   const qrCounts = useMemo(() => {
     return Object.entries(qrCountsMap).reduce(
       (acc, [id, curr]) => {
-        // 현재 활성화된(필터링된) 회차의 QR 카운트만 합산 처리하도록 검증
         const isExistInFiltered = filteredItems.some(item => item.id === id);
         if (!isExistInFiltered) return acc;
         return {
@@ -129,22 +126,15 @@ export default function TodayOperationsClient() {
           </p>
         </div>
 
-        {/* 3. 소속 필터 UI 컴포넌트 탑재 */}
+        {/* 3. 공용 소속 필터 UI 컴포넌트로 교체 완료 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <label htmlFor="affiliation-filter" style={{ fontSize: 14, fontWeight: 600, color: '#475569' }}>소속 필터:</label>
-          <select
-            id="affiliation-filter"
+          <AffiliationSelect 
             value={selectedAffiliationId}
-            onChange={(e) => setSelectedAffiliationId(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 14, background: 'white', minWidth: 160 }}
-          >
-            <option value="all">전체 보기</option>
-            {affiliations.map((aff) => (
-              <option key={aff.id} value={String(aff.id)}>
-                {aff.name}
-              </option>
-            ))}
-          </select>
+            onChange={setSelectedAffiliationId}
+            showAllOption={true}
+            allOptionLabel="전체 보기"
+          />
         </div>
       </header>
 

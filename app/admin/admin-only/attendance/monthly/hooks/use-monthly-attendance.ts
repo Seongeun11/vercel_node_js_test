@@ -1,4 +1,3 @@
-// app/admin/admin-only/attendance/monthly/hooks/use-monthly-attendance.ts
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
@@ -8,14 +7,14 @@ export type MonthlyOccurrence = {
   id: string; 
   event_id: string; 
   event_name: string; 
-  occurrence_date: string; 
+  occurrence_date: string;
   start_time: string;
   end_time: string | null; 
   status: string 
 }
 export type MonthlyAttendanceCell = { 
   occurrence_id: string; 
-  event_id: string; 
+  event_id: string;
   event_name: string; 
   occurrence_date: string;
   status: CellStatus; 
@@ -32,15 +31,6 @@ export type MonthlyAttendanceUserRow = {
   days: Record<string, MonthlyAttendanceCell> 
 }
 
-const MASTER_AFFILIATIONS = [
-  { id: 1, name: '아카데미' },
-  { id: 2, name: '영성 40일' },
-  { id: 3, name: '모심 40일' },
-  { id: 4, name: '효진정' },
-  { id: 5, name: '성화영성' },
-  { id: 6, name: '3일 공명기도' },
-]
-
 export type MonthlyAttendanceResponse = {
   month: string
   range: { start_date: string; end_date: string }
@@ -53,7 +43,6 @@ export type MonthlyAttendanceResponse = {
 export type CalendarDay = { date: string; day: number; inCurrentMonth: boolean }
 export type DaySummary = { present: number; late: number; absent: number; unmarked: number; total: number; occurrences: MonthlyOccurrence[] }
 export type EventOption = { id: string; name: string }
-export type AffiliationOption = { id: string; name: string }
 
 function getCurrentMonth(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit' }).format(new Date())
@@ -96,7 +85,7 @@ export function useMonthlyAttendance() {
   const [tempAffiliationId, setTempAffiliationId] = useState<string>('')
   
   const [events, setEvents] = useState<EventOption[]>([])
-  const [affiliations, setAffiliations] = useState<AffiliationOption[]>([])
+  // 💡 중복 배치된 affiliations 로컬 상태 및 하드코딩 마스터 구조 과감히 제거
 
   const [searchParams, setSearchParams] = useState({
     month: getCurrentMonth(),
@@ -204,6 +193,7 @@ export function useMonthlyAttendance() {
         return
       }
       setData(result)
+     
       if (!selectedDate || !result.occurrences.some((item: MonthlyOccurrence) => item.occurrence_date === selectedDate)) {
         setSelectedDate(result.occurrences[0]?.occurrence_date ?? '')
       }
@@ -215,7 +205,6 @@ export function useMonthlyAttendance() {
     }
   }
 
-  // 소속 ID 파라미터를 받아 해당 소속에 종속된 행사만 백엔드에서 가져오도록 보완
   const loadEvents = useCallback(async (affiliationId: string) => {
     try {
       const params = new URLSearchParams()
@@ -232,35 +221,11 @@ export function useMonthlyAttendance() {
     }
   }, [])
 
-  const loadAffiliations = useCallback(async () => {
-    try {
-      const response = await fetch('/api/admin/affiliations/list', { method: 'GET', cache: 'no-store' })
-      if (!response.ok) {
-        setAffiliations(MASTER_AFFILIATIONS.map(a => ({ id: String(a.id), name: a.name })))
-        return
-      }
-      const result = await response.json()
-      const rawItems = Array.isArray(result) ? result : Array.isArray(result?.items) ? result.items : Array.isArray(result?.data) ? result.data : []
-      if (rawItems.length === 0) {
-        setAffiliations(MASTER_AFFILIATIONS.map(a => ({ id: String(a.id), name: a.name })))
-        return
-      }
-      const formatted = rawItems.map((item: any) => ({
-        id: String(item.id),
-        name: String(item.name || item.affiliation_name || `소속 ${item.id}`)
-      }))
-      setAffiliations(formatted)
-    } catch (e) {
-      console.error('소속 로드 실패, 마스터 데이터로 대체합니다.', e)
-      setAffiliations(MASTER_AFFILIATIONS.map(a => ({ id: String(a.id), name: a.name })))
-    }
-  }, [])
-
-  // 💡 [논리오류 핵심 교정]: 사용자가 소속을 선택 변경할 때 동적으로 행사 목록을 다시 로딩하는 커스텀 핸들러
+  // 소속 필터가 동적으로 전환될 때 처리하는 커스텀 연동 액션 핸들러
   const handleAffiliationChange = useCallback((affiliationId: string) => {
     setTempAffiliationId(affiliationId)
-    setTempEventId('') // 소속이 전환되면 이전에 선택한 다른 소속의 행사 ID 바인딩 해제 및 초기화
-    void loadEvents(affiliationId) // 변경된 소속 ID에 대응하는 행사 API Re-fetch 유도
+    setTempEventId('') // 소속이 바뀔 시 연동 안정성을 위해 선택되어 있던 종속 행사 비워줌
+    void loadEvents(affiliationId) // 변경된 새 소속에 바인딩된 행사 목록 실시간 API Re-fetch
   }, [loadEvents])
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -279,19 +244,18 @@ export function useMonthlyAttendance() {
   }, [queryString])
 
   useEffect(() => {
-    void loadAffiliations()
-    void loadEvents('') // 최초 페이지 렌더링 시에는 전체 행사 로드
-  }, [loadAffiliations, loadEvents])
+    void loadEvents('') // 초기 진입 시 전체 행사 로드 유지
+  }, [loadEvents])
 
   return {
     state: {
       tempMonth, tempCohortNo, tempKeyword, tempEventId, tempAffiliationId,
-      events, affiliations, loading, errorMessage, data, calendarDays,
+      events, loading, errorMessage, data, calendarDays,
       daySummaryMap, selectedDate, selectedOccurrences, selectedRows
     },
     actions: {
       setTempMonth, setTempCohortNo, setTempKeyword, setTempEventId,
-      setTempAffiliationId: handleAffiliationChange, // 💡 단순 State 변경 훅을 커스텀 이벤트 처리 핸들러로 스와프
+      setTempAffiliationId: handleAffiliationChange, // 가로챈 커스텀 핸들러 전달
       handleSearchSubmit, setSelectedDate
     }
   }

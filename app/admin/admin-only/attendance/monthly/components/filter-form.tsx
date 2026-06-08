@@ -1,7 +1,8 @@
-// app/admin/admin-only/attendance/monthly/components/filter-form.tsx
 'use client'
 
-import { EventOption, AffiliationOption } from '../hooks/use-monthly-attendance'
+import { EventOption } from '../hooks/use-monthly-attendance'
+// 공용 컴포넌트 임포트
+import AffiliationSelect from '@/components/common/affiliation-select'
 
 interface FilterFormProps {
   tempMonth: string;
@@ -10,7 +11,6 @@ interface FilterFormProps {
   tempEventId: string;
   tempAffiliationId: string;
   events: EventOption[];
-  affiliations: AffiliationOption[];
   loading: boolean;
   onChangeMonth: (v: string) => void;
   onChangeCohort: (v: string) => void;
@@ -23,7 +23,6 @@ interface FilterFormProps {
 export default function FilterForm({
   tempMonth, tempCohortNo, tempKeyword, tempEventId, tempAffiliationId,
   events = [], 
-  affiliations = [], 
   loading,
   onChangeMonth, onChangeCohort, onChangeKeyword, onChangeEvent, onChangeAffiliation, onSubmit
 }: FilterFormProps) {
@@ -34,16 +33,15 @@ export default function FilterForm({
         <input type="month" value={tempMonth} onChange={(e) => onChangeMonth(e.target.value)} style={{ padding: '9px', border: '1px solid #ccc', borderRadius: '8px' }} />
       </label>
       
+      {/* 하드코딩 영역을 공용 컴포넌트로 완벽 교체 */}
       <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <span style={{ fontSize: '13px', fontWeight: 700 }}>소속</span>
-        <select value={tempAffiliationId} onChange={(e) => onChangeAffiliation(e.target.value)} style={{ padding: '9px', border: '1px solid #ccc', borderRadius: '8px', width: '150px', background: '#fff' }}>
-          <option value="">전체 소속</option>
-          {affiliations && affiliations.map((aff) => (
-            <option key={aff.id} value={aff.id}>
-              {aff.name}
-            </option>
-          ))}
-        </select>
+        <AffiliationSelect 
+          value={tempAffiliationId} 
+          onChange={onChangeAffiliation}
+          showAllOption={true}
+          allOptionLabel="전체 소속"
+        />
       </label>
 
       <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

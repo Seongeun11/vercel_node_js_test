@@ -1,4 +1,3 @@
-// app/admin/admin-only/attendance/monthly/page.tsx
 'use client'
 
 import { useMonthlyAttendance } from './hooks/use-monthly-attendance'
@@ -30,7 +29,6 @@ export default function MonthlyAttendancePage() {
         tempEventId={state.tempEventId} 
         tempAffiliationId={state.tempAffiliationId} 
         events={state.events} 
-        affiliations={state.affiliations} 
         loading={state.loading} 
         onChangeMonth={actions.setTempMonth} 
         onChangeCohort={actions.setTempCohortNo} 

@@ -2,7 +2,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-
+import AffiliationSelect from '@/components/common/affiliation-select' // 공용 컴포넌트 
 type LogAction = 'create' | 'update' | 'correct' | 'mark_absent' | 'delete'
 
 type ProfileMeta = {
@@ -41,15 +41,7 @@ type LogsResponse = {
   error?: string
 }
 
-// 스키마 상의 마스터 소속 정보 
-const AFFILIATIONS = [
-  { id: 1, name: '아카데미' },
-  { id: 2, name: '영성 40일' },
-  { id: 3, name: '모심 40일' },
-  { id: 4, name: '효진정' },
-  { id: 5, name: '성화영성' },
-  { id: 6, name: '3일 공명기도' },
-]
+
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '-'
@@ -81,17 +73,7 @@ function formatRole(role: ProfileMeta['role'] | null | undefined) {
   }
 }
 
-function formatAffiliation(id: number | null | undefined) {
-  if (!id) return '-'
-  const found = AFFILIATIONS.find(a => a.id === id)
-  return found ? found.name : `소속 ID: ${id}`
-}
 
-type AffiliationBtnProps = {
-  name: string
-  active: boolean
-  onClick: () => void
-}
 
 function stringifySafe(value: unknown) {
   try {
@@ -183,6 +165,35 @@ export default function AdminAttendanceLogsPage() {
   const [dateTo, setDateTo] = useState('')
   const [selectedAffiliation, setSelectedAffiliation] = useState<string>('') // 빈 값은 '전체' 의미
 
+  // [수정 논리] 카드 내부 매핑용 소속 데이터 상태
+  const [affiliationMap, setAffiliationMap] = useState<Record<number, string>>({})
+
+  // 소속 데이터 API 로드 (카드 뷰 내 한글 변환용)
+  useEffect(() => {
+    async function fetchAffiliationMaster() {
+      try {
+        const res = await fetch('/api/affiliations', { method: 'GET', cache: 'no-store' }) 
+        const result = await res.json() 
+        if (res.ok && result.success && Array.isArray(result.data)) { 
+          const mapped: Record<number, string> = {}
+          result.data.forEach((aff: { id: number; name: string }) => { 
+            mapped[aff.id] = aff.name
+          })
+          setAffiliationMap(mapped)
+        }
+      } catch (err) {
+        console.error('로그 페이지 소속 마스터 로드 에러:', err)
+      }
+    }
+    void fetchAffiliationMaster()
+  }, [])
+
+  // 동적 소속 포맷팅 함수 정의
+  const formatAffiliation = useCallback((id: number | null | undefined) => { 
+    if (!id) return '-' 
+    return affiliationMap[id] ?? `소속 ID: ${id}` 
+  }, [affiliationMap])
+
   const fetchLogs = useCallback(async () => {
     setLoading(true)
     setError('')
@@ -255,25 +266,16 @@ export default function AdminAttendanceLogsPage() {
         </p>
       </div>
 
-      {/* [추가 요구사항] 소속 필터링 버튼 목록 그룹 UI */}
-      <section style={{ marginBottom: '20px' }}>
-        <div style={{ fontWeight: 800, marginBottom: '10px', fontSize: '15px' }}>소속별 필터</div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => setSelectedAffiliation('')}
-            style={selectedAffiliation === '' ? activeAffiliationBtnStyle : affiliationBtnStyle}
-          >
-            전체
-          </button>
-          {AFFILIATIONS.map((aff) => (
-            <button
-              key={aff.id}
-              onClick={() => setSelectedAffiliation(String(aff.id))}
-              style={selectedAffiliation === String(aff.id) ? activeAffiliationBtnStyle : affiliationBtnStyle}
-            >
-              {aff.name}
-            </button>
-          ))}
+      {/* [수정 완수] 하드코딩 버튼 그룹을 공용 컴포넌트 select 박스로 교체 */}
+      <section style={{ marginBottom: '20px' }}> 
+        <div style={{ fontWeight: 800, marginBottom: '10px', fontSize: '15px' }}>소속별 필터</div> 
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}> 
+          <AffiliationSelect 
+            value={selectedAffiliation}
+            onChange={setSelectedAffiliation}
+            showAllOption={true}
+            allOptionLabel="전체 소속"
+          />
         </div>
       </section>
 
