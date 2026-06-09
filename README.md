@@ -7,20 +7,20 @@ Vercel + supabase + upstash 사용
 기능
 
 ---
-추가된 기능
-1. 
-affiliations 테이블
+추가된 기능<br>
+1. <br>
+affiliations 테이블<br>
 
-아카데미, 영성 수련, 모심수련, 효진정, 성화영성, 3일 공명기도 소속 확장
+아카데미, 영성 수련, 모심수련, 효진정, 성화영성, 3일 공명기도 소속 확장<br>
 
-2. 출석 로그, 월별 출석 조회 소속별로 필터링 
+2. 출석 로그, 월별 출석 조회 소속별로 필터링 <br>
 
-공용 컴포넌트 사용
-components\common\affiliation-select.tsx
+공용 컴포넌트 사용<br>
+components\common\affiliation-select.tsx<br>
 
-3. 아카데미 포인트 기능 추가
+3. 아카데미 포인트 기능 추가<br>
 
-fn_sync_attendance_to_points 함수 트리거
+fn_sync_attendance_to_points 함수 트리거<br>
 
 [방안 A: 파이썬 키오스크] ───>  NFC 카드 태그  ───┐<br>
 [방안 B: Next.js 웹 앱]   ───>  QR 코드 스캔   ──<br>
@@ -29,7 +29,7 @@ fn_sync_attendance_to_points 함수 트리거
 ┼─> [public.attendance] ──> [포인트 통합 트리거](데이터 변동)(자동 정산)<br>
 
 ---
-추가할 기능
+추가할 기능<br>
 
-1. 도서 대출 시스템 연동
-2. 수련 현장 접수기능 별도 구현
+1. 도서 대출 시스템 연동<br>
+2. 수련 현장 접수기능 별도 구현<br>
