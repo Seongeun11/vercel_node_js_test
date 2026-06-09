@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import AdminHeader from '@/components/admin/AdminHeader'
+// 1. ✨ 공용 소속 셀렉트 컴포넌트 임포트
+import AffiliationSelect from '@/components/common/affiliation-select'
 
 type EventItem = {
   id: string
@@ -38,19 +40,40 @@ export default function AttendanceExportPage() {
 
   const [events, setEvents] = useState<EventItem[]>([])
   const [eventIds, setEventIds] = useState<string[]>([])
+  // 2. ✨ 소속 필터 ID 상태 추가 (기본값: 전체 보기 "")
+  const [selectedAffiliationId, setSelectedAffiliationId] = useState<string>('')
+
   const [dateFrom, setDateFrom] = useState(getFirstDayOfMonth(today))
   const [dateTo, setDateTo] = useState(today)
-  const [loading, setLoading] = useState(true)
+  // ✨ 상태 분리
+  const [pageLoading, setPageLoading] = useState(true)       // 최초 페이지 진입 로딩 [cite: 37]
+  const [eventsLoading, setEventsLoading] = useState(false)   // 소속 변경 시 이벤트 목록 전용 로딩
+
   const [errorMessage, setErrorMessage] = useState('')
   const [downloading, setDownloading] = useState(false)
 
+  // 3. ✨ 소속 변경 핸들러 (선택 행사 초기화 포함)
+  function handleAffiliationChange(affiliationId: string) {
+    setSelectedAffiliationId(affiliationId)
+    setEventIds([]) // 소속 변경 시 기존 선택 값 초기화하여 논리 오류 방지
+  }
+
+  // 4. ✨ 백엔드 API 조건부 호출 연동
   useEffect(() => {
     async function fetchevent() {
       try {
-        setLoading(true)
+        // ✨ 최초 로딩이 아닐 때만(소속 변경 시) 목록 로딩 활성화
+        if (!pageLoading) setEventsLoading(true)
         setErrorMessage('')
+        
 
-        const response = await fetch('/api/events/list', {
+        // 💡 백엔드 규격에 맞춰 쿼리 파라미터에 affiliation_id 조립
+        const params = new URLSearchParams()
+        if (selectedAffiliationId) {
+          params.set('affiliation_id', selectedAffiliationId)
+        }
+
+        const response = await fetch(`/api/events/list?${params.toString()}`, {
           method: 'GET',
           credentials: 'include',
           cache: 'no-store',
@@ -66,17 +89,18 @@ export default function AttendanceExportPage() {
 
         const nextevent = result.items ?? []
         setEvents(nextevent)
-        setEventIds([]) 
       } catch (error) {
         console.error('[attendance/export] events fetch error:', error)
         setErrorMessage('행사 목록 조회 중 오류가 발생했습니다.')
       } finally {
-        setLoading(false)
+        // ✨ 무조건 둘 다 false로 안전하게 닫아줌
+        setPageLoading(false)
+        setEventsLoading(false)
       }
     }
 
     void fetchevent()
-  }, [])
+  }, [selectedAffiliationId]) // ✨ 의존성 배열에 소속 ID 추가 (소속 변경 시 자동 Re-fetch)
 
   function handleSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const selectedOptions = Array.from(e.target.selectedOptions).map(
@@ -84,6 +108,7 @@ export default function AttendanceExportPage() {
     )
     setEventIds(selectedOptions)
   }
+  
 
   async function handleDownloadExcel() {
     setErrorMessage('')
@@ -157,8 +182,9 @@ export default function AttendanceExportPage() {
     }
   }
 
-  if (loading) {
-    return <div style={{ padding: '24px' }}>로딩중...</div>
+  // ✨ 최초 진입 시에만 전체 화면 로딩을 띄움
+  if (pageLoading) {
+    return <div style={{ padding: '24px' }}>로딩중...</div> 
   }
 
   return (
@@ -177,14 +203,29 @@ export default function AttendanceExportPage() {
         }}
       >
         <div style={{ display: 'grid', gap: '16px' }}>
+          {/* 5. ✨ JSX 내에 소속 필터 UI 컴포넌트 배치 */}
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>
+              소속 필터
+            </label>
+            <AffiliationSelect
+              value={selectedAffiliationId}
+              onChange={handleAffiliationChange}
+              showAllOption={true}
+              allOptionLabel="전체 보기 (소속 전체)"
+            />
+          </div>
           <div>
             <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>
               행사 선택 (다중 선택: Ctrl 또는 Cmd 키를 누른 채 클릭)
+              {/* ✨ 목록 로딩 중일 때 작게 표시해주는 UX 가이드 */}
+              {eventsLoading && <span style={{ color: '#2563eb', marginLeft: '8px', fontSize: '13px' }}>🔄 업데이트 중...</span>}
             </label>
             <select
               multiple
               value={eventIds}
               onChange={handleSelectChange}
+              disabled={eventsLoading} // ✨ 로딩 중에는 클릭 방지하여 오작동 차단
               style={{
                 width: '100%',
                 padding: '10px',
