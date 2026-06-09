@@ -376,7 +376,7 @@ export function OccurrenceCard({ item, affiliations,onQrCountChange }: Occurrenc
             반복 요일: {formatRecurrenceDays(item.events?.recurrence_days, item.events?.recurrence_type)}
           </div>
           <div style={{ color: '#666', marginTop: 4 }}>
-            특별 행사: {item.events?.is_special_event ? '예' : '아니오'} / 지각 기준: {item.events?.late_threshold_min ?? 5}분
+            아카데미 포인트 지급: {item.events?.is_special_event ? '예' : '아니오'} / 지각 기준: {item.events?.late_threshold_min ?? 5}분
           </div>
         </div>
 

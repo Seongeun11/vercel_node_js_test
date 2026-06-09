@@ -147,7 +147,7 @@ function EventForm({
             onChange={(e) => onChange('is_special_event', e.target.checked)}
             disabled={submitting}
           />
-          <span>특별 행사</span>
+          <span>아카데미 포인트 지급</span>
         </label>
 
         <label style={checkboxLabelStyle}>
