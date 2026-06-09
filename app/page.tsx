@@ -8,6 +8,7 @@ type User = {
   full_name: string
   student_id: string
   role: 'admin' | 'captain' | 'trainee'
+  current_points: number // [추가] 포인트 표시를 위한 필드 정의
 } | null
 
 export default async function HomePage() {
@@ -46,7 +47,15 @@ export default async function HomePage() {
             <p><strong>이름:</strong> {user.full_name}</p>
             <p><strong>학번:</strong> {user.student_id}</p>
             <p><strong>권한:</strong> {user.role}</p>
-           {user.role === 'trainee' &&<p><strong>아카데미 포인트:</strong> {}</p>}
+           {/* [수정] 비어있던 공간에 안전하게 포인트를 출력하며 천단위 콤마 포맷팅 적용 */}
+            {user.role === 'trainee' && (
+              <p>
+                <strong>아카데미 포인트:</strong>{' '}
+                <span style={{ color: '#0070f3', fontWeight: 'bold' }}>
+                  {user.current_points.toLocaleString()}
+                </span> P
+              </p>
+            )}
           </div>
 
           <div

@@ -295,7 +295,47 @@ export default function CentralizedEventsQrClient() {
     }
   }
 
+// 💡 [완전 재작성] QR 삭제 핸들러 기능 보정 및 논리 완성본
+  const handleDeleteQR = useCallback(async (qrId: string,eventId: string) => {
+    const isConfirmed = window.confirm(
+      '이 QR 코드를 정말로 삭제하시겠습니까?\n삭제 후에는 수련생들이 이 QR로 출석할 수 없습니다.'
+    )
+    if (!isConfirmed) return
 
+    try {
+      setError('')
+      setSuccess('')
+
+      // 백엔드 엔드포인트 규격과 일치시킴
+      const res = await fetch('/api/qr/delete', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: qrId }),
+      });
+
+      const result = await res.json()
+
+      if (!res.ok) {
+        throw new Error(result.error || 'QR 코드를 삭제하는 도중 오류가 발생했습니다.')
+      }
+
+      alert(result.message || 'QR 코드가 성공적으로 삭제되었습니다.')
+
+      // 🎯 핵심 교정: 객체 맵 구조(Record)의 불변성을 지키며 화면에서 실시간 즉시 삭제
+      setActiveQrTokens((prevMap) => {
+        const nextMap = { ...prevMap }
+        delete nextMap[eventId] // 해당 이벤트 아이디 키를 맵에서 제거
+        return nextMap
+      })
+
+    } catch (error: any) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[HANDLE_DELETE_QR_ERROR]', error)
+      }
+      alert(`삭제 실패: ${error.message}`)
+    }
+  }, [])
 
  
 
@@ -407,10 +447,20 @@ export default function CentralizedEventsQrClient() {
                           </div>
                         )}
                       </td>
-                      {/* 
+                      
                       <td style={styles.tdStyle}>
-                        <button onClick={() => handleEditSetup(event)} style={{ ...styles.secondaryButtonStyle, padding: '6px 10px', fontSize: '12px' }}>수정</button>
-                      </td>*/}
+                      {/* 💡 [수정 연동] 정상 선언된 attachedToken 검증 후 고유 ID 및 이벤트 ID 전달 */}
+                      {attachedToken ? (
+                        <button 
+                          onClick={() => handleDeleteQR(attachedToken.id, event.id)} 
+                          style={styles.dangerButtonStyle}
+                        >
+                          QR 삭제
+                        </button>
+                      ) : (
+                        <span style={{ color: '#94a3b8', fontSize: '13px' }}>삭제 대상 없음</span>
+                      )}
+                    </td>
                     </tr>
                   )
                 })}
