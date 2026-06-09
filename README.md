@@ -22,10 +22,8 @@ components\common\affiliation-select.tsx
 
 fn_sync_attendance_to_points 함수 트리거
 
-[방안 A: 파이썬 키오스크] ───>  NFC 카드 태그  ───┐
-                                              │
-[방안 B: Next.js 웹 앱]   ───>  QR 코드 스캔   ───┼─> [public.attendance] ──> [포인트 통합 트리거]
-                                              │        (데이터 변동)               (자동 정산)
+[방안 A: 파이썬 키오스크] ───>  NFC 카드 태그  ───┐                                             │
+[방안 B: Next.js 웹 앱]   ───>  QR 코드 스캔   ───┼─> [public.attendance] ──> [포인트 통합 트리거](데이터 변동)(자동 정산)
 [방안 C: 수련생 대시보드] ───>  어드민 수동 정정 ──┘
 
 ---
