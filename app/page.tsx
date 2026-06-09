@@ -13,7 +13,12 @@ type User = {
 
 export default async function HomePage() {
   const user: User = await getCurrentUser()
-
+  // 포인트 사용 버튼을 노출할 허용 계정 이름 정의
+  //const ALLOWED_STORE_NAMES = ['천심 굿즈', '천심 카페'];
+  
+  // 현재 로그인한 유저의 이름이 허용 목록에 있는지 검사
+  const isStoreAccount_goods = user && '천심굿즈'.includes(user.full_name);
+   const isStoreAccount_cafe = user && '천심카페'.includes(user.full_name);
   return (
     <main style={{ maxWidth: '860px', margin: '0 auto', padding: '24px' }}>
       <h1 style={{ marginBottom: '12px' }}>천심 영성 아카데미 출석 체크</h1>
@@ -80,16 +85,37 @@ export default async function HomePage() {
               <Link href="/attendance/my">
                 <button type="button">내 출석 조회</button>
               </Link>
-              {/*
-              <Link href="/attendance/requests">
-              <button type="button">내 출석 변경 요청</button>
+              
+              <Link href="/attendance/point-requests">
+              <button type="button">아카데미 포인트 사용</button>
               </Link>
-              */}
+              
               <Link href="/account/password">
               <button type="button">비밀번호 변경</button>
               </Link>
               </>
               )}
+
+
+              {user.role === 'captain' && isStoreAccount_goods &&(
+                
+                <>
+                  
+                  <Link href="/admin/point-requests">
+                    <button type="button">천심 굿즈 포인트 사용 페이지</button>
+                  </Link>
+                  </>
+              )}
+              {user.role === 'captain' && isStoreAccount_cafe &&(
+                
+                <>
+                  
+                  <Link href="/admin/point-requests">
+                    <button type="button">천심 카페 포인트 사용 페이지</button>
+                  </Link>
+                  </>
+              )}
+
 
               {user.role === 'admin' && (
                 

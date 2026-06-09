@@ -1,10 +1,10 @@
-// app/attendance/requests/page.tsx
+// app/admin/requests/page.tsx
 import { redirect } from 'next/navigation'
 import { requireRole } from '@/lib/serverAuth'
-import MyAttendanceRequestsClient from './myAttendanceRequestsClient'
+import RequestsClient from './point-requests-client'
 
-export default async function AttendanceRequestsPage() {
-  const authResult = await requireRole(['trainee'])
+export default async function RequestsPage() {
+  const authResult = await requireRole(['captain'])
 
   if (!authResult.ok) {
     if (authResult.status === 401) {
@@ -18,5 +18,5 @@ export default async function AttendanceRequestsPage() {
     redirect('/')
   }
 
-  return <MyAttendanceRequestsClient />
+  return <RequestsClient />
 }
