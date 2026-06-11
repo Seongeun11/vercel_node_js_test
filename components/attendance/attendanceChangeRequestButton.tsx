@@ -98,7 +98,7 @@ export default function AttendanceChangeRequestButton({
 
   return (
     <div style={{ marginTop: '10px' }}>
-      <button
+      {/*<button
         type="button"
         onClick={() => {
           setOpen((prev) => !prev)
@@ -107,7 +107,7 @@ export default function AttendanceChangeRequestButton({
         }}
       >
         출석 변경 요청
-      </button>
+      </button>*/}
 
       {message && (
         <div

@@ -161,8 +161,8 @@ export default function MyAttendanceClient() {
       >
         <div>
           <h1 style={{ margin: 0 }}>내 출석 조회 (최근 10건)</h1>
-          <p style={{ marginTop: '8px', color: '#555' }}>
-            본인의 최근 출석 기록 10건을 확인하고 필요한 경우 변경 요청을 생성할 수 있습니다.
+          <p style={{ marginTop: '8px', color: '#002fff' }}>
+            본인의 최근 출석 기록 10건을 확인합니다. 지각 정정요청은 아카데미 팀에게 문의하세요.
           </p>
           
           <div style={{ display: 'flex', gap: '22px', flexWrap: 'wrap' }}>

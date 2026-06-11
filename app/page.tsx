@@ -58,8 +58,11 @@ export default async function HomePage() {
                 <strong>아카데미 포인트:</strong>{' '}
                 <span style={{ color: '#0070f3', fontWeight: 'bold' }}>
                   {user.current_points.toLocaleString()}
-                </span> P
+                </span> P<br></br><br></br> 
+                <strong>아카데미 포인트는 수요워크샵, 천심원 집중기도회 출석 및 과제 기간내 제출시 적립됩니다.</strong> <br></br> 
+                <strong>출석시에만 적립되며 지각 및 결석은 적립되지 않습니다.</strong>
               </p>
+              
             )}
           </div>
 
