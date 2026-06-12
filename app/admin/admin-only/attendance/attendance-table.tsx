@@ -5,9 +5,7 @@ import { AttendanceManageItem, AttendanceStatus } from './types/attendance'
 
 interface AttendanceTableProps {
   items: AttendanceManageItem[]
-  submittingId: string | null
   onOpenEditModal: (item: AttendanceManageItem) => void
-  onQuickStatusChange: (id: string, status: AttendanceStatus) => Promise<void>
 }
 
 const styles = {
@@ -32,8 +30,12 @@ const styles = {
   },
   actionBtn: { padding: '6px 12px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }
 }
-
-export default function AttendanceTable({ items, submittingId, onOpenEditModal, onQuickStatusChange }: AttendanceTableProps) {
+const statusLabel: Record<AttendanceStatus, string> = {
+  present: '출석',
+  late: '지각',
+  absent: '결석',
+}
+export default function AttendanceTable({ items, onOpenEditModal }: AttendanceTableProps) {
   return (
     <div style={{ overflowX: 'auto', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
       <table style={styles.table}>
@@ -65,20 +67,26 @@ export default function AttendanceTable({ items, submittingId, onOpenEditModal, 
               <td style={styles.td}>
                 <span style={styles.badge(item.status)}>{item.status}</span>
               </td>
-              <td style={{ ...styles.td, display: 'flex', gap: '8px', alignItems: 'center' }}>
-                {/* 단발성 변경 시 부모 관제 함수 허브로 다이렉트 이식 처리 */}
-                <select
-                  value={item.status}
-                  disabled={submittingId === item.id}
-                  onChange={(e) => void onQuickStatusChange(item.id, e.target.value as AttendanceStatus)}
-                  style={styles.selectInput}
-                >
-                  <option value="present">출석(Present)</option>
-                  <option value="late">지각(Late)</option>
-                  <option value="absent">결석(Absent)</option>
-                </select>
+              <td
+  style={{
+    ...styles.td,
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+  }}
+>
+  <span
+    style={{
+      fontSize: '13px',
+      fontWeight: 600,
+      color: '#64748b',
+      minWidth: '60px',
+    }}
+  >
+    {statusLabel[item.status]}
+  </span>
                 <button style={styles.actionBtn} onClick={() => onOpenEditModal(item)}>
-                  정밀수정
+                  출결 수정
                 </button>
               </td>
             </tr>

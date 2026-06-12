@@ -98,12 +98,12 @@ export default async function AdminLayout({ children }: Props) {
             {/* 고정되어 있던 주소 문자열을 현재 프로그램 타입(${currentProgram})에 맞춰 동적으로 변환합니다! */}
             <Link href={`/admin/admin-only/logs`} style={navLinkStyle}>
               출석 로그
-
             </Link>
+            {/* 
             {(user.role === 'captain' || user.role === 'admin') && (
               <Link href="/admin/requests"style={navLinkStyle}>
                 출석 변경 요청 처리</Link>
-            )}
+            )}*/}
 
             {user.role === 'admin' && (
               <>

@@ -131,13 +131,12 @@ export default function AttendanceManageClient({ initialDate }: AttendanceClient
       ) : (
         <AttendanceTable 
           items={filteredAttendances}
-          submittingId={submittingId}
+          
           onOpenEditModal={(item) => {
             setActiveItem(item)
             setIsModalOpen(true)
           }}
-          // 테이블 직렬 변경 연동 바인딩
-          onQuickStatusChange={(id, status) => handleUpdateAttendance(id, status, new Date().toISOString(), '관리자 대시보드 빠른 수정')}
+          
         />
       )}
 
