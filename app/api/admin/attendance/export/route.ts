@@ -11,13 +11,14 @@ interface Profile {
   full_name: string | null
   cohort_no: number | null
   enrollment_status: 'active' | 'completed'
+  affiliation_id: string | null
 }
 
 interface AttendanceRow {
   attendance_date: string | null
   status: AttendanceStatus
   user_id: string
-  event_id: string // 논리오류 보완: 복합 매핑을 위해 event_id 필드 추가 필수
+  event_id: string
 }
 
 function formatStatus(status: AttendanceStatus): string {
@@ -48,17 +49,16 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   const { searchParams } = request.nextUrl
-  
-  //다중 쿼리 파라미터를 유실 없이 배열 전체로 수집합니다.
   const eventIds = searchParams.getAll('event_id')
   const dateFrom = searchParams.get('date_from')
   const dateTo = searchParams.get('date_to')
+  const affiliationId = searchParams.get('affiliation_id')
 
   if (!eventIds || eventIds.length === 0) {
     return Response.json({ error: '행사를 최소 하나 이상 선택해주세요.' }, { status: 400 })
   }
 
-  // 1. 선택된 모든 행사 정보(ID, 이름) 한 번에 가져오기
+  // 1. 행사 정보 조회
   const { data: eventList, error: eventError } = await supabaseAdmin
     .from('events')
     .select('id, name')
@@ -68,23 +68,27 @@ export async function GET(request: NextRequest): Promise<Response> {
     return Response.json({ error: '선택한 행사 정보를 찾을 수 없습니다.' }, { status: 404 })
   }
 
-  // 빠른 이름 매핑 조회를 위한 Event Map 생성 (Key: event_id, Value: event_name)
   const eventMap = new Map<string, string>()
   eventList.forEach(e => eventMap.set(e.id, e.name))
 
-  // 2. active 상태의 trainee 등급 유저만 조회
-  const { data: trainees, error: userError } = await supabaseAdmin
+  // 2. 소속 필터가 걸린 active 상태의 trainee 유저 조회
+  let userQuery = supabaseAdmin
     .from('profiles')
-    .select('id, student_id, full_name, cohort_no, enrollment_status, roles!inner(name)')
+    .select('id, student_id, full_name, cohort_no, enrollment_status, affiliation_id, roles!inner(name)')
     .eq('roles.name', 'trainee')
     .eq('enrollment_status', 'active')
+
+  if (affiliationId) {
+    userQuery = userQuery.eq('affiliation_id', affiliationId)
+  }
+
+  const { data: trainees, error: userError } = await userQuery
 
   if (userError || !trainees) {
     return Response.json({ error: '교육생 정보를 불러오지 못했습니다.' }, { status: 500 })
   }
 
-  // 3. 해당 복수 행사들의 출석 데이터 통합 조회
-  // .eq에서 복수 바인딩이 가능한 .in 조건절로 교체
+  // 3. 복수 행사들의 출석 데이터 통합 조회
   let attendanceQuery = supabaseAdmin
     .from('attendance')
     .select('user_id, event_id, attendance_date, status')
@@ -95,28 +99,26 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   const { data: attendanceData } = await attendanceQuery
 
-  // 4. 데이터 가공 단계
-  // 유니크한 조합 컬럼 헤더 생성을 위한 셋 구조 설정
+  // 4. 데이터 구조화 및 매핑 가공
   const columnsSet = new Set<string>()
   const userMap = new Map<string, {
     student_id: string
     full_name: string
     cohort_no: number | null
-    // 복합 키 구조 대응 매핑 컨테이너 (Key: "날짜 (행사명)", Value: 출석상태)
     statuses: Record<string, string>
+    attendedCount: number // 순수 출석 + 지각 합산 카운트
   }>()
 
-  // 모든 trainee 기본 셋팅
   for (const t of trainees) {
     userMap.set(t.id, {
       student_id: t.student_id || '',
       full_name: t.full_name || '',
       cohort_no: t.cohort_no,
       statuses: {},
+      attendedCount: 0
     })
   }
 
-  // 복합 다중 데이터 매핑 연산 진행
   if (attendanceData) {
     for (const row of attendanceData) {
       if (!row.attendance_date || !row.event_id) continue
@@ -124,30 +126,41 @@ export async function GET(request: NextRequest): Promise<Response> {
       if (userMap.has(row.user_id)) {
         const eventName = eventMap.get(row.event_id) || '알 수 없는 행사'
         const formattedDate = formatExcelDate(row.attendance_date)
-        
-        //  열 헤더 명칭을 "날짜 (이벤트명)" 구조로 동적 빌드
         const columnHeader = `${formattedDate} (${eventName})`
         
         columnsSet.add(columnHeader)
         userMap.get(row.user_id)!.statuses[columnHeader] = formatStatus(row.status as AttendanceStatus)
+
+        // ✨ 논리 정정: 출석(present)이거나 지각(late)인 경우 모두 참석 일수로 인정
+        if (row.status === 'present' || row.status === 'late') {
+          userMap.get(row.user_id)!.attendedCount += 1
+        }
       }
     }
   }
 
-  // 날짜 역순 및 이벤트명 기준으로 열(Column) 정렬 규칙 구성
+  // 날짜 역순 및 이벤트명 기준 정렬
   const sortedColumns = Array.from(columnsSet).sort((a, b) => b.localeCompare(a))
 
-  // 5. 최종 엑셀 행 배열 빌드
+  // 5. 최종 엑셀 Row 딕셔너리 빌드
   const excelRows = Array.from(userMap.values())
     .sort((a, b) => (a.student_id || '').localeCompare(b.student_id || ''))
     .map((user) => {
+      // ✨ 논리 정정: 실제 화면에 표시되는 총 컬럼수(분모)를 기준으로 출석률 연산 수행
+      const totalColumns = sortedColumns.length
+      const attendanceRate = totalColumns > 0
+        ? Math.round((user.attendedCount / totalColumns) * 100)
+        : 0
+
+      // 엑셀 가로 열 순서 고정 설정
       const row: Record<string, string> = {
         출석번호: user.student_id,
         이름: user.full_name,
+        
         기수: user.cohort_no != null ? String(user.cohort_no) : '',
+        '평균 출석률': `${attendanceRate}%`,
       }
 
-      // 동적으로 생성된 모든 "날짜 (이벤트명)" 컬럼을 순회하며 데이터 배치
       for (const column of sortedColumns) {
         row[column] = user.statuses[column] || '-'
       }
@@ -155,20 +168,19 @@ export async function GET(request: NextRequest): Promise<Response> {
       return row
     })
 
-  // 6. 엑셀 바이너리 데이터 인코딩 및 출력 반환
+  // 6. SheetJS 파일 변환 및 전송
   const worksheet = XLSX.utils.json_to_sheet(excelRows)
   
-  // 고정폭(출석번호, 이름, 기수) 지정을 포함하여 동적 날짜 컬럼 폭 자동 최적화 조율
   worksheet['!cols'] = [
-    { wch: 14 }, 
-    { wch: 12 }, 
-    { wch: 8 }, 
-    ...sortedColumns.map(() => ({ wch: 26 })) // 이벤트명이 들어가므로 넓이를 26으로 상향 조정
+    { wch: 14 }, // 출석번호
+    { wch: 12 }, // 이름
+    
+    { wch: 8 },  // 기수
+    { wch: 14 }, // 평균 출석률
+    ...sortedColumns.map(() => ({ wch: 26 }))
   ]
 
   const workbook = XLSX.utils.book_new()
-  
-  // 대표 타이틀 텍스트 설정
   const representativeName = eventList.length > 1 
     ? `${eventList[0].name}_외_${eventList.length - 1}건`
     : eventList[0].name
