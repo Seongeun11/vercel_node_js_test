@@ -1,3 +1,4 @@
+//app\admin\admin-only\users\components\user-table-list.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -36,11 +37,14 @@ export default function UserTableList({
   onSetMessage,
   onSetErrorMessage,
 }: Props) {
-  const [isUserListOpen, setIsUserListOpen] = useState(false)
+  const [setIsUserListOpen] = useState(false)
   const [selectedPasswordUser, setSelectedPasswordUser] = useState<AdminUser | null>(null)
   
   // 🔍 공용 컴포넌트가 선택하는 소속 고유 ID 문자열 저장 ("1", "2" 등)
   const [filterAffiliationId, setFilterAffiliationId] = useState<string>('')
+  // 🎓 2. 재학/수료 상태 필터 추가 (기본값: 'active'로 설정하여 재학생만 우선 노출)
+  // 'all' | 'active' | 'completed'
+  const [filterEnrollment, setFilterEnrollment] = useState<string>('active')
 
   // 🗺️ 고유 ID를 한글 소속 명칭으로 변환하기 위한 사전 매핑 정보 사전 객체
   const [affiliationMap, setAffiliationMap] = useState<Record<string, string>>({})
@@ -63,41 +67,43 @@ export default function UserTableList({
       }
     }
     void fetchAffiliationMeta()
-  }, [])
-
-  // 리스트 토글 및 데이터 페칭 핸들러
-  const handleToggleList = () => {
-    const nextState = !isUserListOpen
-    setIsUserListOpen(nextState)
-
-    if (nextState && users.length === 0) {
+    // 💡 목록이 상시 노출되므로, 진입 시 데이터가 없다면 자동으로 불러옵니다.
+    if (users.length === 0) {
       onFetchUsers()
     }
+  }, [])
 
-    if (!nextState) {
-      setSelectedPasswordUser(null)
-      setFilterAffiliationId('') // 테이블 접힐 때 필터 초기화
-    }
-  }
 
-  // 🔥 [완벽 교정 구역] 번호형 ID와 문자열 소속 한글 명칭을 유기적으로 이어주는 크로스 매칭 필터링
+
+    
+
+    
+
+  // 🔥 [복합 교정 구역] 소속 필터링과 재학/수료 상태 필터링을 체이닝 방식으로 결합
   const filteredUsers = users.filter((user) => {
-    // 1. 소속 필터가 비어있거나 전체 보기 상태이면 검사 없이 무조건 노출
-    if (!filterAffiliationId) return true
+    // ---- [파트 A: 소속 필터링] ----
+    if (filterAffiliationId) {
+      const targetAffiliationName = affiliationMap[filterAffiliationId]
+      if (!targetAffiliationName) return false
 
-    // 2. 선택된 고유 ID에 대응하는 데이터베이스상의 진짜 한글 소속 명칭 탐색
-    const targetAffiliationName = affiliationMap[filterAffiliationId]
+      const userAffiliation = typeof (user as any).affiliation === 'object'
+        ? (user as any).affiliation?.name
+        : user.affiliation;
 
-    // 3. 만약 소속 맵 로딩이 미처 완료되지 않았거나 대응값을 찾지 못했다면 일단 비노출 차단
-    if (!targetAffiliationName) return false
+      if (String(userAffiliation).trim() !== targetAffiliationName.trim()) {
+        return false
+      }
+    }
 
-    // 4. 유저 데이터 객체 내부의 실제 값 탐색 및 동치성 점검
-    const userAffiliation = typeof (user as any).affiliation === 'object'
-      ? (user as any).affiliation?.name // 혹시 모를 객체형 구조 대비 방어선
-      : user.affiliation;              // 현재의 순수 텍스트 포맷 ("아카데미")
+    // ---- [파트 B: 재학/수료 필터링 추가] ----
+    if (filterEnrollment !== 'all') {
+      // user.enrollment_status 값이 'active' 혹은 'completed' 인지 매칭 점검
+      if (user.enrollment_status !== filterEnrollment) {
+        return false
+      }
+    }
 
-    // 최종 비교: "아카데미" === "아카데미" 매칭 성공 보장
-    return String(userAffiliation).trim() === targetAffiliationName.trim()
+    return true
   })
 
   return (
@@ -106,8 +112,30 @@ export default function UserTableList({
         <h3 style={{ margin: 0 }}>계정 목록</h3>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+
+          {/* 🎓 재학/수료 토글 필터 셀렉터 추가 배치 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '14px', color: '#475569', fontWeight: 500 }}>상태 필터:</span>
+            <select
+              value={filterEnrollment}
+              onChange={(e) => setFilterEnrollment(e.target.value)}
+              style={{
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: '1px solid #cbd5e1',
+                fontSize: '14px',
+                backgroundColor: '#fff',
+                outline: 'none'
+              }}
+            >
+              <option value="active">재학생만 보기</option>
+              <option value="completed">수료생만 보기</option>
+              <option value="all">전체 상태 보기</option>
+            </select>
+          </div>
+          
           {/* 🔄 공용 소속 셀렉트 박스 컴포넌트 연동 배치 구역 */}
-          {isUserListOpen && (
+          {
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ fontSize: '14px', color: '#475569', fontWeight: 500 }}>소속 필터:</span>
               <AffiliationSelect
@@ -117,12 +145,10 @@ export default function UserTableList({
                 allOptionLabel="전체 보기"
               />
             </div>
-          )}
+          }
 
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button type="button" onClick={handleToggleList}>
-              {isUserListOpen ? '접기' : '펼치기'}
-            </button>
+            
 
             <button type="button" onClick={onFetchUsers} disabled={usersLoading}>
               {usersLoading ? '불러오는 중...' : '새로고침'}
@@ -131,7 +157,7 @@ export default function UserTableList({
         </div>
       </div>
 
-      {isUserListOpen && (
+      {
         <>
           <div style={{ overflowX: 'auto', marginTop: '16px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
@@ -210,7 +236,7 @@ export default function UserTableList({
             />
           )}
         </>
-      )}
+      }
     </div>
   )
 }

@@ -133,16 +133,17 @@ export default function UserCreateForm({ onSuccess, onSetMessage, onSetErrorMess
             ))}
           </select>
         </div>
-        {/* 비밀번호 */}
-        <div>
-          <label style={{ display: 'block', marginBottom: '6px' }}>초기 비밀번호</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="초기 비밀번호 입력" style={inputStyle} />
-        </div>
         {/* 기수 */}
         <div>
           <label style={{ display: 'block', marginBottom: '6px' }}>기수</label>
           <input type="number" min="1" value={cohortNo} onChange={(e) => setCohortNo(e.target.value)} placeholder="예: 10" style={inputStyle} />
         </div>
+        {/* 비밀번호 */}
+        <div>
+          <label style={{ display: 'block', marginBottom: '6px' }}>초기 비밀번호</label>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="초기 비밀번호 입력" style={inputStyle} />
+        </div>
+        
 
         <button type="button" onClick={handleCreateUser} disabled={loading}>
           {loading ? '생성 중...' : '회원 생성'}

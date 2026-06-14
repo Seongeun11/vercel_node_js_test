@@ -125,6 +125,9 @@ export default async function AdminLayout({ children }: Props) {
                 <Link href={`/admin/admin-only/users`} style={navLinkStyle}>
                   회원 관리
                 </Link>
+                <Link href={`/admin/admin-only/points`} style={navLinkStyle}>
+                  포인트 관리
+                </Link>
                 <Link href={`/admin/admin-only/export`} style={navLinkStyle}>
                   엑셀로 내보내기
                 </Link>

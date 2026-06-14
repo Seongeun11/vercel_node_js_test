@@ -19,6 +19,7 @@ type ProfileRow = {
   cohort_no: number | null
   enrollment_status: EnrollmentStatus | null
   affiliation: string 
+  current_points: number // 🪙 타입 명세서에 포인트 필드 추가
   created_at: string
   updated_at: string
 }
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
         student_id,    
         cohort_no,
         enrollment_status,
+        current_points,
         created_at,
         updated_at,
         roles ( name ),
@@ -76,7 +78,9 @@ export async function POST(request: NextRequest) {
       // 가공 필드
       role: (user.roles?.name || 'trainee') as UserRole,
       affiliation: user.affiliations?.name || '미지정',
+      affiliation_id: user.affiliation_id, // 💡 [추가] 이 줄을 추가하여 프론트 필터 락을 해결합니다.
       enrollment_status: normalizeEnrollmentStatus(user.enrollment_status),
+      current_points: user.current_points !== undefined && user.current_points !== null ? user.current_points : 0,
     }))
 
     return jsonNoStore({ users }, { status: 200 })

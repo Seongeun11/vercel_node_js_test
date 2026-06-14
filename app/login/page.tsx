@@ -6,7 +6,7 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <div style={{ padding: 20 }}>
-          <h2>출석 로그인</h2>
+          <h2>천심 영성 아카데미<br></br> 출석 로그인</h2>
           <p>로딩 중...</p>
         </div>
       }

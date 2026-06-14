@@ -1,3 +1,4 @@
+//app\api\account\change-password\route.ts
 import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabase/admin'

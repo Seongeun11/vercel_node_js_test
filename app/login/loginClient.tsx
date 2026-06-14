@@ -1,5 +1,6 @@
-'use client'
 //app\login\loginClient.tsx
+'use client'
+
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { KeyboardEvent } from 'react'
@@ -121,7 +122,7 @@ export default function LoginClient() {
       maxWidth: '300px'         // 로그인 폼이 너무 넓어지지 않도록 제한 (선택 사항)
     }}>
 
-      <h2 style={{ margin: '0 0 10px 0' }}>출석 로그인</h2>
+      <h2 style={{ margin: '0 0 10px 0' }}>천심 영성 아카데미<br></br> 출석 로그인</h2>
       {reason === 'password_changed' && (
         <div className="mb-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
           비밀번호가 변경되었습니다. 새 비밀번호로 다시 로그인해주세요.
@@ -177,6 +178,9 @@ export default function LoginClient() {
       >
         {loading ? '로그인 중...' : '로그인'}
       </button>
+
+      
+
 
       {errorMessage && (
         <p
