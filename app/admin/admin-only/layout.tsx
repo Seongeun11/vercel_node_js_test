@@ -95,10 +95,8 @@ export default async function AdminLayout({ children }: Props) {
           </h2>
 
           <nav style={{ display: 'grid', gap: '8px' }}>
-            {/* 고정되어 있던 주소 문자열을 현재 프로그램 타입(${currentProgram})에 맞춰 동적으로 변환합니다! */}
-            <Link href={`/admin/admin-only/logs`} style={navLinkStyle}>
-              출석 로그
-            </Link>
+           
+            
             {/* 
             {(user.role === 'captain' || user.role === 'admin') && (
               <Link href="/admin/requests"style={navLinkStyle}>
@@ -107,14 +105,17 @@ export default async function AdminLayout({ children }: Props) {
 
             {user.role === 'admin' && (
               <>
+                <Link href={`/admin/admin-only/logs`} style={navLinkStyle}>
+                  출석 로그
+                </Link>
+                <Link href={`/admin/admin-only/attendance`} style={navLinkStyle}>
+                  출석 조회 및 수정
+                </Link>
                 <Link href={`/admin/admin-only/attendance/monthly`} style={navLinkStyle}>
                   월별 출석 조회
                 </Link>
                 <Link href={`/admin/admin-only/attendance-today`} style={navLinkStyle}>
                   오늘 출석 운영
-                </Link>
-                <Link href={`/admin/admin-only/attendance`} style={navLinkStyle}>
-                  출석 조회 및 수정
                 </Link>
                 <Link href={`/admin/admin-only/qr`} style={navLinkStyle}>
                   QR 관리

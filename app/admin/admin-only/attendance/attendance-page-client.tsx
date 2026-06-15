@@ -1,4 +1,4 @@
-//app\admin\admin-only\attendance\attendance-page-client.tsx
+// app/admin/admin-only/attendance/attendance-page-client.tsx
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -8,7 +8,8 @@ import AdminHeader from '@/components/admin/AdminHeader'
 import AttendanceFilterBar from './attendance-filterbar'
 import AttendanceTable from './attendance-table'
 import AttendanceEditModal from './attendance-edit-modal'
-
+// 상단에 생성한 컴포넌트 import 유지
+import AttendanceAddForm from './attendance-add-form'
 import { AttendanceManageItem, AttendanceStatus } from './types/attendance'
 
 type AttendanceClientProps = {
@@ -29,81 +30,92 @@ export default function AttendanceManageClient({ initialDate }: AttendanceClient
   const [activeItem, setActiveItem] = useState<AttendanceManageItem | null>(null)
   const [submittingId, setSubmittingId] = useState<string | null>(null)
 
-  // 1. 데이터 로드 엔진
+  // 1. 데이터 로드 엔진 (단일 API 컴포넌트 부분 리프레시 기능 탑재)
   const loadAttendanceData = useCallback(async (dateStr: string) => {
-  try {
-    setLoading(true)
-    setError('')
-    
-    // 💡 원본 관리자 전용 엔드포인트 주소로 원복
-    const params = new URLSearchParams()
-    if (dateStr) {
-      params.set('date_from', dateStr)
-      params.set('date_to', dateStr)
-    }
+    try {
+      setLoading(true)
+      setError('')
+      
+      const params = new URLSearchParams()
+      if (dateStr) {
+        params.set('date_from', dateStr)
+        params.set('date_to', dateStr)
+      }
 
-    const res = await fetch(`/api/attendance/manage/list?${params.toString()}`, { 
-      method: 'GET', 
-      cache: 'no-store',
-      credentials: 'include' // 필요시 관리자 세션 쿠키 포함
-    })
-    const data = await res.json()
-    
-    if (res.ok && data.items) {
-      setAttendances(data.items)
-    } else {
-      throw new Error(data.error || '출석 명단을 가져오지 못했습니다.')
+      const res = await fetch(`/api/attendance/manage/list?${params.toString()}`, { 
+        method: 'GET', 
+        cache: 'no-store',
+        credentials: 'include'
+      })
+      const data = await res.json()
+      
+      if (res.ok && data.items) {
+        setAttendances(data.items)
+      } else {
+        throw new Error(data.error || '출석 명단을 가져오지 못했습니다.')
+      }
+    } catch (err: any) {
+      setError(err.message || '출석 데이터 서버 연동 중 오류 발생')
+    } finally {
+      setLoading(false)
     }
-  } catch (err: any) {
-    setError(err.message || '출석 데이터 서버 연동 중 오류 발생')
-  } finally {
-    setLoading(false)
-  }
-}, [])
+  }, [])
 
   useEffect(() => {
     void loadAttendanceData(currentDate)
   }, [currentDate, loadAttendanceData])
 
-  // 2. 통합 수정 실행부 (모달 및 테이블 공용 API 허브)
-  const handleUpdateAttendance = async (id: string, nextStatus: AttendanceStatus, checkTime: string, reason: string) => {
-  setSubmittingId(id)
-  try {
-    // 💡 원본 수정 API 스펙 주소 및 명세 일치화
-    const res = await fetch('/api/attendance/edit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        attendance_id: id,                              // id -> attendance_id
-        status: nextStatus, 
-        check_time: checkTime ? new Date(checkTime).toISOString() : null, // checkTime -> check_time + ISO 포맷팅
-        reason: reason.trim()
-      })
-    })
-    
-    const data = await res.json()
-    if (!res.ok || data.error) {
-      throw new Error(data.error || '인증 오류 혹은 수정 권한이 거부되었습니다.')
+  // 2. ✨ [신규 논리 추가] 수동 출석 입력 완료 시 부분 새로고침 핸들러
+  const handleAddFormSuccess = useCallback((addedDate: string) => {
+    // 관리자가 추가한 출석 날짜와 대시보드가 현재 바라보고 있는 필터 날짜가 일치할 때만 리스트 부분 로딩
+    if (currentDate === addedDate) {
+      void loadAttendanceData(currentDate)
+    } else {
+      // 다른 날짜에 소급 적용한 경우 필터가 틀어지지 않게 안내 후, 관리자가 원하면 이동할 수 있도록 처리
+      if (confirm(`성공적으로 저장되었습니다.\n추가된 날짜(${addedDate})의 출석부 화면으로 이동하시겠습니까?`)) {
+        router.push(`?date=${addedDate}`)
+      }
     }
-    
-    // 로컬 상태 업데이트 로직 유지
-    setAttendances(prev => prev.map(item => 
-      item.id === id 
-        ? { 
-            ...item, 
-            status: nextStatus, 
-            check_time: checkTime ? new Date(checkTime).toISOString() : item.check_time, 
-            updated_at: new Date().toISOString() 
-          } 
-        : item
-    ))
-  } catch (err: any) {
-    alert(err.message || '업데이트에 실패했습니다.')
-    throw err
-  } finally {
-    setSubmittingId(null)
+  }, [currentDate, loadAttendanceData, router])
+
+  // 3. 통합 수정 실행부 (모달 및 테이블 공용 API 허브)
+  const handleUpdateAttendance = async (id: string, nextStatus: AttendanceStatus, checkTime: string, reason: string) => {
+    setSubmittingId(id)
+    try {
+      const res = await fetch('/api/attendance/edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          attendance_id: id,
+          status: nextStatus, 
+          check_time: checkTime ? new Date(checkTime).toISOString() : null,
+          reason: reason.trim()
+        })
+      })
+      
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        throw new Error(data.error || '인증 오류 혹은 수정 권한이 거부되었습니다.')
+      }
+      
+      // 로컬 상태 부분 업데이트
+      setAttendances(prev => prev.map(item => 
+        item.id === id 
+          ? { 
+              ...item, 
+              status: nextStatus, 
+              check_time: checkTime ? new Date(checkTime).toISOString() : item.check_time, 
+              updated_at: new Date().toISOString() 
+            } 
+          : item
+      ))
+    } catch (err: any) {
+      alert(err.message || '업데이트에 실패했습니다.')
+      throw err
+    } finally {
+      setSubmittingId(null)
+    }
   }
-}
 
   const filteredAttendances = useMemo(() => {
     if (!selectedAffiliationId) return attendances
@@ -121,7 +133,10 @@ export default function AttendanceManageClient({ initialDate }: AttendanceClient
         onAffiliationChange={setSelectedAffiliationId}
         totalCount={filteredAttendances.length}
       />
-
+      
+      {/* 💡 변경 완료: 단순 갱신이 아닌 추가된 날짜 매핑 기반의 부분 로딩 트리거 적용 */}
+      <AttendanceAddForm onSuccess={handleAddFormSuccess} />
+      
       {error && <div style={{ padding: '20px', background: '#fef2f2', color: '#ef4444', borderRadius: '12px', fontWeight: 600, marginBottom: '24px' }}>⚠️ {error}</div>}
 
       {loading ? (
@@ -131,12 +146,10 @@ export default function AttendanceManageClient({ initialDate }: AttendanceClient
       ) : (
         <AttendanceTable 
           items={filteredAttendances}
-          
           onOpenEditModal={(item) => {
             setActiveItem(item)
             setIsModalOpen(true)
           }}
-          
         />
       )}
 
