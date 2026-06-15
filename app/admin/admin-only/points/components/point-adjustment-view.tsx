@@ -20,18 +20,44 @@ interface Props {
 }
 
 export default function PointAdjustmentView({ users, loading, affiliationMap, onRefresh, onAdjust }: Props) {
-  const [filterAffId, setFilterAffId] = useState('')
+  const [filterAffId, setFilterAffId] = useState('1')
   const [filterEnroll, setFilterEnroll] = useState('active')
   const [amountInputs, setAmountInputs] = useState<Record<string, string>>({})
   const [reasonInputs, setReasonInputs] = useState<Record<string, string>>({})
 
   // 필터링 로직
-  const filteredUsers = users.filter((u) => {
-    if (filterEnroll !== 'all' && u.enrollment_status !== filterEnroll) return false
-    if (filterAffId) {
-      const uAffId = String((u as any).affiliation_id || '')
-      if (uAffId !== filterAffId) return false
+  // 🔄 보다 강력하고 유연하게 개선된 필터링 로직
+const filteredUsers = users.filter((u) => {
+  // 1. 학적 상태 필터링
+  if (filterEnroll !== 'all' && u.enrollment_status !== filterEnroll) return false
+  
+  // 2. 소속 필터링 점검
+  // filterAffId를 문자열로 안전하게 변환하여 'all'이나 빈 값이 아닐 때만 작동
+  const targetFilterId = String(filterAffId || '').trim();
+  
+  if (targetFilterId && targetFilterId !== 'all') {
+    // A. 유저 객체에서 추출 가능한 소속 ID 후보군 수집
+    let detectedId: string | number | undefined = u.affiliation_id;
+    
+    // B. 만약 affiliation이 중첩 객체 형태 { id: 1, name: '...' } 일 경우
+    if (!detectedId && (u as any).affiliation && typeof (u as any).affiliation === 'object') {
+      detectedId = (u as any).affiliation.id;
     }
+    
+    // C. 만약 affiliation이 단순 문자열('아카데미')로 들어와서 ID를 알 수 없을 경우
+    // 부모로부터 전달받은 affiliationMap(예: { "1": "아카데미" })을 역조회하여 ID를 역산합니다.
+    if (!detectedId && typeof (u as any).affiliation === 'string') {
+      const uAffName = (u as any).affiliation;
+      // 매핑 테이블에서 이름이 일치하는 Key(ID)를 찾음
+      const foundId = Object.keys(affiliationMap).find(key => affiliationMap[key] === uAffName);
+      if (foundId) detectedId = foundId;
+    }
+
+    // 최종 정제된 문자열 비교
+    const uAffId = String(detectedId || '').trim();
+    if (uAffId !== targetFilterId) return false
+  }
+    
     return true
   })
 

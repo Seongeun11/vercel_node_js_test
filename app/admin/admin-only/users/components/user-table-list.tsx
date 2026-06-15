@@ -41,7 +41,8 @@ export default function UserTableList({
   const [selectedPasswordUser, setSelectedPasswordUser] = useState<AdminUser | null>(null)
   
   // 🔍 공용 컴포넌트가 선택하는 소속 고유 ID 문자열 저장 ("1", "2" 등)
-  const [filterAffiliationId, setFilterAffiliationId] = useState<string>('')
+  // 🎯 [요청 반영] 초기 소속 필터 기본값을 '1' (아카데미)로 설정합니다.
+  const [filterAffiliationId, setFilterAffiliationId] = useState<string>('1')
   // 🎓 2. 재학/수료 상태 필터 추가 (기본값: 'active'로 설정하여 재학생만 우선 노출)
   // 'all' | 'active' | 'completed'
   const [filterEnrollment, setFilterEnrollment] = useState<string>('active')
@@ -80,11 +81,16 @@ export default function UserTableList({
     
 
   // 🔥 [복합 교정 구역] 소속 필터링과 재학/수료 상태 필터링을 체이닝 방식으로 결합
+  // 🔥 [논리오류 교정 완료] 결합형 필터링 로직
   const filteredUsers = users.filter((user) => {
     // ---- [파트 A: 소속 필터링] ----
-    if (filterAffiliationId) {
+    // 'all' 이거나 빈 값인 경우는 필터를 생략하고 전체를 보여줍니다.
+    if (filterAffiliationId && filterAffiliationId !== 'all' && filterAffiliationId !== '') {
       const targetAffiliationName = affiliationMap[filterAffiliationId]
-      if (!targetAffiliationName) return false
+      
+      // 💡 [핵심 교정] 아직 API 조회가 완료되지 않아 매핑 딕셔너리가 빈 값일 경우, 
+      // 리스트를 다 지워버리는 대신 필터 검사를 임시 통과시켜 튕김 현상을 원천 방지합니다.
+      if (!targetAffiliationName) return true 
 
       const userAffiliation = typeof (user as any).affiliation === 'object'
         ? (user as any).affiliation?.name
