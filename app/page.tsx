@@ -91,11 +91,11 @@ export default async function HomePage() {
               <Link href="/attendance/my">
                 <button type="button">내 출석 조회</button>
               </Link>
-              
+               {/*
               <Link href="/attendance/point-requests">
               <button type="button">아카데미 포인트 사용</button>
               </Link>
-              
+              */}
               <Link href="/account/password">
               <button type="button">비밀번호 변경</button>
               </Link>
