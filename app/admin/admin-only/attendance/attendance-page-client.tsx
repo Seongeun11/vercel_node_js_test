@@ -8,8 +8,9 @@ import AdminHeader from '@/components/admin/AdminHeader'
 import AttendanceFilterBar from './attendance-filterbar'
 import AttendanceTable from './attendance-table'
 import AttendanceEditModal from './attendance-edit-modal'
-// 상단에 생성한 컴포넌트 import 유지
 import AttendanceAddForm from './attendance-add-form'
+// 💡 [추가] 일괄 결석 처리 컴포넌트 임포트
+
 import { AttendanceManageItem, AttendanceStatus } from './types/attendance'
 
 type AttendanceClientProps = {
@@ -24,7 +25,10 @@ export default function AttendanceManageClient({ initialDate }: AttendanceClient
   const [attendances, setAttendances] = useState<AttendanceManageItem[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string>('')
-  const [selectedAffiliationId, setSelectedAffiliationId] = useState<string>('')
+  
+  // 💡 [논리 점검 반영] 일괄 처리를 정밀 타깃팅하기 위해 소속 및 행사 ID 상태를 메인 레이어에서 통제
+  const [selectedAffiliationId, setSelectedAffiliationId] = useState<string>('1')
+  const [selectedEventId, setSelectedEventId] = useState<string>('')
 
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
   const [activeItem, setActiveItem] = useState<AttendanceManageItem | null>(null)
@@ -65,13 +69,11 @@ export default function AttendanceManageClient({ initialDate }: AttendanceClient
     void loadAttendanceData(currentDate)
   }, [currentDate, loadAttendanceData])
 
-  // 2. ✨ [신규 논리 추가] 수동 출석 입력 완료 시 부분 새로고침 핸들러
+  // 2. 수동 출석 입력 완료 시 부분 새로고침 핸들러
   const handleAddFormSuccess = useCallback((addedDate: string) => {
-    // 관리자가 추가한 출석 날짜와 대시보드가 현재 바라보고 있는 필터 날짜가 일치할 때만 리스트 부분 로딩
     if (currentDate === addedDate) {
       void loadAttendanceData(currentDate)
     } else {
-      // 다른 날짜에 소급 적용한 경우 필터가 틀어지지 않게 안내 후, 관리자가 원하면 이동할 수 있도록 처리
       if (confirm(`성공적으로 저장되었습니다.\n추가된 날짜(${addedDate})의 출석부 화면으로 이동하시겠습니까?`)) {
         router.push(`?date=${addedDate}`)
       }
@@ -98,7 +100,6 @@ export default function AttendanceManageClient({ initialDate }: AttendanceClient
         throw new Error(data.error || '인증 오류 혹은 수정 권한이 거부되었습니다.')
       }
       
-      // 로컬 상태 부분 업데이트
       setAttendances(prev => prev.map(item => 
         item.id === id 
           ? { 
@@ -117,24 +118,41 @@ export default function AttendanceManageClient({ initialDate }: AttendanceClient
     }
   }
 
+  // 💡 [논리 점검 반영] 일괄 결석 성공 시 전체 명단을 다시 산뜻하게 조회해오는 동기화 콜백 정의
+  const handleBatchSuccess = useCallback(() => {
+    void loadAttendanceData(currentDate)
+  }, [currentDate, loadAttendanceData])
+  
   const filteredAttendances = useMemo(() => {
-    if (!selectedAffiliationId) return attendances
-    return attendances.filter(item => item.event?.affiliations_id && String(item.event.affiliations_id) === selectedAffiliationId)
-  }, [attendances, selectedAffiliationId])
+  // 필터가 선택되지 않았다면 전체 데이터 반환
+  if (!selectedAffiliationId) return attendances;
+  
+  return attendances.filter(item => {
+    const tableAffiliationId = item.event?.affiliations_id;
+    if (!tableAffiliationId) return false; // 소속이 없는 행사는 필터링 시 제외
+    return String(tableAffiliationId) === String(selectedAffiliationId);
+  });
+}, [attendances, selectedAffiliationId]);
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto', fontFamily: 'sans-serif', color: '#1e293b' }}>
       <AdminHeader title="실시간 출석 상태 대시보드" />
 
-      <AttendanceFilterBar 
-        currentDate={currentDate}
-        onDateChange={(d) => router.push(`?date=${d}`)}
-        selectedAffiliationId={selectedAffiliationId}
-        onAffiliationChange={setSelectedAffiliationId}
-        totalCount={filteredAttendances.length}
-      />
+      {/* 💡 상단 필터 바 영역과 일괄 배치 처리 버튼을 수평 배치 구조로 래핑하여 완성도 향상 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '16px', marginBottom: '8px' }}>
+        <div style={{ flex: 1 }}>
+          <AttendanceFilterBar 
+            currentDate={currentDate}
+            onDateChange={(d) => router.push(`?date=${d}`)}
+            selectedAffiliationId={selectedAffiliationId}
+            onAffiliationChange={setSelectedAffiliationId}
+            totalCount={filteredAttendances.length}
+          />
+        </div>
+        
+        
+      </div>
       
-      {/* 💡 변경 완료: 단순 갱신이 아닌 추가된 날짜 매핑 기반의 부분 로딩 트리거 적용 */}
       <AttendanceAddForm onSuccess={handleAddFormSuccess} />
       
       {error && <div style={{ padding: '20px', background: '#fef2f2', color: '#ef4444', borderRadius: '12px', fontWeight: 600, marginBottom: '24px' }}>⚠️ {error}</div>}

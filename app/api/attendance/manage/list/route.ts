@@ -116,7 +116,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     `)
     .order('attendance_date', { ascending: false })
     .order('check_time', { ascending: false })
-    .limit(limit)
+    //.limit(limit)
 
   if (eventId) {
     query = query.eq('event_id', eventId)

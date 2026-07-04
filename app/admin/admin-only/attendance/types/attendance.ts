@@ -1,7 +1,7 @@
 // types/attendance.ts
 
 // 1. 출석 상태 및 인식 수단 리터럴 타입
-export type AttendanceStatus = 'present' | 'late' | 'absent'
+export type AttendanceStatus = 'present' | 'late' | 'absent' | 'unmarked';
 export type AttendanceMethod = 'manual' | 'qr' | 'nfc'
 
 // 2. 단일 출석 레코드에 대한 데이터 타입 명세 (JOIN 구조 포함)

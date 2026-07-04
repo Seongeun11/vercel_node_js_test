@@ -23,12 +23,15 @@ export default async function AdminPage() {
       2026.05.12 업데이트<br />
       데이터베이스에 제2 정규화를 적용했습니다.<br />
       2026.05.21 업데이트<br />
-      페이지 최적화 및 오류 수정, supabase 자동 실행 함수등록(fn_create_today_occurrences)<br />vercel웹사이트경로와 정확히 일치해야함<br />
+      페이지 최적화 및 오류 수정,<br />supabase 자동오늘회차등록 - 실행시간 02시 - 함수등록: cron_create_today_occurrences <br />vercel웹사이트경로와 정확히 일치해야함<br />
       2026.06.01 업데이트<br /> 
       소속 필터링 추가: components\common\affiliation-select.tsx
-      2026.06.01 업데이트<br /> 
+      <br/>2026.06.01 업데이트<br /> 
       supabase 자동 실행 함수등록: fn_sync_attendance_to_points<br/>
       [public.attendance][포인트 통합 트리거](데이터 변동)(자동 정산)
+      <br/>2026.07.04 업데이트<br /> 
+      supabase 자동 결석 처리 - 실행시간 01시 - 함수등록: cron_daily-attendance-auto-close-job<br/>
+
 
     </main>
   )
