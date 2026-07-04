@@ -209,7 +209,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     // 5. 오늘 회차 자동 생성 RPC 호출
-    const { error: rpcError } = await supabaseAdmin.rpc('fn_create_today_occurrences')
+    const { error: rpcError } = await supabaseAdmin.rpc('cron_create_today_occurrences')
     if (rpcError) {
       console.error('[events/update] rpc sync error:', rpcError)
       return jsonNoStore<UpdateEventResponse>(

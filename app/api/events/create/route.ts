@@ -139,7 +139,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     // 2. [논리 교정 핵심] DB 함수(RPC) 호출을 통해 단발성/정기 행사 오늘 자 회차 동기화 위임 처리
     // 앞서 만든 'sync_today_event_occurrences' SQL 함수를 원격 실행합니다.
-    const { error: rpcError } = await supabaseAdmin.rpc('fn_create_today_occurrences')
+    const { error: rpcError } = await supabaseAdmin.rpc('cron_create_today_occurrences')
 
     if (rpcError) {
       console.error('[events/create] rpc sync error:', rpcError)
