@@ -2,19 +2,14 @@
 'use client'
 
 import { useState } from 'react'
+import { AdminUser } from '../hooks/use-admin-users' // 💡 공용 타입으로 일치화
 
 type EnrollmentStatus = 'active' | 'completed'
 type UserRole = {
   id: number
   name: string
 }
-type AdminUser = {
-  id: string
-  student_id: string
-  full_name: string
-  enrollment_status: EnrollmentStatus
-  role?: UserRole | null // 💡 백엔드가 보내주는 role 필드 추가 (단일 객체 혹은 배열 대비)
-}
+
 
 type Props = {
   user: AdminUser
