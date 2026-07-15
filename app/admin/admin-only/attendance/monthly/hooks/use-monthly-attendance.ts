@@ -1,17 +1,20 @@
+// app/admin/admin-only/attendance/monthly/hooks/use-monthly-attendance.ts
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 
 export type CellStatus = 'present' | 'late' | 'absent' | 'unmarked'
+
 export type MonthlyOccurrence = { 
   id: string; 
   event_id: string; 
   event_name: string; 
-  occurrence_date: string;
+  occurrence_date: string; // 형식: 'YYYY-MM-DD'
   start_time: string;
   end_time: string | null; 
   status: string 
 }
+
 export type MonthlyAttendanceCell = { 
   occurrence_id: string; 
   event_id: string;
@@ -22,6 +25,7 @@ export type MonthlyAttendanceCell = {
   method: string | null; 
   check_time: string | null 
 }
+
 export type MonthlyAttendanceUserRow = { 
   profile_id: string; 
   student_id: string; 
@@ -34,65 +38,92 @@ export type MonthlyAttendanceUserRow = {
 export type MonthlyAttendanceResponse = {
   month: string
   range: { start_date: string; end_date: string }
-  filters: { cohort_no: number | null; keyword: string; event_id: string | null; affiliation_id: string | null }
+  filters: { cohort_no: number | null; keyword: string; affiliation_id: string | null }
   summary: { trainee_count: number; occurrence_count: number; present_count: number; late_count: number; absent_count: number; unmarked_count: number }
   occurrences: MonthlyOccurrence[]
   rows: MonthlyAttendanceUserRow[]
 }
 
 export type CalendarDay = { date: string; day: number; inCurrentMonth: boolean }
-export type DaySummary = { present: number; late: number; absent: number; unmarked: number; total: number; occurrences: MonthlyOccurrence[] }
-export type EventOption = { id: string; name: string }
+export type DaySummary = { present: number; late: number; absent: number; unmarked: number; disabled: number; total: number; occurrences: MonthlyOccurrence[] }
+
+// 💡 설계에 맞춰 Toggle 속성 타입을 추가 지정합니다.
+export type EventOption = { id: string; name: string; toggle: boolean }
 
 function getCurrentMonth(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit' }).format(new Date())
 }
 
+// 💡 안전한 KST 로컬 타임존 기반 캘린더 생성 로직
 function buildCalendarDays(month: string): CalendarDay[] {
   if (!month) return []
   const [yearText, monthText] = month.split('-')
   const year = Number(yearText)
   const monthIndex = Number(monthText) - 1
 
-  const firstDate = new Date(Date.UTC(year, monthIndex, 1))
-  const lastDate = new Date(Date.UTC(year, monthIndex + 1, 0))
-  const firstWeekday = firstDate.getUTCDay()
-  const totalDays = lastDate.getUTCDate()
+  const firstDate = new Date(year, monthIndex, 1)
+  const lastDate = new Date(year, monthIndex + 1, 0)
+  
+  const firstWeekday = firstDate.getDay()
+  const totalDays = lastDate.getDate()
 
   const days: CalendarDay[] = []
-  for (let i = 0; i < firstWeekday; i += 1) {
-    const date = new Date(Date.UTC(year, monthIndex, 1 - firstWeekday + i))
-    days.push({ date: date.toISOString().slice(0, 10), day: date.getUTCDate(), inCurrentMonth: false })
+
+  // 이전 달 채우기
+  for (let i = 0; i < firstWeekday; i++) {
+    const prevDate = new Date(year, monthIndex, 1 - firstWeekday + i)
+    days.push({
+      date: formatDateLocal(prevDate),
+      day: prevDate.getDate(),
+      inCurrentMonth: false
+    })
   }
-  for (let day = 1; day <= totalDays; day += 1) {
-    const date = new Date(Date.UTC(year, monthIndex, day))
-    days.push({ date: date.toISOString().slice(0, 10), day, inCurrentMonth: true })
+
+  // 이번 달 채우기
+  for (let day = 1; day <= totalDays; day++) {
+    const currDate = new Date(year, monthIndex, day)
+    days.push({
+      date: formatDateLocal(currDate),
+      day,
+      inCurrentMonth: true
+    })
   }
+
+  // 다음 달 채우기 (7열 그리드 맞추기)
   while (days.length % 7 !== 0) {
     const last = days[days.length - 1]
-    const date = new Date(`${last.date}T00:00:00.000Z`)
-    date.setUTCDate(date.getUTCDate() + 1)
-    days.push({ date: date.toISOString().slice(0, 10), day: date.getUTCDate(), inCurrentMonth: false })
+    const nextDate = new Date(last.date)
+    nextDate.setDate(nextDate.getDate() + 1)
+    days.push({
+      date: formatDateLocal(nextDate),
+      day: nextDate.getDate(),
+      inCurrentMonth: false
+    })
   }
   return days
+}
+
+function formatDateLocal(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 export function useMonthlyAttendance() {
   const [tempMonth, setTempMonth] = useState<string>(getCurrentMonth)
   const [tempCohortNo, setTempCohortNo] = useState<string>('')
   const [tempKeyword, setTempKeyword] = useState<string>('')
-  const [tempEventId, setTempEventId] = useState<string>('')
   const [tempAffiliationId, setTempAffiliationId] = useState<string>('')
   
+  // 💡 확장된 EventOption[] 타입을 가집니다.
   const [events, setEvents] = useState<EventOption[]>([])
-  // 💡 중복 배치된 affiliations 로컬 상태 및 하드코딩 마스터 구조 과감히 제거
 
   const [searchParams, setSearchParams] = useState({
     month: getCurrentMonth(),
     cohortNo: '',
     keyword: '',
-    eventId: '',
-    affiliationId: '',
+    affiliationId: '', // 다중 선택 토글 방식을 사용하므로 단일 eventId 상태 필드는 불필요하여 제거합니다.
   })
 
   const [data, setData] = useState<MonthlyAttendanceResponse | null>(null)
@@ -105,7 +136,6 @@ export function useMonthlyAttendance() {
     if (searchParams.month) params.set('month', searchParams.month)
     if (searchParams.cohortNo.trim()) params.set('cohort_no', searchParams.cohortNo.trim())
     if (searchParams.keyword.trim()) params.set('keyword', searchParams.keyword.trim())
-    if (searchParams.eventId.trim()) params.set('event_id', searchParams.eventId.trim())
     if (searchParams.affiliationId.trim()) params.set('affiliation_id', searchParams.affiliationId.trim())
     return params.toString()
   }, [searchParams])
@@ -125,21 +155,36 @@ export function useMonthlyAttendance() {
     return map
   }, [data?.occurrences])
 
+  // 💡 데이터베이스 출석 데이터를 날짜별 전체 카운트로 전환하는 강력한 요약 Map 빌더
   const daySummaryMap = useMemo(() => {
     const map = new Map<string, DaySummary>()
     if (!data) return map
+
+    // 1단계: 날짜별 행사 회차 세팅
     for (const occurrence of data.occurrences) {
       if (!map.has(occurrence.occurrence_date)) {
-        map.set(occurrence.occurrence_date, { present: 0, late: 0, absent: 0, unmarked: 0, total: 0, occurrences: [] })
+        map.set(occurrence.occurrence_date, { 
+          present: 0, 
+          late: 0, 
+          disabled: 0, // 구 타입 호환성
+          absent: 0, 
+          unmarked: 0, 
+          total: 0, 
+          occurrences: [] 
+        })
       }
       map.get(occurrence.occurrence_date)!.occurrences.push(occurrence)
     }
+
+    // 2단계: 수련생 로우와 일치하는 회차별 출석 결과를 당일 누적 데이터로 병합
     for (const row of data.rows) {
       for (const occurrence of data.occurrences) {
         const current = map.get(occurrence.occurrence_date)
         if (!current) continue
+        
         const cell = row.days[occurrence.id]
         const status = cell?.status ?? 'unmarked'
+        
         current[status] += 1
         current.total += 1
       }
@@ -193,7 +238,6 @@ export function useMonthlyAttendance() {
         return
       }
       setData(result)
-     
       if (!selectedDate || !result.occurrences.some((item: MonthlyOccurrence) => item.occurrence_date === selectedDate)) {
         setSelectedDate(result.occurrences[0]?.occurrence_date ?? '')
       }
@@ -205,6 +249,7 @@ export function useMonthlyAttendance() {
     }
   }
 
+  // 💡 이벤트 로드 시 데이터베이스에서 가져온 Toggle 컬럼 상태값을 UI 모델로 매핑합니다.
   const loadEvents = useCallback(async (affiliationId: string) => {
     try {
       const params = new URLSearchParams()
@@ -215,48 +260,102 @@ export function useMonthlyAttendance() {
       if (!response.ok) return
       const result = await response.json()
       const rawEvents = Array.isArray(result?.items) ? result.items : Array.isArray(result) ? result : []
-      setEvents(rawEvents.map((e: any) => ({ id: String(e.id), name: String(e.name) })))
+      
+      setEvents(rawEvents.map((e: any) => ({ 
+        id: String(e.id), 
+        name: String(e.name),
+        toggle: Boolean(e.toggle) // DB 내의 Toggle bool 컬럼을 맵핑
+      })))
     } catch (e) {
       console.error('행사 목록 로드 실패:', e)
     }
   }, [])
 
-  // 소속 필터가 동적으로 전환될 때 처리하는 커스텀 연동 액션 핸들러
+  // 💡 사용자 클릭 시 로컬 상태를 우선 업데이트(Optimistic UI)하고, 서버 DB에 즉각 동기화한 뒤 캘린더 데이터를 재조회하는 핵심 액션입니다.
+  const toggleEventSelection = useCallback(async (eventId: string, currentToggle: boolean) => {
+    const nextToggle = !currentToggle
+    
+    // 1단계: 즉각적 UI 반응을 위한 선제적 상태 변경
+    setEvents((prev) => 
+      prev.map((ev) => (ev.id === eventId ? { ...ev, toggle: nextToggle } : ev))
+    )
+
+    try {
+      // 2단계: Supabase Update API Route 호출
+      const response = await fetch('/api/events/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId, toggleState: nextToggle })
+      })
+
+      if (!response.ok) {
+        // 백엔드 통신 실패 시 이전 상태로 되돌림(Rollback)
+        setEvents((prev) => 
+          prev.map((ev) => (ev.id === eventId ? { ...ev, toggle: currentToggle } : ev))
+        )
+        const errJson = await response.json().catch(() => ({}))
+        setErrorMessage(errJson?.error || '토글 상태 동기화에 실패했습니다.')
+        return
+      }
+
+      // 3단계: 변경된 토글 상태에 적합한 출석 데이터를 다시 로드
+      void loadMonthlyAttendance()
+    } catch (err) {
+      console.error('[Event Toggle Client Exception]:', err)
+      // 예외 발생 시 롤백
+      setEvents((prev) => 
+        prev.map((ev) => (ev.id === eventId ? { ...ev, toggle: currentToggle } : ev))
+      )
+    }
+  }, [loadMonthlyAttendance])
+
   const handleAffiliationChange = useCallback((affiliationId: string) => {
     setTempAffiliationId(affiliationId)
-    setTempEventId('') // 소속이 바뀔 시 연동 안정성을 위해 선택되어 있던 종속 행사 비워줌
-    void loadEvents(affiliationId) // 변경된 새 소속에 바인딩된 행사 목록 실시간 API Re-fetch
+    void loadEvents(affiliationId)
   }, [loadEvents])
 
   const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault()
     setSearchParams({
       month: tempMonth,
       cohortNo: tempCohortNo,
       keyword: tempKeyword,
-      eventId: tempEventId,
       affiliationId: tempAffiliationId,
-    });
-  };
+    })
+  }
 
   useEffect(() => {
     void loadMonthlyAttendance()
   }, [queryString])
 
   useEffect(() => {
-    void loadEvents('') // 초기 진입 시 전체 행사 로드 유지
+    void loadEvents('')
   }, [loadEvents])
 
   return {
     state: {
-      tempMonth, tempCohortNo, tempKeyword, tempEventId, tempAffiliationId,
-      events, loading, errorMessage, data, calendarDays,
-      daySummaryMap, selectedDate, selectedOccurrences, selectedRows
+      tempMonth,
+      tempCohortNo,
+      tempKeyword,
+      tempAffiliationId, // 불필요한 tempEventId 제거
+      events,
+      loading,
+      errorMessage,
+      data,
+      calendarDays,
+      daySummaryMap,
+      selectedDate,
+      selectedOccurrences,
+      selectedRows
     },
     actions: {
-      setTempMonth, setTempCohortNo, setTempKeyword, setTempEventId,
-      setTempAffiliationId: handleAffiliationChange, // 가로챈 커스텀 핸들러 전달
-      handleSearchSubmit, setSelectedDate
+      setTempMonth,
+      setTempCohortNo,
+      setTempKeyword,
+      setTempAffiliationId: handleAffiliationChange,
+      toggleEventSelection, // 💡 새로 추가된 토글 처리용 핸들러 제공
+      handleSearchSubmit,
+      setSelectedDate
     }
   }
 }

@@ -6,32 +6,28 @@ import { jsonNoStore } from '@/lib/security/api-response'
 
 export async function GET(request: NextRequest): Promise<Response> {
   try {
-    // 1. 관리자 권한 권한 검증
     const authResult = await requireRole(['admin'])
     if (!authResult.ok) {
       return jsonNoStore({ error: authResult.error }, { status: authResult.status })
     }
 
-    // 2. URL 검색 파라미터 추출
     const { searchParams } = request.nextUrl
-    const month = searchParams.get('month') // 형식: 'YYYY-MM'
+    const month = searchParams.get('month') // 'YYYY-MM'
     const cohortNo = searchParams.get('cohort_no')
     const keyword = searchParams.get('keyword')
-    const eventId = searchParams.get('event_id')
-    const affiliationId = searchParams.get('affiliation_id') // 핵심 필터 대상
+    const affiliationId = searchParams.get('affiliation_id')
 
     if (!month) {
       return jsonNoStore({ error: '조회할 월(month) 파라미터가 필요합니다.' }, { status: 400 })
     }
 
-    // 해당 월의 시작일과 종료일 계산 (KST 기준 안전 처리)
     const startDate = `${month}-01`
     const [year, nextMonth] = month.split('-').map(Number)
     const lastDay = new Date(year, nextMonth, 0).getDate()
     const endDate = `${month}-${String(lastDay).padStart(2, '0')}`
 
     // ----------------------------------------------------------------
-    // 💡 [행사 회차 기본 쿼리 빌드]
+    // 💡 변경 포인트: 단일 event_id 필터 대신 events 테이블 내 Toggle이 true인 것을 가져오도록 설정
     // ----------------------------------------------------------------
     let occurrenceQuery = supabaseAdmin
       .from('event_occurrences')
@@ -45,25 +41,19 @@ export async function GET(request: NextRequest): Promise<Response> {
         events!inner (
           id,
           name,
-          affiliations_id
+          affiliations_id,
+          toggle
         )
       `)
       .gte('occurrence_date', startDate)
       .lte('occurrence_date', endDate)
       .neq('status', 'archived')
+      // DB상에서 toggle이 true인 이벤트만 필터링하도록 강제 설정
+      .eq('events.toggle', true) 
 
-    // ----------------------------------------------------------------
-    // 💡 [논리오류 교정]: 소속 선택 시 선택된 소속 '또는' 공통(null) 행사 동시 조회
-    // ----------------------------------------------------------------
     if (affiliationId && affiliationId.trim() !== '') {
       const affIdNum = Number(affiliationId)
-      // Supabase .or() 메서드를 사용하여 (해당소속 ID 이거나 OR null 인 것) 구조를 충족합니다.
       occurrenceQuery = occurrenceQuery.or(`affiliations_id.eq.${affIdNum},affiliations_id.is.null`, { foreignTable: 'events' })
-    }
-    
-    // 특정 행사 조건이 추가로 있다면 필터링
-    if (eventId && eventId.trim() !== '') {
-      occurrenceQuery = occurrenceQuery.eq('event_id', eventId)
     }
 
     const { data: dbOccurrences, error: occError } = await occurrenceQuery.order('occurrence_date', { ascending: true })
@@ -73,7 +63,6 @@ export async function GET(request: NextRequest): Promise<Response> {
       return jsonNoStore({ error: '회차 목록 조회 중 오류가 발생했습니다.' }, { status: 500 })
     }
 
-    // 데이터 안전 포맷팅
     const occurrences = (dbOccurrences ?? []).map((occ: any) => ({
       id: occ.id,
       event_id: occ.event_id,
@@ -86,9 +75,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
     const validOccurrenceIds = occurrences.map((o: any) => o.id)
 
-    // ----------------------------------------------------------------
-    // 💡 수련생 프로필 및 출석 레코드 가져오기
-    // ----------------------------------------------------------------
+    // [중략 - 기존 수련생 프로필 로직 동일하게 유지]
     let profileQuery = supabaseAdmin
       .from('profiles')
       .select(`
@@ -100,7 +87,6 @@ export async function GET(request: NextRequest): Promise<Response> {
       `)
       .eq('enrollment_status', 'active')
 
-    // 수련생 자체의 소속 조건 필터링
     if (affiliationId && affiliationId.trim() !== '') {
       profileQuery = profileQuery.eq('affiliation_id', Number(affiliationId))
     }
@@ -118,15 +104,11 @@ export async function GET(request: NextRequest): Promise<Response> {
       return jsonNoStore({ error: '수련생 목록 조회 중 오류가 발생했습니다.' }, { status: 500 })
     }
 
-    // ----------------------------------------------------------------
-    // 3. 필터링된 회차 정보에 매핑되는 출석(attendance) 데이터 벌크 조회
-    // ----------------------------------------------------------------
     let rows: any[] = []
     let present_count = 0, late_count = 0, absent_count = 0, unmarked_count = 0
 
     if (dbProfiles && dbProfiles.length > 0 && validOccurrenceIds.length > 0) {
       const profileIds = dbProfiles.map((p) => p.id)
-
       const { data: dbAttendance, error: attError } = await supabaseAdmin
         .from('attendance')
         .select('id, user_id, event_id, occurrence_id, status, method, check_time')
@@ -140,16 +122,13 @@ export async function GET(request: NextRequest): Promise<Response> {
         })
       }
 
-      // 프론트엔드가 요구하는 행(Row) 구조 매트릭스 조립
       rows = dbProfiles.map((p: any) => {
         const daysCellObj: Record<string, any> = {}
-
         occurrences.forEach((occ: any) => {
           const attKey = `${p.id}_${occ.id}`
           const attRecord = attendanceMap.get(attKey)
           const status = attRecord?.status || 'unmarked'
 
-          // 통계 카운트 산출
           if (status === 'present') present_count++
           else if (status === 'late') late_count++
           else if (status === 'absent') absent_count++
@@ -166,7 +145,6 @@ export async function GET(request: NextRequest): Promise<Response> {
             check_time: attRecord?.check_time || null,
           }
         })
-
         return {
           profile_id: p.id,
           student_id: p.student_id,
@@ -178,14 +156,12 @@ export async function GET(request: NextRequest): Promise<Response> {
       })
     }
 
-    // 4. 최종 결과 반환 규격 준수하여 리턴
     return jsonNoStore({
       month,
       range: { start_date: startDate, end_date: endDate },
       filters: {
         cohort_no: cohortNo ? Number(cohortNo) : null,
         keyword: keyword || '',
-        event_id: eventId || null,
         affiliation_id: affiliationId || null,
       },
       summary: {

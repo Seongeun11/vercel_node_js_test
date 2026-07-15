@@ -63,6 +63,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       is_active,
       created_at,
       updated_at,
+      toggle,  
       affiliations_id,
         affiliations (
           name
@@ -96,6 +97,8 @@ export async function GET(request: NextRequest): Promise<Response> {
   // 프론트엔드가 중첩 객체 depth를 타지 않고 깔끔하게 소속 이름을 쓸 수 있도록 포맷 맵핑
     const items = data.map((event: any) => ({
       ...event,
+      // DB에 Toggle 값이 null 일 경우 안전하게 false 처리
+      toggle: event.toggle ?? false,
       // 백엔드 단에서 결합 완료된 소속명 주입 (외래키 데이터 매핑이 누락된 경우 '전체 노출' 처리)
       affiliation_name: event.affiliations?.name ?? '전체 노출'
     }))
