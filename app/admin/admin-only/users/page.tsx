@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import AdminHeader from '@/components/admin/AdminHeader'
-import UserBulkUpload from './user-bulk-upload'
+import UserBulkUpload from './components/user-bulk-upload'
 import UserCreateForm from './components/user-create-form'
 import UserTableList from './components/user-table-list'
 import { useAdminUsers } from './hooks/use-admin-users'

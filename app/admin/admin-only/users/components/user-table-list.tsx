@@ -2,10 +2,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import EnrollmentStatusToggle from '../enrollment-status'
-import ResetPasswordPanel from '../reset-password-panel'
+import EnrollmentStatusToggle from './enrollment-status'
+import ResetPasswordPanel from './reset-password-panel'
 import AffiliationSelect from '@/components/common/affiliation-select' // 🔄 공용 컴포넌트
 import { AdminUser, UserRole } from '../hooks/use-admin-users'
+import UpdateNamePanel from './update-name-panel' // 이름변경
+
 
 const ROLE_OPTIONS = [
   { value: 'admin', label: '관리자', id: 1 },
@@ -39,6 +41,8 @@ export default function UserTableList({
 }: Props) {
   const [setIsUserListOpen] = useState(false)
   const [selectedPasswordUser, setSelectedPasswordUser] = useState<AdminUser | null>(null)
+
+  const [selectedNameUser, setSelectedNameUser] = useState<AdminUser | null>(null) // 🔄 이름 변경 대상 유저 상태 추가
   
   // 🔍 공용 컴포넌트가 선택하는 소속 고유 ID 문자열 저장 ("1", "2" 등)
   // 🎯 [요청 반영] 초기 소속 필터 기본값을 '1' (아카데미)로 설정합니다.
@@ -168,16 +172,17 @@ export default function UserTableList({
           <div style={{ overflowX: 'auto', marginTop: '16px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
               <thead>
-                <tr style={{ background: '#f8fafc' }}>
-                  <th style={{ borderBottom: '2px solid #e2e8f0', padding: '10px', textAlign: 'left' }}>학번</th>
-                  <th style={{ borderBottom: '2px solid #e2e8f0', padding: '10px', textAlign: 'left' }}>이름</th>
-                  <th style={{ borderBottom: '2px solid #e2e8f0', padding: '10px', textAlign: 'left' }}>권한</th>
-                  <th style={{ borderBottom: '2px solid #e2e8f0', padding: '10px', textAlign: 'left' }}>기수</th>
-                  <th style={{ borderBottom: '2px solid #e2e8f0', padding: '10px', textAlign: 'left' }}>재학/수료</th>
-                  <th style={{ borderBottom: '2px solid #e2e8f0', padding: '10px', textAlign: 'left' }}>소속</th>
-                  <th style={{ borderBottom: '2px solid #e2e8f0', padding: '10px', textAlign: 'left' }}>비밀번호</th>
-                </tr>
-              </thead>
+  <tr style={{ background: '#f8fafc' }}>
+    <th style={{ borderBottom: '2px solid #e2e8f0', padding: '10px', textAlign: 'left' }}>학번</th> 
+    <th style={{ borderBottom: '2px solid #e2e8f0', padding: '10px', textAlign: 'left' }}>이름</th> 
+    <th style={{ borderBottom: '2px solid #e2e8f0', padding: '10px', textAlign: 'left' }}>권한</th> 
+    <th style={{ borderBottom: '2px solid #e2e8f0', padding: '10px', textAlign: 'left' }}>기수</th> 
+    <th style={{ borderBottom: '2px solid #e2e8f0', padding: '10px', textAlign: 'left' }}>재학/수료</th> 
+    <th style={{ borderBottom: '2px solid #e2e8f0', padding: '10px', textAlign: 'left' }}>소속</th> 
+    <th style={{ borderBottom: '2px solid #e2e8f0', padding: '10px', textAlign: 'left' }}>이름 변경</th> 
+    <th style={{ borderBottom: '2px solid #e2e8f0', padding: '10px', textAlign: 'left' }}>비밀번호</th> 
+  </tr>
+</thead>
               <tbody>
                 {filteredUsers.length === 0 ? (
                   <tr>
@@ -214,11 +219,36 @@ export default function UserTableList({
                             {displayAffiliation}
                           </span>
                         </td>
+
+                        {/* 🔄 [새로 추가] 이름 변경 버튼 */}
+                        <td style={{ borderBottom: '1px solid #edf2f7', padding: '10px' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedNameUser(user)
+                              setSelectedPasswordUser(null) // 충돌 방지 차원에서 비밀번호 패널은 닫아줍니다.
+                              onSetMessage('') 
+                              onSetErrorMessage('') 
+                            }}
+                            style={{
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              border: '1px solid #cbd5e1',
+                              background: '#ffffff',
+                              fontSize: '13px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            변경
+                          </button>
+                        </td>
+
                         <td style={{ borderBottom: '1px solid #edf2f7', padding: '10px' }}>
                           <button
                             type="button"
                             onClick={() => {
                               setSelectedPasswordUser(user)
+                              setSelectedNameUser(null) // 이름 변경 패널은 닫아줍니다
                               onSetMessage('')
                               onSetErrorMessage('')
                             }}
@@ -241,8 +271,26 @@ export default function UserTableList({
               onSuccess={() => setSelectedPasswordUser(null)}
             />
           )}
+
+          {/* 🔄 [새로 추가] 이름 변경 패널 */}
+          {selectedNameUser && (
+            <UpdateNamePanel
+              user={selectedNameUser}
+              onCancel={() => setSelectedNameUser(null)}
+              onSuccess={(updatedUser) => {
+                // 로컬 user 리스트 상태 동기화 처리
+                setUsers((prevUsers) =>
+                  prevUsers.map((u) => (u.id === updatedUser.id ? { ...u, full_name: updatedUser.full_name } : u))
+                )
+                setSelectedNameUser(null)
+              }}
+            />
+          )}
         </>
+        
       }
+      
     </div>
+    
   )
 }

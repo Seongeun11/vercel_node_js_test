@@ -1,16 +1,16 @@
 // app/api/events/toggle/route.ts
 import { NextRequest } from 'next/server'
-import { getSessionProfile } from '@/lib/server-session'
+import { requireRole } from '@/lib/serverAuth'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { jsonNoStore } from '@/lib/security/api-response'
 
-
-export async function PATCH(request: NextRequest): Promise<Response> {
-  const session = await getSessionProfile(['admin'])
-  if (!session.ok) {
-    return jsonNoStore({ error: '인증이 필요합니다.' }, { status: 401 })
-  }
-
+export async function POST(request: NextRequest): Promise<Response> {
   try {
+    // 1. 관리자 권한 검증
+    const authResult = await requireRole(['admin'])
+    if (!authResult.ok) {
+      return jsonNoStore({ error: '인증이 필요합니다.' }, { status: 401 })
+    }
 
     const { eventId, toggleState } = await request.json()
 
@@ -18,21 +18,20 @@ export async function PATCH(request: NextRequest): Promise<Response> {
       return jsonNoStore({ error: '필수 파라미터(eventId)가 누락되었습니다.' }, { status: 400 })
     }
 
-    // DB의 events 테이블 Toggle 값을 업데이트합니다.
-    const { data, error } = await session.supabase
+    // 2. Supabase DB의 events 테이블 Toggle 컬럼 업데이트
+    const { error } = await supabaseAdmin
       .from('events')
-      .update({ Toggle: toggleState })
+      .update({ toggle: toggleState })
       .eq('id', eventId)
-      .select('id, name, Toggle')
-      .single()
 
     if (error) {
       console.error('Toggle DB update error:', error)
       return jsonNoStore({ error: 'DB 상태 변경 중 오류가 발생했습니다.' }, { status: 500 })
     }
 
-    return jsonNoStore({ success: true, item: data })
-  } catch (err) {
+    return jsonNoStore({ success: true, eventId, Toggle: toggleState })
+  } catch (error) {
+    console.error('[Event Toggle API Exception]:', error)
     return jsonNoStore({ error: '잘못된 요청 양식입니다.' }, { status: 400 })
   }
 }
