@@ -32,16 +32,31 @@ const profileQuery = `
   )
 `
 
-// 이름 내 허용되지 않는 특수문자나 공백을 추가로 방어하기 위한 추가 검증 논리
+// 이름 내 허용되지 않는 특수문자를 방어하되, 공백(띄어쓰기)을 허용하는 검증 논리
 function validateNameFormat(fullName: string): string | null {
-  if (/\s/.test(fullName)) {
-    return '이름에는 공백을 사용할 수 없습니다.'
+  // 1. 앞뒤 공백을 제외한 실제 문자열이 비어있는지 확인
+  const trimmed = fullName.trim()
+  if (!trimmed) {
+    return '이름을 입력해주세요.'
   }
-  // 한글, 영문 대소문자만 허용하는 검증 논리 (자유도에 따라 조절 가능)
-  const nameRegex = /^[a-zA-Z가-힣]+$/
+
+  // 2. 이름의 시작이나 끝에 공백이 포함되어 있는지 점검 (사용자 입력 실수 방지)
+  if (fullName.startsWith(' ') || fullName.endsWith(' ')) {
+    return '이름의 시작이나 끝에는 공백을 사용할 수 없습니다.'
+  }
+
+  // 3. 이름 중간에 공백이 연속해서 여러 개 들어가는 것을 방지 (예: "홍  길동" 방어)
+  if (/\s{2,}/.test(fullName)) {
+    return '이름 사이에 연속된 공백을 사용할 수 없습니다.'
+  }
+
+  // 4. 한글, 영문 대소문자, 그리고 공백(띄어쓰기)만 허용하는 정규식
+  // [a-zA-Z가-힣 ] 부분 끝에 한 칸의 공백( ) 또는 \s를 추가하여 공백 허용
+  const nameRegex = /^[a-zA-Z가-힣 ]+$/
   if (!nameRegex.test(fullName)) {
-    return '이름에는 한글과 영문자만 사용할 수 있습니다.'
+    return '이름에는 한글, 영문자, 공백만 사용할 수 있습니다.'
   }
+
   return null
 }
 
