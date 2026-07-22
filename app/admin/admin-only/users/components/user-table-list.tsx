@@ -216,7 +216,7 @@ export default function UserTableList({
                           {/* 🛠️ 오류 해결: 필수 속성인 initialMode('name')를 전달하고 확장된 Prop을 정상 연결 */}
                           <UserEditPanel
                             user={user}
-                            initialMode="name"
+                            initialMode="profile"
                             onCancel={() => setEditingUserId(null)}
                             onSuccess={(updatedUser) => {
                               if (updatedUser) {
