@@ -79,8 +79,14 @@ export default function AttendanceManageClient({ initialDate }: AttendanceClient
     }
   }, [currentDate, loadAttendanceData, router])
 
-  // 3. 통합 수정 실행부
-  const handleUpdateAttendance = async (id: string, nextStatus: AttendanceStatus, checkTime: string, reason: string) => {
+  // 3. 통합 수정 실행부 (event_id 수용 및 재조회 연동)
+  const handleUpdateAttendance = async (
+    id: string,
+    nextStatus: AttendanceStatus,
+    checkTime: string,
+    reason: string,
+    nextEventId?: string
+  ) => {
     setSubmittingId(id)
     try {
       const res = await fetch('/api/attendance/edit', {
@@ -88,6 +94,7 @@ export default function AttendanceManageClient({ initialDate }: AttendanceClient
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           attendance_id: id,
+          event_id: nextEventId,
           status: nextStatus, 
           check_time: checkTime ? new Date(checkTime).toISOString() : null,
           reason: reason.trim()
@@ -99,16 +106,8 @@ export default function AttendanceManageClient({ initialDate }: AttendanceClient
         throw new Error(data.error || '인증 오류 혹은 수정 권한이 거부되었습니다.')
       }
       
-      setAttendances(prev => prev.map(item => 
-        item.id === id 
-          ? { 
-              ...item, 
-              status: nextStatus, 
-              check_time: checkTime ? new Date(checkTime).toISOString() : item.check_time, 
-              updated_at: new Date().toISOString() 
-            } 
-          : item
-      ))
+      // 행사가 변경되었을 가능성이 있으므로 목록 재조회 수행
+      await loadAttendanceData(currentDate)
     } catch (err: any) {
       alert(err.message || '업데이트에 실패했습니다.')
       throw err
@@ -176,6 +175,7 @@ export default function AttendanceManageClient({ initialDate }: AttendanceClient
         />
       )}
 
+      {/* 렌더링부 바인딩 */}
       <AttendanceEditModal 
         isOpen={isModalOpen}
         item={activeItem}
@@ -183,7 +183,7 @@ export default function AttendanceManageClient({ initialDate }: AttendanceClient
           setIsModalOpen(false)
           setActiveItem(null)
         }}
-        onSave={(id, status, time, reas) => handleUpdateAttendance(id, status, time, reas)}
+        onSave={(id, status, time, reas, evtId) => handleUpdateAttendance(id, status, time, reas, evtId)}
       />
     </div>
   )
