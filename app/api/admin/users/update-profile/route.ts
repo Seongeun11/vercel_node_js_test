@@ -1,3 +1,4 @@
+//app\api\admin\users\update-profile\route.ts
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { requireRole } from '@/lib/serverAuth'
