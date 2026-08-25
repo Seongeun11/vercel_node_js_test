@@ -13,6 +13,8 @@ export type AdminUser = {
   enrollment_status: EnrollmentStatus
   role?: UserRole | null
   affiliation: string
+  //유저콜백
+  latest_schedule_name?: string | null
 }
 
 export function useAdminUsers() {
