@@ -1,4 +1,4 @@
-// app\attendance\scan\attendance-scanclient.tsx
+// app/attendance/scan/attendance-scanclient.tsx
 
 'use client'
 
@@ -45,13 +45,6 @@ export default function AttendanceScanPage() {
           body: JSON.stringify({ token }),
         })
 
-        /**
-         * 비로그인 상태 처리
-         * - 현재 QR URL을 next 파라미터로 보존
-         * - 로그인 성공 후 다시 QR 출석 페이지로 돌아오기 위함
-         */
-        // 401만 로그인으로 보낸다.
-        // 403은 권한/출석시간 제한 등 여러 의미가 있으므로 JSON 에러를 화면에 표시한다.
         if (response.status === 401) {
           const currentUrl = `${pathname}?${searchParams.toString()}`
           router.replace(`/login?next=${encodeURIComponent(currentUrl)}`)
@@ -71,20 +64,20 @@ export default function AttendanceScanPage() {
           return
         }
 
-      const alreadyChecked = Boolean(data.already_checked)
+        const alreadyChecked = Boolean(data.already_checked)
 
-      setResult({
-        success: data.success,
-        status: data.status,
-        message: alreadyChecked
-          ? '이미 출석 처리되었습니다.'
-          : data.message || '출석이 완료되었습니다.',
-        check_time: data.check_time,
-        check_time_kst: data.check_time_kst ?? data.recorded_at_kst,
-        attendance_date: data.attendance_date,
-        attendance_date_kst: data.attendance_date_kst ?? data.attendance_date,
-        already_checked: alreadyChecked,
-      })
+        setResult({
+          success: data.success,
+          status: data.status,
+          message: alreadyChecked
+            ? '이미 출석 처리되었습니다.'
+            : data.message || '출석이 완료되었습니다.',
+          check_time: data.check_time,
+          check_time_kst: data.check_time_kst ?? data.recorded_at_kst,
+          attendance_date: data.attendance_date,
+          attendance_date_kst: data.attendance_date_kst ?? data.attendance_date,
+          already_checked: alreadyChecked,
+        })
       } catch (error) {
         console.error(error)
         setResult({
@@ -97,6 +90,13 @@ export default function AttendanceScanPage() {
 
     void checkAttendance()
   }, [token, pathname, searchParams, router])
+
+  // 결석 사유 등록 페이지로 이동 (스캔 날짜 전달)
+  const handleGoToAbsenceForm = () => {
+    const todayStr = new Date().toISOString().split('T')[0]
+    const targetDate = result?.attendance_date_kst || todayStr
+    router.push(`/attendance/my-absence-reason?date=${targetDate}`)
+  }
 
   return (
     <div
@@ -133,14 +133,39 @@ export default function AttendanceScanPage() {
 
             <div
               style={{
-                marginTop: '16px',
+                marginTop: '20px',
                 display: 'flex',
                 gap: '8px',
                 justifyContent: 'center',
                 flexWrap: 'wrap',
               }}
             >
-              <button type="button" onClick={() => router.push('/')}>
+              <button
+                type="button"
+                onClick={handleGoToAbsenceForm}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#2563eb',
+                  color: '#fff',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                📝 결석/지각 사유 입력하기
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/')}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #ccc',
+                  background: '#fff',
+                  cursor: 'pointer',
+                }}
+              >
                 메인으로
               </button>
             </div>
@@ -192,14 +217,39 @@ export default function AttendanceScanPage() {
 
             <div
               style={{
-                marginTop: '16px',
+                marginTop: '20px',
                 display: 'flex',
                 gap: '8px',
                 justifyContent: 'center',
                 flexWrap: 'wrap',
               }}
             >
-              <button type="button" onClick={() => router.push('/')}>
+              <button
+                type="button"
+                onClick={handleGoToAbsenceForm}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#2563eb',
+                  color: '#fff',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                📝 결석/지각 사유 입력하기
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/')}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #ccc',
+                  background: '#fff',
+                  cursor: 'pointer',
+                }}
+              >
                 메인으로
               </button>
             </div>

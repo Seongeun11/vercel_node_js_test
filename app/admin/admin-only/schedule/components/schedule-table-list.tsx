@@ -1,4 +1,3 @@
-// app/admin/admin-only/schedule/components/schedule-table-list.tsx
 'use client'
 
 import React, { useState } from 'react'
@@ -6,33 +5,39 @@ import { ScheduleItem, AbsenceType } from '../page'
 
 type Props = {
   schedules: ScheduleItem[]
-  setSchedules: React.Dispatch<React.SetStateAction<ScheduleItem[]>>
   absenceTypes: AbsenceType[]
   loading: boolean
+  startDate: string
+  endDate: string
+  onDateChange: (start: string, end: string) => void
   onRefresh: () => void
+  onEdit: (item: ScheduleItem) => void
+  onDelete: (id: number) => void
 }
 
 export default function ScheduleTableList({
   schedules,
   absenceTypes,
   loading,
+  startDate,
+  endDate,
+  onDateChange,
   onRefresh,
+  onEdit,
+  onDelete,
 }: Props) {
   const [selectedType, setSelectedType] = useState<string>('all')
-  const [statusFilter, setStatusFilter] = useState<'active' | 'ended' | 'all'>('active') // 기본값: 진행 중
+  const [statusFilter, setStatusFilter] = useState<'active' | 'ended' | 'all'>('all')
   const [searchTerm, setSearchTerm] = useState('')
 
   const filteredSchedules = schedules.filter((item) => {
-    // 1. 진행중 / 종료됨 필터링
     if (statusFilter === 'active' && item.is_ended) return false
     if (statusFilter === 'ended' && !item.is_ended) return false
 
-    // 2. 외출 유형 필터링
     if (selectedType !== 'all' && String(item.absence_type) !== selectedType) {
       return false
     }
 
-    // 3. 이름/학번 검색 필터링
     if (searchTerm) {
       const name = item.profiles?.full_name || ''
       const studentId = item.profiles?.student_id || ''
@@ -45,39 +50,52 @@ export default function ScheduleTableList({
   return (
     <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', background: '#fff', padding: '20px' }}>
       {/* 필터 및 컨트롤 바 */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          {/* 이름 / 학번 검색 */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* 날짜 필터 (기본 일주일) */}
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            <span style={{ fontSize: '13px', fontWeight: 600 }}>조회기간:</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => onDateChange(e.target.value, endDate)}
+              style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+            />
+            ~
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => onDateChange(startDate, e.target.value)}
+              style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+            />
+          </div>
+
           <input
             type="text"
             placeholder="이름 또는 학번 검색"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }}
+            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
           />
 
-          {/* 스케쥴 상태 필터 (진행 중 / 종료됨) */}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as 'active' | 'ended' | 'all')}
-            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', fontWeight: 600, color: '#1e293b' }}
+            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 600 }}
           >
+            <option value="all">전체 상태</option>
             <option value="active">진행 중</option>
             <option value="ended">종료됨</option>
-            <option value="all">전체 상태</option>
           </select>
 
-          {/* 외출 유형 필터 */}
           <select
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }}
+            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
           >
-            <option value="all">전체 결석 유형</option>
+            <option value="all">전체 외출 유형</option>
             {absenceTypes.map((type) => (
-              <option key={type.id} value={type.id}>
-                {type.text}
-              </option>
+              <option key={type.id} value={type.id}>{type.text}</option>
             ))}
           </select>
         </div>
@@ -85,7 +103,7 @@ export default function ScheduleTableList({
         <button
           onClick={onRefresh}
           disabled={loading}
-          style={{ padding: '8px 14px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#f8fafc', cursor: 'pointer' }}
+          style={{ padding: '8px 14px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#f8fafc', cursor: 'pointer', fontSize: '13px' }}
         >
           {loading ? '불러오는 중...' : '새로고침'}
         </button>
@@ -103,7 +121,7 @@ export default function ScheduleTableList({
               <th style={{ padding: '12px', textAlign: 'left' }}>기간 (시작일 ~ 종료일)</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>상태</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>사유</th>
-              <th style={{ padding: '12px', textAlign: 'left' }}>등록일시</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>관리</th>
             </tr>
           </thead>
           <tbody>
@@ -139,8 +157,21 @@ export default function ScheduleTableList({
                     )}
                   </td>
                   <td style={{ padding: '12px', color: '#475569' }}>{item.absence_reason || '-'}</td>
-                  <td style={{ padding: '12px', color: '#94a3b8', fontSize: '13px' }}>
-                    {new Date(item.created_at).toLocaleString('ko-KR')}
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                      <button
+                        onClick={() => onEdit(item)}
+                        style={{ padding: '4px 8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}
+                      >
+                        수정
+                      </button>
+                      <button
+                        onClick={() => onDelete(Number(item.id))}
+                        style={{ padding: '4px 8px', fontSize: '12px', borderRadius: '4px', border: 'none', background: '#fee2e2', color: '#b91c1c', cursor: 'pointer' }}
+                      >
+                        삭제
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

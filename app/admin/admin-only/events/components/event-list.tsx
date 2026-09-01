@@ -46,7 +46,7 @@ function EventList({
             <th style={thStyle}>기본 시작 시간</th>
             <th style={thStyle}>반복 규칙</th>
             <th style={thStyle}>지각 기준</th>
-            <th style={thStyle}>아카데미 포인트 지급</th>
+            <th style={thStyle}>아카데미 포인트 지급 (500)</th>
             <th style={thStyle}>중복 허용</th>
             <th style={thStyle}>활성화</th>
             <th style={thStyle}>관리</th>

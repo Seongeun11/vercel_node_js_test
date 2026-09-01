@@ -1,23 +1,23 @@
-//app\admin\admin-only\schedule\components\schedule-create-modal.tsx
 'use client'
 
 import React, { useState, useEffect } from 'react'
 import { AbsenceType, ScheduleItem } from '../page'
 
-type Props = {
-  absenceTypes: AbsenceType[]
-  onClose: () => void
-  onSuccess: (newSchedule: ScheduleItem) => void
-}
-
 type UserProfile = {
   id: string
   full_name: string
   student_id: string
-  affiliation: string
+  affiliation: string | { name: string } | null
 }
 
-export default function ScheduleCreateModal({ absenceTypes, onClose, onSuccess }: Props) {
+type Props = {
+  absenceTypes: AbsenceType[]
+  initialData?: ScheduleItem | null
+  onClose: () => void
+  onSuccess: (schedule: ScheduleItem, isEdit: boolean) => void
+}
+
+export default function ScheduleFormModal({ absenceTypes, initialData, onClose, onSuccess }: Props) {
   const getTodayStr = () => new Date().toISOString().split('T')[0]
 
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null)
@@ -33,7 +33,6 @@ export default function ScheduleCreateModal({ absenceTypes, onClose, onSuccess }
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  // enrollment_status가 active인 유저 목록만 불러오기
   useEffect(() => {
     const fetchUsers = async () => {
       setLoadingUsers(true)
@@ -56,20 +55,38 @@ export default function ScheduleCreateModal({ absenceTypes, onClose, onSuccess }
     fetchUsers()
   }, [])
 
+  useEffect(() => {
+    if (initialData) {
+      if (initialData.profiles) {
+        setSelectedUser({
+          id: initialData.user_id,
+          full_name: initialData.profiles.full_name,
+          student_id: initialData.profiles.student_id,
+          affiliation: typeof initialData.profiles.affiliation === 'object' ? initialData.profiles.affiliation?.name || '' : '',
+        })
+      }
+      setAbsenceType(initialData.absence_type)
+      setStartDate(initialData.start_date || getTodayStr())
+      setEndDate(initialData.end_date || getTodayStr())
+      setReason(initialData.absence_reason || '')
+    }
+  }, [initialData])
+
   const filteredUsers = userList.filter((u) => {
     if (!userSearchTerm.trim()) return true
     const term = userSearchTerm.toLowerCase()
+    const affName = typeof u.affiliation === 'object' ? u.affiliation?.name : u.affiliation
     return (
       u.full_name?.toLowerCase().includes(term) ||
       u.student_id?.toLowerCase().includes(term) ||
-      u.affiliation?.toLowerCase().includes(term)
+      affName?.toLowerCase().includes(term)
     )
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedUser) {
-      setError('유저를 검색 후 선택해주세요.')
+      setError('유저를 선택해주세요.')
       return
     }
     if (!startDate || !endDate) {
@@ -84,26 +101,31 @@ export default function ScheduleCreateModal({ absenceTypes, onClose, onSuccess }
     setSubmitting(true)
     setError('')
 
+    const isEdit = !!initialData
+    const method = isEdit ? 'PUT' : 'POST'
+    const payload = {
+      ...(isEdit && { id: initialData.id }),
+      user_id: selectedUser.id,
+      absence_type: Number(absenceType),
+      start_date: startDate,
+      end_date: endDate,
+      absence_reason: reason,
+    }
+
     try {
       const res = await fetch('/api/admin/users/schedules', {
-        method: 'POST',
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: selectedUser.id,
-          absence_type: Number(absenceType),
-          start_date: startDate,
-          end_date: endDate,
-          absence_reason: reason,
-        }),
+        body: JSON.stringify(payload),
       })
 
       const data = await res.json()
       if (res.ok && data.schedule) {
-        onSuccess(data.schedule)
+        onSuccess(data.schedule, isEdit)
       } else {
-        setError(data.error || '등록 중 오류가 발생했습니다.')
+        setError(data.error || '처리 중 오류가 발생했습니다.')
       }
-    } catch (err) {
+    } catch {
       setError('서버 요청 실패')
     } finally {
       setSubmitting(false)
@@ -113,61 +135,55 @@ export default function ScheduleCreateModal({ absenceTypes, onClose, onSuccess }
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
       <div style={{ background: '#fff', borderRadius: '12px', width: '100%', maxWidth: '480px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-        <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>스케쥴 직접 등록</h2>
+        <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>
+          {initialData ? '스케쥴 수정' : '스케쥴 직접 등록'}
+        </h2>
 
         {error && <div style={{ padding: '8px 12px', background: '#fee2e2', color: '#b91c1c', borderRadius: '6px', marginBottom: '12px', fontSize: '14px' }}>{error}</div>}
 
         <form onSubmit={handleSubmit}>
-          {/* 유저 검색 및 선택 */}
           <div style={{ marginBottom: '12px', position: 'relative' }}>
-            <label style={{ display: 'block', fontSize: '14px', marginBottom: '4px', fontWeight: 500 }}>유저 검색 (이름/학번/소속)</label>
+            <label style={{ display: 'block', fontSize: '14px', marginBottom: '4px', fontWeight: 500 }}>유저 선택</label>
             {selectedUser ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#f1f5f9', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }}>
                 <div>
-                  <strong>{selectedUser.full_name}</strong> ({selectedUser.student_id}) - {selectedUser.affiliation}
+                  <strong>{selectedUser.full_name}</strong> ({selectedUser.student_id})
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedUser(null)
-                    setUserSearchTerm('')
-                  }}
-                  style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold' }}
-                >
-                  변경
-                </button>
+                {!initialData && (
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedUser(null); setUserSearchTerm(''); }}
+                    style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    변경
+                  </button>
+                )}
               </div>
             ) : (
               <div>
                 <input
                   type="text"
                   value={userSearchTerm}
-                  onChange={(e) => {
-                    setUserSearchTerm(e.target.value)
-                    setShowDropdown(true)
-                  }}
+                  onChange={(e) => { setUserSearchTerm(e.target.value); setShowDropdown(true); }}
                   onFocus={() => setShowDropdown(true)}
                   placeholder="이름 또는 학번 검색..."
                   style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }}
                 />
                 {showDropdown && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, maxHeight: '180px', overflowY: 'auto', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', zIndex: 10, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, maxHeight: '180px', overflowY: 'auto', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', zIndex: 10 }}>
                     {loadingUsers ? (
-                      <div style={{ padding: '8px 12px', color: '#94a3b8', fontSize: '13px' }}>유저 목록 불러오는 중...</div>
+                      <div style={{ padding: '8px 12px', color: '#94a3b8', fontSize: '13px' }}>불러오는 중...</div>
                     ) : filteredUsers.length === 0 ? (
-                      <div style={{ padding: '8px 12px', color: '#94a3b8', fontSize: '13px' }}>검색 결과가 없습니다.</div>
+                      <div style={{ padding: '8px 12px', color: '#94a3b8', fontSize: '13px' }}>검색 결과 없음</div>
                     ) : (
                       filteredUsers.map((u) => (
                         <div
                           key={u.id}
-                          onClick={() => {
-                            setSelectedUser(u)
-                            setShowDropdown(false)
-                          }}
+                          onClick={() => { setSelectedUser(u); setShowDropdown(false); }}
                           style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: '13px' }}
                           onMouseDown={(e) => e.preventDefault()}
                         >
-                          <strong>{u.full_name}</strong> ({u.student_id}) | {u.affiliation}
+                          <strong>{u.full_name}</strong> ({u.student_id})
                         </div>
                       ))
                     )}
@@ -177,7 +193,6 @@ export default function ScheduleCreateModal({ absenceTypes, onClose, onSuccess }
             )}
           </div>
 
-          {/* 외출 유형 */}
           <div style={{ marginBottom: '12px' }}>
             <label style={{ display: 'block', fontSize: '14px', marginBottom: '4px', fontWeight: 500 }}>외출 유형</label>
             <select
@@ -186,14 +201,11 @@ export default function ScheduleCreateModal({ absenceTypes, onClose, onSuccess }
               style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }}
             >
               {absenceTypes.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.text}
-                </option>
+                <option key={t.id} value={t.id}>{t.text}</option>
               ))}
             </select>
           </div>
 
-          {/* 날짜 선택 (시작날짜 / 종료날짜) */}
           <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
             <div style={{ flex: 1 }}>
               <label style={{ display: 'block', fontSize: '14px', marginBottom: '4px', fontWeight: 500 }}>시작 날짜</label>
@@ -215,7 +227,6 @@ export default function ScheduleCreateModal({ absenceTypes, onClose, onSuccess }
             </div>
           </div>
 
-          {/* 사유 */}
           <div style={{ marginBottom: '20px' }}>
             <label style={{ display: 'block', fontSize: '14px', marginBottom: '4px', fontWeight: 500 }}>사유</label>
             <textarea
@@ -240,7 +251,7 @@ export default function ScheduleCreateModal({ absenceTypes, onClose, onSuccess }
               disabled={submitting}
               style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: '#2563eb', color: '#fff', cursor: 'pointer', fontWeight: 600 }}
             >
-              {submitting ? '등록 중...' : '등록하기'}
+              {submitting ? '저장 중...' : initialData ? '수정 완료' : '등록하기'}
             </button>
           </div>
         </form>

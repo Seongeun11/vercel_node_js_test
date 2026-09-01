@@ -1,5 +1,6 @@
+//app\attendance\my-absence-reason\components\absence-reason-manager.tsx
 'use client'
-//./components/absence-reason-manager
+
 import React, { useState } from 'react'
 import AbsenceReasonForm from './absence-reason-form'
 import AbsenceReasonList, { AbsenceType, AbsenceItem } from './absence-reason-list'
