@@ -1,4 +1,4 @@
-// app/attendance/scan/page.tsx
+// app\attendance\scan\attendance-scanclient.tsx
 
 'use client'
 

@@ -1,4 +1,4 @@
-// app/admin/admin-only/schedule/components/schedule-create-modal.tsx
+//app\admin\admin-only\schedule\components\schedule-create-modal.tsx
 'use client'
 
 import React, { useState, useEffect } from 'react'
@@ -33,12 +33,16 @@ export default function ScheduleCreateModal({ absenceTypes, onClose, onSuccess }
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  // 유저 목록 가져오기
+  // enrollment_status가 active인 유저 목록만 불러오기
   useEffect(() => {
     const fetchUsers = async () => {
       setLoadingUsers(true)
       try {
-        const res = await fetch('/api/profiles/list', { method: 'POST' })
+        const res = await fetch('/api/profiles/list', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'active' }),
+        })
         const data = await res.json()
         if (res.ok && data.users) {
           setUserList(data.users)

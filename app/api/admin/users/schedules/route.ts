@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl
     const userId = searchParams.get('user_id')
     const absenceType = searchParams.get('absence_type')
+    const isEndedParam = searchParams.get('is_ended') // 'true' | 'false' | null
 
     // 외출 유형 공통 코드 조회
     const { data: absenceTypes, error: typeError } = await supabaseAdmin
@@ -69,13 +70,15 @@ export async function GET(request: NextRequest) {
         absence_type_info:absence_type ( id, text )
       `)
       .order('created_at', { ascending: false })
-      .limit(100)
+      //.limit(100)
 
     if (userId) query = query.eq('user_id', userId)
     if (absenceType) query = query.eq('absence_type', Number(absenceType))
+    if (isEndedParam === 'true') query = query.eq('is_ended', true)
+    if (isEndedParam === 'false') query = query.eq('is_ended', false)
 
     const { data: schedules, error: scheduleError } = await query
-
+    
     if (scheduleError) {
       console.error('[schedules GET] Fetch error:', scheduleError)
       return jsonNoStore({ error: '스케쥴 목록 조회 실패' }, { status: 500 })

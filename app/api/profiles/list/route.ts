@@ -8,22 +8,6 @@ import { jsonNoStore } from '@/lib/security/api-response'
 type EnrollmentStatus = 'active' | 'completed'
 type UserRole = 'admin' | 'captain' | 'trainee'
 
-
-
-type ProfileRow = {
-  id: string
-  full_name: string
-  student_id: string
-  // 조인된 데이터 (Supabase 쿼리 결과 형태)
-  roles: { name: string }
-  cohort_no: number | null
-  enrollment_status: EnrollmentStatus | null
-  affiliation: string 
-  current_points: number // 🪙 타입 명세서에 포인트 필드 추가
-  created_at: string
-  updated_at: string
-}
-
 function normalizeEnrollmentStatus(
   status: string | null
 ): EnrollmentStatus {
@@ -33,18 +17,27 @@ function normalizeEnrollmentStatus(
 export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request)
-// 관리자 권한 확인
-    const authResult = await requireRole(['admin'])
 
+    // 관리자 권한 확인
+    const authResult = await requireRole(['admin'])
     if (!authResult.ok) {
       return jsonNoStore(
         { error: authResult.error },
         { status: authResult.status }
       )
     }
-// 2. [수정 핵심] 조인 쿼리 실행
-    // role_id, affiliation_id 대신 각 테이블의 name을 가져옵니다.
-    const { data, error } = await supabaseAdmin
+
+    // 요청 Body에서 status 조건 추출 (기본값: undefined)
+    let statusFilter: string | undefined
+    try {
+      const body = await request.json()
+      statusFilter = body?.status
+    } catch {
+      // Body가 없는 경우 예외 처리
+    }
+
+    // 1. Supabase 쿼리 생성
+    let query = supabaseAdmin
       .from('profiles')
       .select(`
         id,
@@ -60,14 +53,21 @@ export async function POST(request: NextRequest) {
       `)
       .order('student_id', { ascending: true })
 
+    // status 파라미터가 들어온 경우 DB 조건절 적용
+    if (statusFilter) {
+      query = query.eq('enrollment_status', statusFilter)
+    }
+
+    const { data, error } = await query
+
     if (error) {
       return jsonNoStore(
         { error: error.message },
         { status: 500 }
       )
     }
-// 3. [수정 핵심] 클라이언트용 데이터 평탄화 매핑
-    // 중첩된 roles.name과 affiliations.name을 최상위 필드로 끌어올립니다.
+
+    // 2. 클라이언트용 데이터 평탄화 매핑
     const users = ((data ?? []) as any[]).map((user) => ({
       id: user.id,
       full_name: user.full_name,
@@ -75,10 +75,9 @@ export async function POST(request: NextRequest) {
       cohort_no: user.cohort_no,
       created_at: user.created_at,
       updated_at: user.updated_at,
-      // 가공 필드
       role: (user.roles?.name || 'trainee') as UserRole,
       affiliation: user.affiliations?.name || '미지정',
-      affiliation_id: user.affiliation_id, // 💡 [추가] 이 줄을 추가하여 프론트 필터 락을 해결합니다.
+      affiliation_id: user.affiliation_id,
       enrollment_status: normalizeEnrollmentStatus(user.enrollment_status),
       current_points: user.current_points !== undefined && user.current_points !== null ? user.current_points : 0,
     }))

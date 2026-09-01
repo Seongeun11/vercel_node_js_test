@@ -70,7 +70,7 @@ export default function AdminSchedulePage() {
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>스케쥴 관리</h1>
           <p style={{ color: '#000000', fontSize: '14px', marginTop: '4px' }}>
-            수련생 및 아카데미생들의 외출, 휴가 및 출석 스케쥴을 독립적으로 관리합니다.<br/>이 스케쥴에 등록된 회원은 엑셀내보내기에서 출석체크 통계에 반영되지 않습니다.
+            수련생 및 아카데미생들의 외출, 휴가 및 출석 스케쥴을 독립적으로 관리합니다.<br/>이 스케쥴에 등록된 회원은 엑셀내보내기에서 출석체크 통계에서 사유가 자동으로 반영됩니다.
           </p>
         </div>
         <button
