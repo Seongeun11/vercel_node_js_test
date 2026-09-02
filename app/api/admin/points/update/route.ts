@@ -36,18 +36,19 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. 트랜잭션 격리성 확보를 위해 현시점의 대상 유저 데이터 조회
-    const { data: profile, error: findError } = await supabaseAdmin
-      .from('profiles')
+    //-- user_points 테이블에서 현재 포인트 조회 (없으면 0으로 가동)
+    const { data: userPoint, error: findError } = await supabaseAdmin
+      .from('user_points')
       .select('current_points')
-      .eq('id', target_user_id)
-      .single()
+      .eq('user_id', target_user_id)
+      .maybeSingle()
 
-    if (findError || !profile) {
+    if (findError) {
       return jsonNoStore({ error: '존재하지 않는 회원입니다.' }, { status: 404 })
     }
 
     // 🛠️ 교정 핵심: 계산 시 원본 amount 대신 철저하게 정수형인 safeAmount를 사용합니다.
-    const beforePoints = profile.current_points
+    const beforePoints = userPoint?.current_points
     const afterPoints = beforePoints + safeAmount
 
     // 5. 비즈니스 로직 방어선: 음수 잔고 체크
@@ -55,12 +56,16 @@ export async function POST(request: NextRequest) {
       return jsonNoStore({ error: '보유 포인트보다 더 많은 포인트를 차감할 수 없습니다.' }, { status: 400 })
     }
 
-    // 6. DB 반영 (profiles 테이블 업데이트)
+    // 6. DB 반영 (user_points 테이블 업데이트)
     // 🛠️ 교정 핵심: 정수형으로 완전히 연산된 afterPoints를 업데이트에 반영합니다.
+    //-- user_points 테이블 Upsert/Update 진행
     const { error: updateError } = await supabaseAdmin
-      .from('profiles')
-      .update({ current_points: afterPoints, updated_at: new Date().toISOString() })
-      .eq('id', target_user_id)
+      .from('user_points')
+      .upsert({ 
+        user_id: target_user_id, 
+        current_points: afterPoints, 
+        updated_at: new Date().toISOString() 
+      })
 
     if (updateError) {
       return jsonNoStore({ error: '포인트 업데이트에 실패했습니다.' }, { status: 500 })

@@ -62,6 +62,7 @@ export default function RequestsClient() {
   }
 
   // 2) 자신에게 소속된 상점 장부 수신
+  // 1) Select 구문의 Profiles 연동 시 user_points를 조인하도록 변경
   const fetchAssignedRequests = async (store: 'goods' | 'cafe') => {
     const { data, error } = await supabase
       .from('point_usage_requests')
@@ -76,7 +77,9 @@ export default function RequestsClient() {
         profiles:user_id ( 
           full_name, 
           student_id, 
-          current_points 
+          user_points (
+            current_points
+          )
         )
       `)
       .eq('store_name', store) 
@@ -85,10 +88,18 @@ export default function RequestsClient() {
     if (error) {
       console.error('[browser] 대기 장부 수신 오류:', error)
     } else {
-      setRequests(data as unknown as PendingRequest[]) 
-    }
+      // raw 반환값을 인터페이스에 맞추어 매핑
+    const formattedData = (data as any[]).map(item => ({
+      ...item,
+      profiles: item.profiles ? {
+        full_name: item.profiles.full_name,
+        student_id: item.profiles.student_id,
+        current_points: item.profiles.user_points?.current_points ?? 0
+      } : null
+    }))
+    setRequests(formattedData as PendingRequest[]) 
   }
-
+}
   useEffect(() => {
     identifyCaptainAndLoad()
   }, [])
@@ -114,15 +125,16 @@ export default function RequestsClient() {
 
     try {
       // 1. 최신 포인트 정보 다시 실시간 베이스 조회
-      const { data: latestProfile, error: fetchErr } = await supabase
-        .from('profiles')
+      //-- user_points 테이블에서 최신 포인트 실시간 조회
+      const { data: latestPoint, error: fetchErr } = await supabase
+        .from('user_points')
         .select('current_points')
-        .eq('id', req.user_id)
-        .single();
+        .eq('user_id', req.user_id)
+        .maybeSingle();
 
       if (fetchErr) throw new Error(`유저의 최신 포인트를 조회할 수 없습니다. RLS를 확인하세요.`);
 
-      const currentPoints = latestProfile ? latestProfile.current_points : req.profiles.current_points;
+      const currentPoints = latestPoint ? latestPoint.current_points : (req.profiles?.current_points ?? 0);
 
       if (currentPoints < req.points_requested) { 
         alert('유저의 잔여 아카데미 포인트가 부족하여 승인 처리가 거절되었습니다.');
@@ -133,11 +145,12 @@ export default function RequestsClient() {
       const nextBalance = currentPoints - req.points_requested;
 
       // 2. 사용자 프로필 포인트 차감 실행 및 수정 결과 강제 반환(select) 설정
+      //-- user_points 테이블 차감 실행
       const { data: updateResult, error: profileErr } = await supabase
-        .from('profiles')
-        .update({ current_points: nextBalance })
-        .eq('id', req.user_id)
-        .select(); // 💡 중요: 수정한 행의 데이터를 다시 반환받도록 처리하여 RLS 차단 우회 여부 감시
+        .from('user_points')
+        .update({ current_points: nextBalance, updated_at: new Date().toISOString() })
+        .eq('user_id', req.user_id)
+        .select();
 
       if (profileErr) throw profileErr;
       

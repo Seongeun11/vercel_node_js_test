@@ -1,4 +1,4 @@
-//app\attendance\point-requests\my-point-requests-client.tsx
+// app/attendance/point-requests/my-point-requests-client.tsx
 'use client'
 
 import React, { useState, useEffect } from 'react'
@@ -14,7 +14,7 @@ interface UserProfile {
 
 interface UsageRequest {
   id: string
-  store_name: 'goods' | 'cafe' // [추가] 상점 필드 타입 정의
+  store_name: 'goods' | 'cafe'
   product_name: string
   points_requested: number
   status: 'pending' | 'approved' | 'rejected' 
@@ -29,27 +29,47 @@ export default function MyPointUsageRequestsClient() {
   const [requests, setRequests] = useState<UsageRequest[]>([])
   
   // 입력 폼 상태 관리
-  const [storeName, setStoreName] = useState<'goods' | 'cafe' | ''>('') // [추가] 상점 선택 유지를 위한 state
+  const [storeName, setStoreName] = useState<'goods' | 'cafe' | ''>('')
   const [productName, setProductName] = useState('')
   const [pointsRequested, setPointsRequested] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
 
-  // 유저 정보 및 본인의 포인트 요청 이력 조회
+  // 유저 정보 및 본인의 포인트 요청 이력 조회 (user_points 테이블 조인 반영)
   const loadData = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
-    // 1) 프로필 잔여 포인트 실시간 조회 
-    const { data: profile } = await supabase
+    // 1) profiles와 user_points 테이블을 조인하여 실시간 잔여 포인트 조회
+    const { data: profileData } = await supabase
       .from('profiles') 
-      .select('id, full_name, student_id, current_points')
+      .select(`
+        id, 
+        full_name, 
+        student_id,
+        user_points (
+          current_points
+        )
+      `)
       .eq('id', session.user.id)
       .single()
 
-    if (profile) setUser(profile)
+    if (profileData) {
+      // 조인된 user_points 배열 또는 객체에서 current_points 추출 (없으면 0 처리)
+      const rawUserPoints = (profileData as any).user_points;
+      const currentPoints = Array.isArray(rawUserPoints) 
+        ? (rawUserPoints[0]?.current_points ?? 0) 
+        : (rawUserPoints?.current_points ?? 0);
 
-    // 2) 신청 내역 조회 (store_name 컬럼 추가)
+      setUser({
+        id: profileData.id,
+        full_name: profileData.full_name,
+        student_id: profileData.student_id,
+        current_points: currentPoints
+      })
+    }
+
+    // 2) 신청 내역 조회
     const { data: reqList } = await supabase
       .from('point_usage_requests')
       .select('id, store_name, product_name, points_requested, status, created_at')
@@ -68,7 +88,6 @@ export default function MyPointUsageRequestsClient() {
     e.preventDefault()
     if (!user) return
 
-    // 상점 선택 정밀 검증
     if (!storeName) {
       alert('이용하실 상점(천심굿즈 또는 천심카페)을 상단에서 먼저 선택해 주세요.')
       return
@@ -84,30 +103,32 @@ export default function MyPointUsageRequestsClient() {
     setMessage('')
 
     try {
-      // [보안 강화 - 2차 방어]: 요청 제출 시점에 DB에서 실시간 최신 포인트 잔액 재조회 
-      const { data: latestProfile, error: profileCheckErr } = await supabase
-        .from('profiles')
+      // [보안 강화 - 2차 방어]: 요청 제출 시점에 user_points 테이블에서 실시간 최신 포인트 잔액 재조회
+      const { data: latestPointData, error: profileCheckErr } = await supabase
+        .from('user_points')
         .select('current_points')
-        .eq('id', user.id)
-        .single() 
+        .eq('user_id', user.id)
+        .maybeSingle() 
 
-      if (profileCheckErr || !latestProfile) {
-        throw new Error('사용자 계정 상태를 확인할 수 없습니다.')
+      if (profileCheckErr) {
+        throw new Error('사용자 계정 포인트 상태를 확인할 수 없습니다.')
       }
 
-      if (latestProfile.current_points < pts) {
-        alert(`잔여 포인트가 부족합니다.\n현재 실시간 보유 포인트: ${latestProfile.current_points.toLocaleString()} p`); 
-        setUser(prev => prev ? { ...prev, current_points: latestProfile.current_points } : null) 
+      const latestPoints = latestPointData?.current_points ?? 0
+
+      if (latestPoints < pts) {
+        alert(`잔여 포인트가 부족합니다.\n현재 실시간 보유 포인트: ${latestPoints.toLocaleString()} p`); 
+        setUser(prev => prev ? { ...prev, current_points: latestPoints } : null) 
         setLoading(false)
         return
       }
 
-      // 검증 통과 후 장부에 인서트 요청 진행 (store_name 매핑 추가) 
+      // 검증 통과 후 장부에 인서트 요청 진행
       const { error: insertError } = await supabase
         .from('point_usage_requests')
         .insert({
           user_id: user.id, 
-          store_name: storeName, // 'goods' 또는 'cafe'
+          store_name: storeName,
           product_name: productName.trim(), 
           points_requested: pts, 
           status: 'pending' 
@@ -118,7 +139,7 @@ export default function MyPointUsageRequestsClient() {
       setMessage('포인트 결제 요청이 전송되었습니다. 해당 상점의 승인을 기다려주세요.')
       setProductName('')
       setPointsRequested('')
-      setStoreName('') // 초기화
+      setStoreName('')
       await loadData() 
 
     } catch (error: any) {
@@ -152,7 +173,6 @@ export default function MyPointUsageRequestsClient() {
       {/* 결제 요청 입력 폼 */}
       <form onSubmit={handleSubmitRequest} style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '36px', background: '#fff', padding: '20px', borderRadius: '10px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', border: '1px solid #eee'  }}>
         
-        {/* 상점 선택 UI 컴포넌트 세그먼트 */}
         <div>
           <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '14px', color: '#333' }}>
             이용 상점 선택 <span style={{ color: '#d93025' }}>*</span>
@@ -222,7 +242,6 @@ export default function MyPointUsageRequestsClient() {
         </div>
       )}
 
-      {/* 개인 결제 내역 히스토리 그리드 */}
       <h3 style={{ marginBottom: '12px' }}>📋 나의 결제 요청 상태</h3> 
       <div style={{ border: '1px solid #eee', borderRadius: '8px', overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>

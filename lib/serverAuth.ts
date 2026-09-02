@@ -39,8 +39,8 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
         id, 
         full_name, 
         student_id, 
-        current_points,
-        roles!inner ( name )
+        roles!inner ( name ),
+        user_points ( current_points )
       `)
       .eq('id', user.id)
       .maybeSingle()
@@ -55,12 +55,18 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     // 3) [수정 핵심] 중첩된 객체를 평탄화하여 CurrentUser 형식으로 리턴
     // 3) 안전한 런타임 평탄화 매핑
     const rawProfile = profile as any;
+    const rawUserPoints = rawProfile.user_points
+    // user_points가 배열 또는 단일 객체 형태로 올 수 있으므로 안전하게 처리
+    const extractedPoints = Array.isArray(rawUserPoints)
+      ? (rawUserPoints[0]?.current_points ?? 0)
+      : (rawUserPoints?.current_points ?? 0)
+
     return {
       id: profile.id,
       full_name: profile.full_name,
       student_id: profile.student_id,
       // 데이터베이스 값이 null이거나 누락되었을 경우를 대비해 0으로 안전하게 방어 처리합니다.
-      current_points: Number(rawProfile.current_points ?? 0),
+      current_points: Number(extractedPoints),
       // roles.name을 role 필드로 할당 (TypeScript 에러 방지를 위해 as any 사용)
       role: (profile.roles as any)?.name as AppRole
     }

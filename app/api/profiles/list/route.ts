@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       // Body가 없는 경우 예외 처리
     }
 
-    // 1. Supabase 쿼리 생성
+    // 1. Supabase 쿼리 생성 (user_points 조인으로 수정)
     let query = supabaseAdmin
       .from('profiles')
       .select(`
@@ -45,11 +45,11 @@ export async function POST(request: NextRequest) {
         student_id,    
         cohort_no,
         enrollment_status,
-        current_points,
         created_at,
         updated_at,
         roles ( name ),
-        affiliations ( name )
+        affiliations ( name ),
+        user_points ( current_points )
       `)
       .order('student_id', { ascending: true })
 
@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await query
 
     if (error) {
+      console.error('[API Profiles List DB Error]:', error)
       return jsonNoStore(
         { error: error.message },
         { status: 500 }
@@ -68,19 +69,27 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. 클라이언트용 데이터 평탄화 매핑
-    const users = ((data ?? []) as any[]).map((user) => ({
-      id: user.id,
-      full_name: user.full_name,
-      student_id: user.student_id,
-      cohort_no: user.cohort_no,
-      created_at: user.created_at,
-      updated_at: user.updated_at,
-      role: (user.roles?.name || 'trainee') as UserRole,
-      affiliation: user.affiliations?.name || '미지정',
-      affiliation_id: user.affiliation_id,
-      enrollment_status: normalizeEnrollmentStatus(user.enrollment_status),
-      current_points: user.current_points !== undefined && user.current_points !== null ? user.current_points : 0,
-    }))
+    const users = ((data ?? []) as any[]).map((user) => {
+      // user_points 반환 형태(배열 또는 단일 객체) 대응
+      const rawUserPoints = user.user_points
+      const currentPoints = Array.isArray(rawUserPoints)
+        ? (rawUserPoints[0]?.current_points ?? 0)
+        : (rawUserPoints?.current_points ?? 0)
+
+      return {
+        id: user.id,
+        full_name: user.full_name,
+        student_id: user.student_id,
+        cohort_no: user.cohort_no,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+        role: (user.roles?.name || 'trainee') as UserRole,
+        affiliation: user.affiliations?.name || '미지정',
+        affiliation_id: user.affiliation_id,
+        enrollment_status: normalizeEnrollmentStatus(user.enrollment_status),
+        current_points: Number(currentPoints),
+      }
+    })
 
     return jsonNoStore({ users }, { status: 200 })
   } catch (error) {
@@ -91,6 +100,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    console.error('[API Profiles List Unexpected Error]:', error)
     return jsonNoStore(
       { error: '사용자 목록 조회 중 오류가 발생했습니다.' },
       { status: 500 }
