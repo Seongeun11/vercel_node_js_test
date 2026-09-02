@@ -26,9 +26,14 @@ fn_sync_attendance_to_points 함수 트리거<br>
 [방안 B: Next.js 웹 앱]   ───>  QR 코드 스캔   ── ┼─> [public.attendance] ──> [포인트 통합 트리거](데이터 변동)(자동 정산)<br>
 [방안 C: 수련생 대시보드] ───>  어드민 수동 정정 ──┘<br>
 
+아카데미 포스기 : pypointkiosk에서 아카데미 포인트 사용
+supabase에서 process_point_payment RPC사용함
+
 4. 월별 출석 조회 이벤트 필터링 방식을 단일에서 복수형으로 변경
 5. 회원 이름변경 추가
 
+6. supabase 자동오늘회차등록 - 실행시간 kst 03시 - 함수등록: cron_create_today_occurrences
+== vercel웹사이트경로와 정확히 일치해야함
 ---
 추가할 기능<br>
 
