@@ -129,6 +129,9 @@ export default async function AdminLayout({ children }: Props) {
                 <Link href={`/admin/admin-only/schedule`} style={navLinkStyle}>
                   해외선교 및<br />장기외출 관리
                 </Link>
+                <Link href={`/admin/admin-only/notion-sync`} style={navLinkStyle}>
+                  노션 동기화
+                </Link>
                 <Link href={`/admin/admin-only/points`} style={navLinkStyle}>
                   포인트 관리
                 </Link>
