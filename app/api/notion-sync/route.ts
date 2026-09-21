@@ -1,3 +1,4 @@
+//app\api\notion-sync\route.ts
 import { NextRequest } from 'next/server'
 import { Client } from '@notionhq/client'
 import { supabaseAdmin } from '@/lib/supabase/admin'
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
   try {
     // 1. Webhook 또는 외부 호출 보안 검증
     const secretHeader = request.headers.get('x-notion-sync-secret')
-    if (process.env.NOTION_SYNC_SECRET && secretHeader !== process.env.NOTION_SYNC_SECRET) {
+    if (NOTION_TOKEN && secretHeader !== NOTION_TOKEN) {
       return jsonNoStore({ error: '인증되지 않은 동기화 요청입니다.' }, { status: 401 })
     }
 

@@ -1,4 +1,3 @@
-// app/admin/admin-only/points/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -6,6 +5,7 @@ import AdminHeader from '@/components/admin/AdminHeader'
 import { useAdminPoints } from './hooks/use-admin-points'
 import PointAdjustmentView from './components/point-adjustment-view'
 import PointLogsView from './components/point-logs-view'
+import GoogleSheetSync from './components/google-sheet-sync'
 
 export default function AdminPointsPage() {
   const [activeTab, setActiveTab] = useState<'adjust' | 'logs'>('adjust')
@@ -41,6 +41,9 @@ export default function AdminPointsPage() {
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <AdminHeader title="포인트 종합 관리" description="수련생 포인트 정산 및 변동 이력을 추적합니다." />
+
+      {/* 엑셀 동기화 컴포넌트 추가 */}
+      <GoogleSheetSync onSuccess={fetchUsersWithPoints} />
 
       {/* 전문적인 탭 네비게이션 */}
       <div style={tabContainerStyle}>
