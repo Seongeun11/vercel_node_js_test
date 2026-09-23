@@ -110,6 +110,8 @@ export async function GET(request: NextRequest): Promise<Response> {
     return Response.json({ error: '교육생 정보를 불러오지 못했습니다.' }, { status: 500 })
   }
 
+  const traineeIds = trainees.map(t => t.id)
+
   // 3. 출석 데이터 조회
   let attendanceQuery = supabaseAdmin
     .from('attendance')
@@ -131,9 +133,8 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   const { data: attendanceData } = await attendanceQuery
 
-  // 4. 수강생들의 스케쥴(결석 사유) 데이터 조회 - 수정된 Supabase 쿼리
   // 4. 수강생들의 스케쥴(결석 사유) 데이터 조회
-  // ✨ traineeIds 기반 조건 제거 후, 선택한 eventIds 기준으로 결석 사유를 직접 조회하여 누락 방지
+  // event_id가 선택된 eventIds에 포함되거나, event_id가 null(공통 일정)인 데이터를 모두 조회
   let scheduleQuery = supabaseAdmin
     .from('user_schedules')
     .select(`
@@ -147,7 +148,12 @@ export async function GET(request: NextRequest): Promise<Response> {
       events ( name ),
       profiles ( student_id, full_name )
     `)
-    .in('event_id', eventIds)
+    .or(`event_id.in.(${eventIds.join(',')}),event_id.is.null`)
+
+  // 조회 대상 수강생 조건 추가 (소속 필터 유지를 위함)
+  if (traineeIds.length > 0) {
+    scheduleQuery = scheduleQuery.in('user_id', traineeIds)
+  }
 
   if (dateFrom) {
     scheduleQuery = scheduleQuery.gte('end_date', dateFrom)
@@ -296,7 +302,6 @@ export async function GET(request: NextRequest): Promise<Response> {
     })
   })
 
-  // 7. 엑셀 하단 결석 사유 표 추가 - 수정된 데이터 매핑
   // 7. 엑셀 하단 결석 사유 표 추가
   if (userSchedules && userSchedules.length > 0) {
     worksheet.addRow([]) // 빈 행 구분선
@@ -322,14 +327,14 @@ export async function GET(request: NextRequest): Promise<Response> {
     })
 
     userSchedules.forEach((sch: any) => {
-      // 배열 또는 단일 객체 구조 방어 처리
       const profile = Array.isArray(sch.profiles) ? sch.profiles[0] : sch.profiles
       const eventObj = Array.isArray(sch.events) ? sch.events[0] : sch.events
       const typeObj = Array.isArray(sch.absence_type) ? sch.absence_type[0] : sch.absence_type
 
       const studentId = profile?.student_id || '-'
       const name = profile?.full_name || '-'
-      const eventName = eventObj?.name || '-'
+      // event_id가 null이거나 이벤트명이 없으면 '공통/전체' 표기
+      const eventName = eventObj?.name || '공통/전체'
       const typeText = typeObj?.text || '-'
       const period = sch.start_date === sch.end_date 
         ? (sch.start_date || '-') 
