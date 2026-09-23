@@ -1,3 +1,4 @@
+//app\api\admin\attendance\export\route.ts
 import { NextRequest } from 'next/server'
 import ExcelJS from 'exceljs'
 import { requireRole } from '@/lib/serverAuth'
@@ -130,41 +131,45 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   const { data: attendanceData } = await attendanceQuery
 
-  // 4. 수강생들의 스케쥴(외출/휴가 사유) 데이터 조회 - 선택한 event_id 기반 필터링
-const traineeIds = trainees.map(t => t.id)
-let scheduleQuery = supabaseAdmin
-  .from('user_schedules')
-  .select(`
-    id,
-    user_id,
-    event_id,
-    start_date,
-    end_date,
-    absence_reason,
-    absence_type_info:absence_type ( text ),
-    events:event_id ( name ),
-    profiles:user_id ( student_id, full_name )
-  `)
-  .in('user_id', traineeIds.length > 0 ? traineeIds : ['00000000-0000-0000-0000-000000000000'])
-  .in('event_id', eventIds) // ✨ 선택된 이벤트 ID 리스트에 해당하는 사유만 정확하게 필터링
+  // 4. 수강생들의 스케쥴(결석 사유) 데이터 조회 - 수정된 Supabase 쿼리
+  // 4. 수강생들의 스케쥴(결석 사유) 데이터 조회
+  // ✨ traineeIds 기반 조건 제거 후, 선택한 eventIds 기준으로 결석 사유를 직접 조회하여 누락 방지
+  let scheduleQuery = supabaseAdmin
+    .from('user_schedules')
+    .select(`
+      id,
+      user_id,
+      event_id,
+      start_date,
+      end_date,
+      absence_reason,
+      absence_type ( text ),
+      events ( name ),
+      profiles ( student_id, full_name )
+    `)
+    .in('event_id', eventIds)
 
-if (dateFrom) {
-  scheduleQuery = scheduleQuery.gte('end_date', dateFrom)
-}
-if (dateTo) {
-  scheduleQuery = scheduleQuery.lte('start_date', dateTo)
-}
+  if (dateFrom) {
+    scheduleQuery = scheduleQuery.gte('end_date', dateFrom)
+  }
+  if (dateTo) {
+    scheduleQuery = scheduleQuery.lte('start_date', dateTo)
+  }
 
-const { data: userSchedules } = await scheduleQuery.order('start_date', { ascending: true })
+  const { data: userSchedules, error: scheduleError } = await scheduleQuery.order('start_date', { ascending: true })
 
-// 5. 데이터 구조화 및 매핑
+  if (scheduleError) {
+    console.error('[Excel Export] Schedule Fetch Error:', scheduleError)
+  }
+
+  // 5. 데이터 구조화 및 매핑
   const columnsSet = new Set<string>()
   const userMap = new Map<string, {
     student_id: string
     full_name: string
     cohort_no: number | null
     statuses: Record<string, string>
-    attendedCount: number // 출석 + 지각 합산
+    attendedCount: number
   }>()
 
   for (const t of trainees) {
@@ -201,7 +206,6 @@ const { data: userSchedules } = await scheduleQuery.order('start_date', { ascend
         const wasAttended = prevStatusText === '출석' || prevStatusText === '지각'
         const isAttended = row.status === 'present' || row.status === 'late'
 
-        // 출석 + 지각인 경우 출석 횟수로 카운트
         if (!wasAttended && isAttended) {
           targetUser.attendedCount += 1
         } else if (wasAttended && !isAttended) {
@@ -244,7 +248,7 @@ const { data: userSchedules } = await scheduleQuery.order('start_date', { ascend
     }
   })
 
-  // 회원별 행 추가 및 스타일링 (출석: 초록, 지각: 노랑, 결석: 무색)
+  // 회원별 행 추가 및 스타일링
   const sortedUsers = Array.from(userMap.values())
     .sort((a, b) => (a.student_id || '').localeCompare(b.student_id || ''))
 
@@ -253,7 +257,7 @@ const { data: userSchedules } = await scheduleQuery.order('start_date', { ascend
       user.student_id,
       user.full_name,
       user.cohort_no != null ? String(user.cohort_no) : '',
-      user.attendedCount, // 평균 출석률 대신 출석+지각 합산 횟수
+      user.attendedCount,
     ]
 
     for (const col of sortedColumns) {
@@ -271,32 +275,31 @@ const { data: userSchedules } = await scheduleQuery.order('start_date', { ascend
         right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
       }
 
-      // 출석일자 컬럼 색상 처리
       if (colNumber > baseHeaders.length) {
         const val = cell.value?.toString()
         if (val === '출석') {
           cell.fill = {
             type: 'pattern',
             pattern: 'solid',
-            fgColor: { argb: 'FFDCFCE7' }, // Light Green
+            fgColor: { argb: 'FFDCFCE7' },
           }
           cell.font = { color: { argb: 'FF15803D' }, bold: true }
         } else if (val === '지각') {
           cell.fill = {
             type: 'pattern',
             pattern: 'solid',
-            fgColor: { argb: 'FFFEF9C3' }, // Light Yellow
+            fgColor: { argb: 'FFFEF9C3' },
           }
           cell.font = { color: { argb: 'FFA16207' }, bold: true }
         }
-        // 결석/미출석은 기본 무색
       }
     })
   })
 
-  // 7. 엑셀 가장 밑에 등록된 스케쥴 사유 표 추가
+  // 7. 엑셀 하단 결석 사유 표 추가 - 수정된 데이터 매핑
+  // 7. 엑셀 하단 결석 사유 표 추가
   if (userSchedules && userSchedules.length > 0) {
-    worksheet.addRow([]) // 빈 행 추가
+    worksheet.addRow([]) // 빈 행 구분선
 
     const scheduleTitleRow = worksheet.addRow(['스케쥴 등록 회원 사유 목록'])
     scheduleTitleRow.font = { bold: true, size: 11, color: { argb: 'FF0F172A' } }
@@ -319,14 +322,21 @@ const { data: userSchedules } = await scheduleQuery.order('start_date', { ascend
     })
 
     userSchedules.forEach((sch: any) => {
-      const studentId = sch.profiles?.student_id || '-'
-      const name = sch.profiles?.full_name || '-'
-      const eventName = sch.events?.name || '-'
-      const typeText = sch.absence_type_info?.text || '-'
-      const period = `${sch.start_date || ''} ~ ${sch.end_date || ''}`
+      // 배열 또는 단일 객체 구조 방어 처리
+      const profile = Array.isArray(sch.profiles) ? sch.profiles[0] : sch.profiles
+      const eventObj = Array.isArray(sch.events) ? sch.events[0] : sch.events
+      const typeObj = Array.isArray(sch.absence_type) ? sch.absence_type[0] : sch.absence_type
+
+      const studentId = profile?.student_id || '-'
+      const name = profile?.full_name || '-'
+      const eventName = eventObj?.name || '-'
+      const typeText = typeObj?.text || '-'
+      const period = sch.start_date === sch.end_date 
+        ? (sch.start_date || '-') 
+        : `${sch.start_date || ''} ~ ${sch.end_date || ''}`
       const reason = sch.absence_reason || '사유 없음'
 
-      const schRow = worksheet.addRow([studentId, name, eventName,   typeText, period, reason])
+      const schRow = worksheet.addRow([studentId, name, eventName, typeText, period, reason])
       schRow.eachCell((cell) => {
         cell.alignment = { vertical: 'middle', horizontal: 'center' }
         cell.border = {
