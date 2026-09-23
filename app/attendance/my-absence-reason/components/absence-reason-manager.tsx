@@ -1,15 +1,15 @@
-//app\attendance\my-absence-reason\components\absence-reason-manager.tsx
 'use client'
 
 import React, { useState } from 'react'
-import AbsenceReasonForm from './absence-reason-form'
+import AbsenceReasonForm, { EventOption } from './absence-reason-form'
 import AbsenceReasonList, { AbsenceType, AbsenceItem } from './absence-reason-list'
 
 type Props = {
   absenceTypes: AbsenceType[]
+  events?: EventOption[] // ✨ events 타입 추가
 }
 
-export default function AbsenceReasonManager({ absenceTypes }: Props) {
+export default function AbsenceReasonManager({ absenceTypes, events = [] }: Props) {
   const [editingItem, setEditingItem] = useState<AbsenceItem | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
 
@@ -27,6 +27,7 @@ export default function AbsenceReasonManager({ absenceTypes }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <AbsenceReasonForm
         absenceTypes={absenceTypes}
+        events={events} // ✨ Form으로 전달 추가
         editingItem={editingItem}
         onSuccess={handleSuccess}
         onCancelEdit={() => setEditingItem(null)}

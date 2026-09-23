@@ -130,23 +130,24 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   const { data: attendanceData } = await attendanceQuery
 
-  // 4. 수강생들의 스케쥴(외출/휴가 사유) 데이터 조회
-  const traineeIds = trainees.map(t => t.id)
-  let scheduleQuery = supabaseAdmin
+  // 4. 수강생들의 스케쥴(외출/휴가 사유) 데이터 조회 - 선택한 event_id 기반 필터링
+const traineeIds = trainees.map(t => t.id)
+let scheduleQuery = supabaseAdmin
   .from('user_schedules')
   .select(`
     id,
     user_id,
+    event_id,
     start_date,
     end_date,
     absence_reason,
     absence_type_info:absence_type ( text ),
+    events:event_id ( name ),
     profiles:user_id ( student_id, full_name )
   `)
   .in('user_id', traineeIds.length > 0 ? traineeIds : ['00000000-0000-0000-0000-000000000000'])
-  .order('start_date', { ascending: true })
+  .in('event_id', eventIds) // ✨ 선택된 이벤트 ID 리스트에 해당하는 사유만 정확하게 필터링
 
-// ✨ 기간 지난 스케쥴 제외 조건 추가 (조회 기간과 겹치는 스케쥴만 필터링)
 if (dateFrom) {
   scheduleQuery = scheduleQuery.gte('end_date', dateFrom)
 }
@@ -155,7 +156,8 @@ if (dateTo) {
 }
 
 const { data: userSchedules } = await scheduleQuery.order('start_date', { ascending: true })
-  // 5. 데이터 구조화 및 매핑
+
+// 5. 데이터 구조화 및 매핑
   const columnsSet = new Set<string>()
   const userMap = new Map<string, {
     student_id: string
@@ -299,7 +301,7 @@ const { data: userSchedules } = await scheduleQuery.order('start_date', { ascend
     const scheduleTitleRow = worksheet.addRow(['스케쥴 등록 회원 사유 목록'])
     scheduleTitleRow.font = { bold: true, size: 11, color: { argb: 'FF0F172A' } }
 
-    const scheduleHeaderRow = worksheet.addRow(['학번', '이름', '외출 유형', '기간', '사유'])
+    const scheduleHeaderRow = worksheet.addRow(['학번', '이름', '행사명', '외출 유형', '기간', '사유'])
     scheduleHeaderRow.font = { bold: true }
     scheduleHeaderRow.eachCell((cell) => {
       cell.fill = {
@@ -319,11 +321,12 @@ const { data: userSchedules } = await scheduleQuery.order('start_date', { ascend
     userSchedules.forEach((sch: any) => {
       const studentId = sch.profiles?.student_id || '-'
       const name = sch.profiles?.full_name || '-'
+      const eventName = sch.events?.name || '-'
       const typeText = sch.absence_type_info?.text || '-'
       const period = `${sch.start_date || ''} ~ ${sch.end_date || ''}`
       const reason = sch.absence_reason || '사유 없음'
 
-      const schRow = worksheet.addRow([studentId, name, typeText, period, reason])
+      const schRow = worksheet.addRow([studentId, name, eventName,   typeText, period, reason])
       schRow.eachCell((cell) => {
         cell.alignment = { vertical: 'middle', horizontal: 'center' }
         cell.border = {

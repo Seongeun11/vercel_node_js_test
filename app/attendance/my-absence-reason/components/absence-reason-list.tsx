@@ -10,6 +10,8 @@ export type AbsenceType = {
 
 export type AbsenceItem = {
   id: string
+  event_id?: string           
+  event_name?: string         
   absence_type: number
   absence_type_name?: string
   start_date: string
@@ -173,7 +175,12 @@ export default function AbsenceReasonList({ absenceTypes, onEditClick, onRefresh
             return (
               <div key={item.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
                   <span style={{ fontWeight: 'bold', color: '#2563eb', fontSize: '14px' }}>[{typeLabel}]</span>
+                  <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '14px' }}>
+                      {item.event_name || '미지정 행사'}
+                    </span>
+                  </div>
                   <span style={{ fontSize: '12px', color: '#64748b' }}>
                     {item.start_date} ~ {item.end_date}
                   </span>

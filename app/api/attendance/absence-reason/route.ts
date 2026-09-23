@@ -7,6 +7,7 @@ import { jsonNoStore } from '@/lib/security/api-response'
 type RequestBody = {
   id?: number | string
   absence_type?: number
+  event_id?: string
   start_date?: string
   end_date?: string
   absence_reason?: string
@@ -29,13 +30,15 @@ export async function GET(request: NextRequest): Promise<Response> {
       .from('user_schedules')
       .select(`
         id, 
+        event_id,
         absence_type, 
         start_date, 
         end_date, 
         absence_reason, 
         is_ended,
         created_at,
-        absence_type_rel:absence_type ( text )
+        absence_type_rel:absence_type ( text ),
+        events ( name )
       `)
       .eq('user_id', session.profile.id)
 
@@ -62,6 +65,8 @@ export async function GET(request: NextRequest): Promise<Response> {
 
     const items = rawItems.map((item: any) => ({
       id: String(item.id),
+      event_id: item.event_id|| '',
+      event_name: item.events?.name ?? '미지정 행사',
       absence_type: item.absence_type,
       absence_type_name: item.absence_type_rel?.text ?? '기타',
       start_date: item.start_date,
@@ -88,9 +93,9 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const body = (await request.json()) as RequestBody
-    const { absence_type, start_date, end_date, absence_reason } = body
+    const { absence_type, event_id, start_date, end_date, absence_reason } = body
 
-    if (!absence_type || !start_date || !end_date || !absence_reason?.trim()) {
+    if (!absence_type || !event_id || !start_date || !end_date || !absence_reason?.trim()) {
       return jsonNoStore({ error: '모든 필수 항목을 입력해주세요.' }, { status: 400 })
     }
 
@@ -106,6 +111,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       .from('user_schedules')
       .insert({
         user_id: session.profile.id,
+        event_id,
         absence_type: Number(absence_type),
         start_date,
         end_date,
@@ -140,9 +146,9 @@ export async function PUT(request: NextRequest): Promise<Response> {
     }
 
     const body = (await request.json()) as RequestBody
-    const { id, absence_type, start_date, end_date, absence_reason } = body
+    const { id, absence_type, event_id, start_date, end_date, absence_reason } = body
 
-    if (!id || !absence_type || !start_date || !end_date || !absence_reason?.trim()) {
+    if (!id || !absence_type || !event_id || !start_date || !end_date || !absence_reason?.trim()) {
       return jsonNoStore({ error: '모든 필수 항목을 입력해주세요.' }, { status: 400 })
     }
 
@@ -155,6 +161,7 @@ export async function PUT(request: NextRequest): Promise<Response> {
     const { data: schedule, error } = await session.supabase
       .from('user_schedules')
       .update({
+        event_id,
         absence_type: Number(absence_type),
         start_date,
         end_date,

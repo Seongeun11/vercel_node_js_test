@@ -1,20 +1,38 @@
-//app\attendance\my-absence-reason\components\absence-reason-form.tsx
 'use client'
 
 import React, { useState, useEffect } from 'react'
 import { AbsenceType, AbsenceItem } from './absence-reason-list'
 
+export type EventOption = {
+  id: string
+  name: string
+  start_time: string
+}
+
 type Props = {
-  absenceTypes: AbsenceType[]
+  absenceTypes?: AbsenceType[]
+  events?: EventOption[]
   editingItem: AbsenceItem | null
   onSuccess: () => void
   onCancelEdit: () => void
 }
 
-export default function AbsenceReasonForm({ absenceTypes, editingItem, onSuccess, onCancelEdit }: Props) {
+export default function AbsenceReasonForm({
+  absenceTypes = [],
+  events = [],
+  editingItem,
+  onSuccess,
+  onCancelEdit,
+}: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [absenceType, setAbsenceType] = useState<number>(absenceTypes[0]?.id || 1)
+  
+  // Safe Array 기본값 처리
+  const safeAbsenceTypes = Array.isArray(absenceTypes) ? absenceTypes : []
+  const safeEvents = Array.isArray(events) ? events : []
+
+  const [absenceType, setAbsenceType] = useState<number>(safeAbsenceTypes[0]?.id || 1)
+  const [eventId, setEventId] = useState<string>(safeEvents[0]?.id || '')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [reason, setReason] = useState('')
@@ -24,19 +42,25 @@ export default function AbsenceReasonForm({ absenceTypes, editingItem, onSuccess
   useEffect(() => {
     if (editingItem) {
       setAbsenceType(editingItem.absence_type)
+      setEventId(editingItem.event_id || safeEvents[0]?.id || '')
       setStartDate(editingItem.start_date)
       setEndDate(editingItem.end_date)
       setReason(editingItem.absence_reason)
     } else {
-      setAbsenceType(absenceTypes[0]?.id || 1)
+      setAbsenceType(safeAbsenceTypes[0]?.id || 1)
+      setEventId(safeEvents[0]?.id || '')
       setStartDate(today)
       setEndDate(today)
       setReason('')
     }
-  }, [editingItem, absenceTypes, today])
+  }, [editingItem, safeAbsenceTypes, safeEvents, today])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!eventId) {
+      setError('대상 행사를 선택해주세요.')
+      return
+    }
     if (!reason.trim()) {
       setError('결석 사유를 입력해주세요.')
       return
@@ -56,6 +80,7 @@ export default function AbsenceReasonForm({ absenceTypes, editingItem, onSuccess
       start_date: startDate,
       end_date: endDate,
       absence_reason: reason.trim(),
+      event_id: eventId,
     }
 
     try {
@@ -81,17 +106,41 @@ export default function AbsenceReasonForm({ absenceTypes, editingItem, onSuccess
 
   return (
     <div style={{ background: '#fff', border: '1px solid #ddd', borderRadius: '12px', padding: '20px' }}>
-      <h3 style={{ marginTop: 0, marginBottom: '16px' }}>{editingItem ? '✏️ 결석 사유 수정하기' : '📝 결석 사유 등록하기'}</h3>
-      {error && <div style={{ padding: '8px 12px', background: '#fee2e2', color: '#b91c1c', borderRadius: '6px', marginBottom: '12px', fontSize: '13px' }}>{error}</div>}
+      <h3 style={{ marginTop: 0, marginBottom: '16px' }}>
+        {editingItem ? '✏️ 결석 사유 수정하기' : '📝 결석 사유 등록하기'}
+      </h3>
+      {error && (
+        <div style={{ padding: '8px 12px', background: '#fee2e2', color: '#b91c1c', borderRadius: '6px', marginBottom: '12px', fontSize: '13px' }}>
+          {error}
+        </div>
+      )}
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold', fontSize: '13px' }}>대상 행사</label>
+          <select value={eventId} onChange={(e) => setEventId(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ccc' }}>
+            {safeEvents.length === 0 ? (
+              <option value="">선택 가능한 행사 없음</option>
+            ) : (
+              safeEvents.map((ev) => (
+                <option key={ev.id} value={ev.id}>
+                  {ev.name} ({ev.start_time?.split('T')[0]})
+                </option>
+              ))
+            )}
+          </select>
+        </div>
+
         <div>
           <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold', fontSize: '13px' }}>구분</label>
           <select value={absenceType} onChange={(e) => setAbsenceType(Number(e.target.value))} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ccc' }}>
-            {absenceTypes.map((type) => (
-              <option key={type.id} value={type.id}>{type.text}</option>
+            {safeAbsenceTypes.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.text}
+              </option>
             ))}
           </select>
         </div>
+
         <div style={{ display: 'flex', gap: '8px' }}>
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold', fontSize: '13px' }}>시작일</label>
@@ -102,13 +151,17 @@ export default function AbsenceReasonForm({ absenceTypes, editingItem, onSuccess
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box' }} />
           </div>
         </div>
+
         <div>
           <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold', fontSize: '13px' }}>상세 사유</label>
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={500} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box' }} />
         </div>
+
         <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
           {editingItem && (
-            <button type="button" onClick={onCancelEdit} style={{ flex: 1, padding: '8px', background: '#f3f4f6', border: '1px solid #ccc', borderRadius: '6px', cursor: 'pointer' }}>취소</button>
+            <button type="button" onClick={onCancelEdit} style={{ flex: 1, padding: '8px', background: '#f3f4f6', border: '1px solid #ccc', borderRadius: '6px', cursor: 'pointer' }}>
+              취소
+            </button>
           )}
           <button type="submit" disabled={submitting} style={{ flex: 2, padding: '8px', background: editingItem ? '#16a34a' : '#0070f3', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
             {submitting ? '처리 중...' : editingItem ? '수정 완료' : '등록 완료'}
