@@ -1,3 +1,4 @@
+//app\admin\admin-only\points\hooks\use-sheet-sync.ts
 'use client'
 
 import { useState } from 'react'

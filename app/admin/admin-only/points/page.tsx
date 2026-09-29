@@ -41,7 +41,7 @@ export default function AdminPointsPage() {
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <AdminHeader title="포인트 종합 관리" description="수련생 포인트 정산 및 변동 이력을 추적합니다." />
-
+      <p>아카데미 구글시트 형식을 준수해주세요. 형식이 잘못된 경우 동기화가 실패할 수 있습니다. <br />구글시트의 [파일] [공유] [웹에 게시]를 통해 생성된 CSV 링크를 넣어주세요.</p> 
       {/* 엑셀 동기화 컴포넌트 추가 */}
       <GoogleSheetSync onSuccess={fetchUsersWithPoints} />
 

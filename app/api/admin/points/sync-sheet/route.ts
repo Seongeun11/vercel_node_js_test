@@ -1,3 +1,4 @@
+//app\api\admin\points\sync-sheet\route.ts
 import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
@@ -112,8 +113,17 @@ export async function POST(request: NextRequest) {
         error: '시트를 불러올 수 없습니다. 링크 공유 권한이 "링크가 있는 모든 사용자(보기 가능)"로 설정되어 있는지 확인해주세요.' 
       }, { status: 400 })
     }
+    
 
     const csvText = await csvRes.text()
+
+    // 💡 추가된 방어 로직: 구글 로그인 페이지 등 HTML이 반환된 경우 차단
+    if (csvText.trim().startsWith('<!DOCTYPE html>') || csvText.includes('<html')) {
+      return jsonNoStore({ 
+        error: '구글 시트가 올바르게 공개되지 않았거나 접근할 수 없습니다. 시트의 [파일] > [공유] > [웹에 게시]를 통해 CSV 링크를 이용하거나 권한을 다시 확인해주세요.' 
+      }, { status: 400 })
+    }
+
     const rows = parseCSV(csvText)
 
     if (rows.length === 0) {
