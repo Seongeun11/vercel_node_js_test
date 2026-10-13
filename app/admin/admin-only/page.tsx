@@ -31,7 +31,9 @@ export default async function AdminPage() {
       [public.attendance][포인트 통합 트리거](데이터 변동)(자동 정산)
       <br/>2026.07.04 업데이트<br /> 
       supabase 자동 결석 처리 - 실행시간 kst 02시 - 함수등록: cron_daily-attendance-auto-close-job<br/>== mark_absent_by_occurrence_with_log 와 연동되어 순차 결석처리됨.<br />
-
+      <br/>2026.07.05 업데이트<br />
+      supabase 자동 구글시트 포인트 동기화 처리 - 실행시간 kst 01시 - 함수등록: daily-google-sheet-sync<br/>== vercel웹사이트경로와 정확히 일치해야함<br />
+      <br/>2026.07.05 업데이트<br />
 
     </main>
   )
