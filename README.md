@@ -34,6 +34,17 @@ supabase에서 process_point_payment RPC사용함
 
 6. supabase 자동오늘회차등록 - 실행시간 kst 03시 - 함수등록: cron_create_today_occurrences
 == vercel웹사이트경로와 정확히 일치해야함
+
+7. supabase 자동화 결석 등록
+:daily-attendance-auto-close-job
+
+8. 구글 시트 자동화 등록
+supabase cron 사용
+system_settings 테이블에 링크를 저장함
+cron에서 vercel웹사이트경로와 정확히 일치해야함
+함수등록: daily-google-sheet-sync
+
+cron은 database/extensions/ pg_cron(Supabase Cron)/ jobs 클릭하기
 ---
 추가할 기능<br>
 
