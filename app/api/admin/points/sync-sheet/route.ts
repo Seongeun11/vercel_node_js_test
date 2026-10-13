@@ -1,4 +1,4 @@
-//app\api\admin\points\sync-sheet\route.ts
+// app/api/admin/points/sync-sheet/route.ts
 import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/serverAuth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
@@ -6,31 +6,35 @@ import { assertSameOrigin } from '@/lib/security/csrf'
 import { jsonNoStore } from '@/lib/security/api-response'
 
 /**
- * 다양한 형태의 구글 시트 전체 URL을 CSV 직접 다운로드 URL로 변환합니다.
+ * 다양한 형태의 구글 시트 전체 URL을 안정적인 CSV 직접 다운로드 URL로 변환합니다.
  */
 function getCsvUrl(sheetUrl: string): string {
   const trimmed = sheetUrl.trim()
 
   // 1. 이미 CSV 출력 형태인 경우
-  if (trimmed.includes('output=csv')) {
+  if (trimmed.includes('output=csv') || trimmed.includes('format=csv')) {
     return trimmed
   }
 
-  // 2. '웹에 게시(pubhtml)'된 전체 링크 처리
+  // 2. '웹에 게시(pubhtml 또는 pub)'된 링크 처리
   if (trimmed.includes('/pubhtml')) {
     return trimmed.replace('/pubhtml', '/pub?output=csv')
   }
+  if (trimmed.includes('/pub?')) {
+    return trimmed.includes('output=csv') ? trimmed : `${trimmed}&output=csv`
+  }
 
-  // 3. 일반 편집/보기 공유 전체 링크 (https://docs.google.com/spreadsheets/d/{ID}/edit#gid={GID})
+  // 3. 일반 편집/보기 공유 링크 (https://docs.google.com/spreadsheets/d/{ID}/edit...)
   const spreadsheetIdMatch = trimmed.match(/\/d\/([a-zA-Z0-9-_]+)/)
   if (spreadsheetIdMatch && spreadsheetIdMatch[1]) {
     const spreadsheetId = spreadsheetIdMatch[1]
     
-    // URL 매개변수 또는 해시태그(#)에서 gid 추출
+    // gid 추출 (없으면 기본 0)
     const gidMatch = trimmed.match(/[#&?]gid=([0-9]+)/)
     const gid = gidMatch ? gidMatch[1] : '0'
 
-    return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`
+    // export 대신 pub?output=csv 형식이 구글 봇 차단 우회에 더 안정적입니다.
+    return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/pub?output=csv&gid=${gid}`
   }
 
   return trimmed
@@ -90,37 +94,59 @@ export async function POST(request: NextRequest) {
     const authResult = await requireRole(['admin'])
     if (!authResult.ok) return jsonNoStore({ error: authResult.error }, { status: authResult.status })
 
-    const { sheetUrl } = await request.json()
+    const body = await request.json().catch(() => ({}))
+    const { sheetUrl } = body
+
     if (!sheetUrl || typeof sheetUrl !== 'string') {
       return jsonNoStore({ error: '올바른 구글 시트 URL을 입력해주세요.' }, { status: 400 })
     }
 
-    // 💡 입력받은 시트 URL을 CSV 다운로드 가능 주소로 자동 변환
+    // 1. 시트 URL을 안정적인 CSV 주소로 변환
     const targetCsvUrl = getCsvUrl(sheetUrl)
 
-    // 구글 서버로부터 CSV 데이터 페치 (리다이렉트 추적)
-    const csvRes = await fetch(targetCsvUrl, {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-      },
-      cache: 'no-store',
-      redirect: 'follow',
-    })
+    // 2. 캐시 무력화 타임스탬프 추가
+    const cacheBustedUrl = targetCsvUrl.includes('?') 
+      ? `${targetCsvUrl}&_t=${Date.now()}` 
+      : `${targetCsvUrl}?_t=${Date.now()}`
+
+    // 3. 구글 서버 요청 (AbortController를 이용한 8초 타임아웃 설정으로 무한 대기 방지)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8000)
+
+    let csvRes: Response
+    try {
+      csvRes = await fetch(cacheBustedUrl, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+        cache: 'no-store',
+        redirect: 'follow',
+        signal: controller.signal,
+      })
+    } catch (fetchErr) {
+      clearTimeout(timeoutId)
+      return jsonNoStore({ 
+        error: '구글 시트 응답 시간이 초과되었거나 연결할 수 없습니다. 링크 권한을 확인해주세요.' 
+      }, { status: 400 })
+    } finally {
+      clearTimeout(timeoutId)
+    }
 
     if (!csvRes.ok) {
       return jsonNoStore({ 
         error: '시트를 불러올 수 없습니다. 링크 공유 권한이 "링크가 있는 모든 사용자(보기 가능)"로 설정되어 있는지 확인해주세요.' 
       }, { status: 400 })
     }
-    
 
     const csvText = await csvRes.text()
 
-    // 💡 추가된 방어 로직: 구글 로그인 페이지 등 HTML이 반환된 경우 차단
+    // 4. 구글 로그인 페이지 등 HTML이 반환된 경우 차단
     if (csvText.trim().startsWith('<!DOCTYPE html>') || csvText.includes('<html')) {
       return jsonNoStore({ 
-        error: '구글 시트가 올바르게 공개되지 않았거나 접근할 수 없습니다. 시트의 [파일] > [공유] > [웹에 게시]를 통해 CSV 링크를 이용하거나 권한을 다시 확인해주세요.' 
+        error: '구글 시트가 올바르게 공개되지 않았거나 로그인이 필요합니다. 시트의 [파일] > [공유] > [웹에 게시] 링크를 사용해주세요.' 
       }, { status: 400 })
     }
 
@@ -130,7 +156,7 @@ export async function POST(request: NextRequest) {
       return jsonNoStore({ error: '시트에 데이터가 없거나 읽을 수 없습니다.' }, { status: 400 })
     }
 
-    // 💡 4행 부근 헤더('기수', '학번', '이름', '포인트') 탐색
+    // 5. 헤더 탐색 ('기수', '학번', '이름', '포인트')
     let headerRowIdx = -1
     let studentIdIdx = -1
     let nameIdx = -1
@@ -172,8 +198,9 @@ export async function POST(request: NextRequest) {
 
     let successCount = 0
     const errors: string[] = []
+    const adminActorId = authResult.user?.id || null
 
-    // 데이터 행 순회 정산
+    // 6. 데이터 행 순회 정산
     for (let i = headerRowIdx + 1; i < rows.length; i++) {
       const row = rows[i]
       const rawStudentId = row[studentIdIdx]?.trim()
@@ -189,10 +216,10 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      // 1차: 학번(student_id) 고유 키 매칭
+      // 1차: 학번 매칭
       let user = profiles.find(p => p.student_id === rawStudentId)
 
-      // 2차: 학번 미일치 시 이름+기수 보완 매칭
+      // 2차: 이름 + 기수 보완 매칭
       if (!user && rawFullName && rawCohort) {
         const cohortNo = parseInt(rawCohort.replace(/[^0-9]/g, ''), 10)
         if (!isNaN(cohortNo)) {
@@ -239,7 +266,7 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         amount: Math.abs(diff),
         action: diff > 0 ? 'admin_adjust' : 'cancel',
-        actor_id: authResult.user.id,
+        actor_id: adminActorId,
         reason: `구글 시트 일괄 동기화 (${currentPoint}P -> ${targetPoint}P)`,
         balance_after_action: targetPoint
       })
